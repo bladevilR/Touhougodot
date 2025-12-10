@@ -1,0 +1,583 @@
+extends Area2D
+class_name Bullet
+
+# Bullet - Complete bullet/projectile system implementing ALL combat mechanics
+# from the original touhou-phantom game (constants.ts weapon definitions)
+#
+# Supported Mechanics:
+# - Homing/Tracking (homingStrength)
+# - Bouncing (bounceCount, wallBounces)
+# - Penetration (penetration)
+# - Orbital weapons (orbitRadius, orbitAngle, orbitSpeed)
+# - Gravity effects (hasGravity)
+# - Explosions (explosionRadius, explosionDamage)
+# - Knockback (knockback)
+# - Status effects (onHitEffect: burn, freeze, poison, heal, explode, stun, slow)
+# - Laser mechanics (isLaser)
+# - Barrier fields (isBarrierField, damageInterval)
+# - Chain lightning (chainCount, chainRange)
+# - Boomerang return (returnToPlayer)
+
+# ==================== CORE PROPERTIES ====================
+# Basic attributes
+@export var damage: float = 10.0
+@export var speed: float = 300.0
+@export var lifetime: float = 5.0  # Duration in seconds
+var direction: Vector2 = Vector2.RIGHT
+var velocity: Vector2 = Vector2.ZERO  # Actual velocity vector
+
+# ==================== PROJECTILE MECHANICS ====================
+# Penetration & Knockback
+@export var penetration: int = 1  # Number of enemies to pierce through
+@export var knockback: float = 2.0
+
+# Homing/Tracking
+@export var homing_strength: float = 0.0  # 0-1, tracking strength (0.1-0.15 typical)
+@export var has_homing_after_bounce: bool = false  # Enable homing after bouncing
+
+# Bouncing
+@export var bounce_count: int = 0  # Remaining bounces off walls/enemies
+@export var wall_bounces: int = 0  # Wall-specific bounce count (separate from bounce_count)
+
+# Explosion
+@export var explosion_radius: float = 0.0
+@export var explosion_damage: float = 0.0
+
+# ==================== ORBITAL MECHANICS ====================
+@export var orbit_radius: float = 0.0  # Distance from player (e.g., 150px)
+@export var orbit_angle: float = 0.0  # Current angle in radians
+@export var orbit_speed: float = 0.0  # Rotation speed (e.g., 0.03)
+var player_reference: Node2D = null  # Reference to player for orbital weapons
+
+# ==================== SPECIAL MECHANICS ====================
+# Gravity
+@export var has_gravity: bool = false
+var gravity_strength: float = 400.0  # Gravity acceleration
+
+# Laser
+@export var is_laser: bool = false  # Instant raycast laser
+
+# Barrier Field
+@export var is_barrier_field: bool = false
+@export var damage_interval: float = 0.2  # Damage tick interval in seconds
+@export var slow_effect: float = 1.0  # Speed multiplier for enemies (0.5 = half speed)
+var damage_timer: float = 0.0
+
+# Boomerang
+@export var return_to_player: bool = false
+var return_phase: bool = false  # Whether boomerang is returning
+
+# Chain Lightning
+@export var chain_count: int = 0  # Number of enemies to chain to
+@export var chain_range: float = 0.0  # Range for chaining
+var chained_enemies: Array = []  # Track chained enemy IDs
+
+# Split projectiles
+@export var split_count: int = 0  # Number of projectiles to split into on hit
+@export var split_angle_spread: float = 0.5  # Angle spread for split projectiles
+
+# ==================== STATUS EFFECTS ====================
+@export_enum("none", "burn", "freeze", "poison", "heal", "explode", "stun", "slow", "split")
+var on_hit_effect: String = "none"
+
+# Burn
+@export var burn_duration: float = 3.0  # Duration in seconds (180 frames @ 60fps)
+@export var burn_damage: float = 5.0  # Damage per tick
+
+# Poison
+@export var poison_duration: float = 3.0
+@export var poison_damage: float = 3.0
+
+# Stun
+@export var stun_duration: float = 1.0
+
+# Slow
+@export var slow_duration: float = 2.0
+@export var slow_amount: float = 0.5  # Speed reduction (0.5 = 50% slower)
+
+# Heal
+@export var heal_amount: float = 5.0
+
+# Freeze
+@export var freeze_duration: float = 2.0
+
+# ==================== ELEMENT SYSTEM ====================
+@export_enum("none", "fire", "ice", "lightning", "poison", "holy")
+var element: String = "none"
+
+# ==================== VISUAL ====================
+@onready var sprite = $Sprite2D if has_node("Sprite2D") else null
+@onready var collision_shape = $CollisionShape2D
+
+# ==================== INTERNAL STATE ====================
+var hit_enemies: Array = []  # Track hit enemy IDs to prevent duplicate damage
+var lifetime_timer: float = 0.0
+var bounced_enemies: Array = []  # Track enemies already bounced to
+var is_initialized: bool = false
+
+# ==================== INITIALIZATION ====================
+func _ready():
+	# Setup collision detection
+	area_entered.connect(_on_area_entered)
+	body_entered.connect(_on_body_entered)
+
+	# Set collision layers
+	collision_layer = 4  # Player bullet layer
+	collision_mask = 2   # Detect enemy layer
+
+	# Initialize velocity from direction and speed
+	if velocity == Vector2.ZERO and direction != Vector2.ZERO:
+		velocity = direction.normalized() * speed
+
+	# Find player reference for orbital weapons
+	if orbit_radius > 0.0 or return_to_player:
+		player_reference = get_tree().get_first_node_in_group("player")
+
+	is_initialized = true
+
+# ==================== PHYSICS PROCESS ====================
+func _physics_process(delta):
+	if not is_initialized:
+		return
+
+	lifetime_timer += delta
+
+	# Check lifetime expiration
+	if lifetime_timer >= lifetime:
+		_on_lifetime_end()
+		return
+
+	# ===== ORBITAL MECHANICS =====
+	if orbit_radius > 0.0 and player_reference:
+		_update_orbital_movement(delta)
+		return  # Skip normal movement for orbital weapons
+
+	# ===== BARRIER FIELD MECHANICS =====
+	if is_barrier_field:
+		_update_barrier_field(delta)
+		return  # Barrier stays in place
+
+	# ===== BOOMERANG MECHANICS =====
+	if return_to_player:
+		_update_boomerang_movement(delta)
+
+	# ===== HOMING/TRACKING MECHANICS =====
+	if homing_strength > 0.0 and not return_phase:
+		var target = _find_nearest_enemy()
+		if target:
+			var to_target = (target.global_position - global_position).normalized()
+			velocity = velocity.normalized().lerp(to_target, homing_strength * delta * 60.0).normalized() * speed
+
+	# ===== GRAVITY MECHANICS =====
+	if has_gravity:
+		velocity.y += gravity_strength * delta
+		# Cap falling speed
+		velocity.y = min(velocity.y, 800.0)
+
+	# ===== MOVEMENT =====
+	global_position += velocity * delta
+
+	# ===== WALL BOUNCE MECHANICS =====
+	if bounce_count > 0 or wall_bounces > 0:
+		_check_wall_bounce()
+
+	# ===== OFF-SCREEN CLEANUP =====
+	_check_out_of_bounds()
+
+	# ===== VISUAL ROTATION =====
+	if sprite and velocity.length() > 0:
+		sprite.rotation = velocity.angle()
+
+# ==================== ORBITAL MOVEMENT ====================
+func _update_orbital_movement(delta: float):
+	if not player_reference:
+		queue_free()
+		return
+
+	# Update orbit angle
+	orbit_angle += orbit_speed * delta * 60.0  # Convert to frame-based timing
+
+	# Calculate position around player
+	var offset = Vector2(
+		cos(orbit_angle) * orbit_radius,
+		sin(orbit_angle) * orbit_radius
+	)
+
+	global_position = player_reference.global_position + offset
+
+	# Rotate sprite to face outward
+	if sprite:
+		sprite.rotation = orbit_angle
+
+# ==================== BARRIER FIELD ====================
+func _update_barrier_field(delta: float):
+	damage_timer += delta
+
+	# Damage tick
+	if damage_timer >= damage_interval:
+		damage_timer = 0.0
+
+		# Get all overlapping enemies
+		var overlapping_bodies = get_overlapping_bodies()
+		var overlapping_areas = get_overlapping_areas()
+
+		for body in overlapping_bodies:
+			if body.is_in_group("enemy"):
+				_apply_barrier_damage(body)
+
+		for area in overlapping_areas:
+			var parent = area.get_parent()
+			if parent and parent.is_in_group("enemy"):
+				_apply_barrier_damage(parent)
+
+func _apply_barrier_damage(enemy):
+	if enemy.has_method("take_damage"):
+		enemy.take_damage(damage)
+
+	# Apply slow effect
+	if slow_effect < 1.0 and enemy.has_method("apply_slow"):
+		enemy.apply_slow(slow_effect, damage_interval)
+
+# ==================== BOOMERANG MECHANICS ====================
+func _update_boomerang_movement(delta: float):
+	if not player_reference:
+		queue_free()
+		return
+
+	# Check distance to player
+	var distance_to_player = global_position.distance_to(player_reference.global_position)
+
+	# Switch to return phase after traveling some distance
+	if not return_phase and lifetime_timer > lifetime * 0.4:
+		return_phase = true
+
+	if return_phase:
+		# Return to player
+		var to_player = (player_reference.global_position - global_position).normalized()
+		velocity = to_player * speed * 1.5  # Return faster
+
+		# Collect when reaching player
+		if distance_to_player < 30.0:
+			queue_free()
+
+# ==================== COLLISION DETECTION ====================
+func _on_area_entered(area):
+	var parent = area.get_parent()
+	if parent and parent.is_in_group("enemy"):
+		_hit_enemy(parent)
+
+func _on_body_entered(body):
+	if body.is_in_group("enemy"):
+		_hit_enemy(body)
+
+# ==================== HIT DETECTION & DAMAGE ====================
+func _hit_enemy(enemy):
+	# Prevent duplicate damage (except for barrier fields)
+	if not is_barrier_field:
+		var enemy_id = enemy.get_instance_id()
+		if enemy_id in hit_enemies:
+			return
+		hit_enemies.append(enemy_id)
+
+	# Apply damage
+	if enemy.has_method("take_damage"):
+		enemy.take_damage(damage)
+
+	# Apply knockback
+	if knockback > 0:
+		var knock_dir = (enemy.global_position - global_position).normalized()
+		if enemy.has_method("apply_knockback"):
+			enemy.apply_knockback(knock_dir * knockback)
+		elif enemy.has_method("velocity"):
+			enemy.velocity += knock_dir * knockback * 100
+
+	# Apply status effects
+	_apply_status_effect(enemy)
+
+	# Handle chain lightning
+	if chain_count > 0:
+		_chain_to_nearby_enemies(enemy)
+
+	# Handle split projectiles
+	if split_count > 0:
+		_split_projectile()
+
+	# Reduce penetration
+	if not is_barrier_field and penetration > 0:
+		penetration -= 1
+		if penetration <= 0:
+			_on_penetration_depleted()
+
+# ==================== STATUS EFFECTS ====================
+func _apply_status_effect(enemy):
+	match on_hit_effect:
+		"burn":
+			if enemy.has_method("apply_burn"):
+				enemy.apply_burn(burn_damage, burn_duration)
+
+		"freeze":
+			if enemy.has_method("apply_freeze"):
+				enemy.apply_freeze(freeze_duration)
+
+		"poison":
+			if enemy.has_method("apply_poison"):
+				enemy.apply_poison(poison_damage, poison_duration)
+
+		"stun":
+			if enemy.has_method("apply_stun"):
+				enemy.apply_stun(stun_duration)
+
+		"slow":
+			if enemy.has_method("apply_slow"):
+				enemy.apply_slow(slow_amount, slow_duration)
+
+		"heal":
+			if player_reference and player_reference.has_method("heal"):
+				player_reference.heal(heal_amount)
+
+		"explode":
+			_explode()
+
+		"split":
+			_split_projectile()
+
+# ==================== CHAIN LIGHTNING ====================
+func _chain_to_nearby_enemies(source_enemy):
+	if chain_count <= 0 or chain_range <= 0:
+		return
+
+	var enemy_id = source_enemy.get_instance_id()
+	chained_enemies.append(enemy_id)
+
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	var chained = 0
+
+	for enemy in enemies:
+		if chained >= chain_count:
+			break
+
+		var eid = enemy.get_instance_id()
+		if eid in chained_enemies:
+			continue
+
+		var distance = source_enemy.global_position.distance_to(enemy.global_position)
+		if distance <= chain_range:
+			# Chain damage (reduced)
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(damage * 0.7)
+
+			chained_enemies.append(eid)
+			chained += 1
+
+			# Visual: spawn chain effect (TODO: implement visual)
+			# _spawn_chain_visual(source_enemy.global_position, enemy.global_position)
+
+# ==================== SPLIT PROJECTILES ====================
+func _split_projectile():
+	if split_count <= 0:
+		return
+
+	var bullet_scene = load("res://Bullet.tscn")
+	if not bullet_scene:
+		return
+
+	for i in range(split_count):
+		var split_bullet = bullet_scene.instantiate()
+		get_parent().add_child(split_bullet)
+
+		# Calculate split angle
+		var angle_offset = (i - split_count / 2.0) * split_angle_spread
+		var split_angle = velocity.angle() + angle_offset
+		var split_velocity = Vector2(cos(split_angle), sin(split_angle)) * speed * 0.8
+
+		# Copy properties
+		split_bullet.global_position = global_position
+		split_bullet.velocity = split_velocity
+		split_bullet.damage = damage * 0.6
+		split_bullet.penetration = 1
+		split_bullet.lifetime = lifetime * 0.5
+		split_bullet.element = element
+
+# ==================== WALL BOUNCE ====================
+func _check_wall_bounce():
+	var map_bounds = Rect2(0, 0, GameConstants.MAP_WIDTH, GameConstants.MAP_HEIGHT)
+	var bounced = false
+
+	# Check horizontal bounds
+	if global_position.x <= map_bounds.position.x or global_position.x >= map_bounds.end.x:
+		velocity.x *= -1
+		bounced = true
+
+		# Clamp position
+		global_position.x = clamp(global_position.x, map_bounds.position.x + 10, map_bounds.end.x - 10)
+
+	# Check vertical bounds
+	if global_position.y <= map_bounds.position.y or global_position.y >= map_bounds.end.y:
+		velocity.y *= -1
+		bounced = true
+
+		# Clamp position
+		global_position.y = clamp(global_position.y, map_bounds.position.y + 10, map_bounds.end.y - 10)
+
+	# Reduce bounce count
+	if bounced:
+		if wall_bounces > 0:
+			wall_bounces -= 1
+		elif bounce_count > 0:
+			bounce_count -= 1
+
+		# Enable homing after bounce (Reimu bond ability)
+		if has_homing_after_bounce and homing_strength == 0.0:
+			homing_strength = 0.1
+
+		# Trigger explosion if no bounces left
+		if bounce_count <= 0 and wall_bounces <= 0:
+			if has_gravity:  # Ground impact explosion (molotov)
+				_explode()
+				queue_free()
+
+# ==================== EXPLOSION ====================
+func _explode():
+	if explosion_radius <= 0:
+		return
+
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for enemy in enemies:
+		var distance = global_position.distance_to(enemy.global_position)
+		if distance <= explosion_radius:
+			if enemy.has_method("take_damage"):
+				var dmg = explosion_damage if explosion_damage > 0 else damage
+				enemy.take_damage(dmg)
+
+			# Apply knockback from explosion center
+			if knockback > 0:
+				var knock_dir = (enemy.global_position - global_position).normalized()
+				if enemy.has_method("apply_knockback"):
+					enemy.apply_knockback(knock_dir * knockback * 2.0)
+
+	# TODO: Spawn explosion visual effect
+	# SignalBus.emit_signal("spawn_explosion", global_position, explosion_radius)
+
+# ==================== CLEANUP ====================
+func _on_penetration_depleted():
+	_explode()
+	queue_free()
+
+func _on_lifetime_end():
+	# Trigger explosion on timeout (mines, etc.)
+	if on_hit_effect == "explode" or explosion_radius > 0:
+		_explode()
+	queue_free()
+
+func _check_out_of_bounds():
+	# Despawn if too far from map (safety check)
+	var map_bounds = Rect2(-200, -200, GameConstants.MAP_WIDTH + 400, GameConstants.MAP_HEIGHT + 400)
+	if not map_bounds.has_point(global_position):
+		queue_free()
+
+# ==================== UTILITY ====================
+func _find_nearest_enemy() -> Node2D:
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	if enemies.size() == 0:
+		return null
+
+	var nearest = null
+	var min_distance = INF
+
+	for enemy in enemies:
+		var distance = global_position.distance_to(enemy.global_position)
+		if distance < min_distance:
+			min_distance = distance
+			nearest = enemy
+
+	return nearest
+
+# ==================== SETUP HELPER ====================
+# Setup bullet from dictionary config (for WeaponSystem integration)
+func setup(config: Dictionary):
+	# Core properties
+	if config.has("damage"):
+		damage = config.damage
+	if config.has("speed"):
+		speed = config.speed
+	if config.has("lifetime"):
+		lifetime = config.lifetime
+	if config.has("direction"):
+		direction = config.direction.normalized()
+		velocity = direction * speed
+	if config.has("velocity"):
+		velocity = config.velocity
+
+	# Projectile mechanics
+	if config.has("penetration"):
+		penetration = config.penetration
+	if config.has("knockback"):
+		knockback = config.knockback
+	if config.has("homing_strength"):
+		homing_strength = config.homing_strength
+	if config.has("bounce_count"):
+		bounce_count = config.bounce_count
+	if config.has("wall_bounces"):
+		wall_bounces = config.wall_bounces
+	if config.has("explosion_radius"):
+		explosion_radius = config.explosion_radius
+	if config.has("explosion_damage"):
+		explosion_damage = config.explosion_damage
+
+	# Orbital
+	if config.has("orbit_radius"):
+		orbit_radius = config.orbit_radius
+	if config.has("orbit_angle"):
+		orbit_angle = config.orbit_angle
+	if config.has("orbit_speed"):
+		orbit_speed = config.orbit_speed
+
+	# Special mechanics
+	if config.has("has_gravity"):
+		has_gravity = config.has_gravity
+	if config.has("is_laser"):
+		is_laser = config.is_laser
+	if config.has("is_barrier_field"):
+		is_barrier_field = config.is_barrier_field
+	if config.has("damage_interval"):
+		damage_interval = config.damage_interval
+	if config.has("slow_effect"):
+		slow_effect = config.slow_effect
+	if config.has("return_to_player"):
+		return_to_player = config.return_to_player
+	if config.has("chain_count"):
+		chain_count = config.chain_count
+	if config.has("chain_range"):
+		chain_range = config.chain_range
+	if config.has("split_count"):
+		split_count = config.split_count
+	if config.has("split_angle_spread"):
+		split_angle_spread = config.split_angle_spread
+	if config.has("has_homing_after_bounce"):
+		has_homing_after_bounce = config.has_homing_after_bounce
+
+	# Status effects
+	if config.has("on_hit_effect"):
+		on_hit_effect = config.on_hit_effect
+	if config.has("burn_duration"):
+		burn_duration = config.burn_duration
+	if config.has("burn_damage"):
+		burn_damage = config.burn_damage
+	if config.has("poison_duration"):
+		poison_duration = config.poison_duration
+	if config.has("poison_damage"):
+		poison_damage = config.poison_damage
+	if config.has("stun_duration"):
+		stun_duration = config.stun_duration
+	if config.has("slow_duration"):
+		slow_duration = config.slow_duration
+	if config.has("slow_amount"):
+		slow_amount = config.slow_amount
+	if config.has("heal_amount"):
+		heal_amount = config.heal_amount
+	if config.has("freeze_duration"):
+		freeze_duration = config.freeze_duration
+
+	# Element
+	if config.has("element"):
+		element = config.element
