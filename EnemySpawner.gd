@@ -155,23 +155,38 @@ func spawn_boss(boss_config: EnemyData.BossConfig):
 	get_parent().add_child(boss)
 
 func _get_random_spawn_position() -> Vector2:
-	# 使用MapSystem中定义的固定spawn points，而不是玩家周围随机位置
-	var map_system = get_tree().get_first_node_in_group("map_system")
-	if map_system and map_system.has_method("get_enemy_spawn_points"):
-		var spawn_points = map_system.get_enemy_spawn_points()
-		if spawn_points.size() > 0:
-			# 随机选择一个spawn point
-			return spawn_points[randi() % spawn_points.size()]
-
-	# 如果找不到map_system，回退到玩家周围生成（但只在前方180度）
 	if not is_instance_valid(player):
 		return Vector2.ZERO
-
-	# 只在玩家前方和侧面生成，避免从后方突然出现
-	var angle = randf_range(-PI/2, PI/2)  # -90度到+90度（前方半圆）
-	var offset = Vector2(cos(angle), sin(angle)) * spawn_distance
-
-	return player.global_position + offset
+		
+	var spawn_pos = Vector2.ZERO
+	var map_system = get_tree().get_first_node_in_group("map_system")
+	var map_rect = Rect2(0, 0, 10000, 10000) # Default huge map if no system
+	
+	if map_system and map_system.has_method("get_map_size"):
+		var size = map_system.get_map_size()
+		map_rect = Rect2(0, 0, size.x, size.y)
+	
+	# Try to find a valid spawn position
+	for i in range(10): # Try 10 times to find a good spot
+		var angle = randf() * PI * 2
+		var distance = randf_range(600.0, 900.0) # Outside typical screen area
+		
+		var potential_pos = player.global_position + Vector2(cos(angle), sin(angle)) * distance
+		
+		# Clamp to map bounds
+		if map_rect.has_point(potential_pos):
+			spawn_pos = potential_pos
+			return spawn_pos
+			
+	# If we couldn't find a spot (e.g. player in corner), just clamp the last attempt
+	var angle = randf() * PI * 2
+	var distance = 600.0
+	spawn_pos = player.global_position + Vector2(cos(angle), sin(angle)) * distance
+	
+	spawn_pos.x = clamp(spawn_pos.x, map_rect.position.x, map_rect.end.x)
+	spawn_pos.y = clamp(spawn_pos.y, map_rect.position.y, map_rect.end.y)
+	
+	return spawn_pos
 
 func _get_enemy_type_from_string(enemy_type_str: String) -> int:
 	# 将字符串敌人类型转换为GameConstants枚举

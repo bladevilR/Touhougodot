@@ -35,10 +35,23 @@ func _process(delta):
 
 		# 冷却完成，发射！
 		if weapon_data.timer <= 0:
+			# Auto-fire for most weapons
 			fire_weapon(weapon_id)
 			# 重置冷却，应用角色的cooldown属性
 			var stats = _get_player_stats()
 			weapon_data.timer = weapon_data.config.cooldown_max * stats.cooldown
+
+	# Manual Fire Override - 鼠标左键触发妹红的凤凰利爪攻击
+	# 检测鼠标按下（而不是按住）以提供更好的反馈
+	if Input.is_action_just_pressed("ui_accept") or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		if "phoenix_claws" in weapons:
+			var weapon_data = weapons["phoenix_claws"]
+			if weapon_data.timer <= 0:
+				# Force fire at mouse position
+				_fire_projectile_at_target("phoenix_claws", weapon_data.config, _get_player_stats(), weapon_data.level, get_global_mouse_position())
+				# Reset timer
+				var stats = _get_player_stats()
+				weapon_data.timer = weapon_data.config.cooldown_max * stats.cooldown
 
 func add_weapon(weapon_id: String):
 	if weapon_id in weapons:
@@ -98,7 +111,10 @@ func _fire_projectile(weapon_id: String, config: WeaponData.WeaponConfig, stats:
 	# 获取最近的敌人作为目标
 	var target = get_nearest_enemy()
 	var target_pos = target.global_position if target else player.global_position + Vector2(100, 0)
+	
+	_fire_projectile_at_target(weapon_id, config, stats, weapon_level, target_pos)
 
+func _fire_projectile_at_target(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int, target_pos: Vector2):
 	# 计算方向
 	var direction = (target_pos - player.global_position).normalized()
 
@@ -143,7 +159,7 @@ func _fire_projectile(weapon_id: String, config: WeaponData.WeaponConfig, stats:
 		bullet.global_position = player.global_position
 
 		# 添加到场景
-		get_tree().root.add_child(bullet)
+		get_tree().current_scene.call_deferred("add_child", bullet)
 
 func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 环绕武器（如凤凰羽衣）
@@ -178,7 +194,7 @@ func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 		})
 
 		bullet.global_position = player.global_position
-		get_tree().root.add_child(bullet)
+		get_tree().current_scene.call_deferred("add_child", bullet)
 
 func _fire_laser(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 激光武器
@@ -207,7 +223,7 @@ func _fire_laser(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dict
 	})
 
 	bullet.global_position = player.global_position
-	get_tree().root.add_child(bullet)
+	get_tree().current_scene.call_deferred("add_child", bullet)
 
 func _fire_special(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 特殊武器（如地雷）
@@ -237,7 +253,7 @@ func _fire_special(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 		})
 
 		bullet.global_position = player.global_position + random_offset
-		get_tree().root.add_child(bullet)
+		get_tree().current_scene.call_deferred("add_child", bullet)
 
 func get_nearest_enemy() -> Node2D:
 	var enemies = get_tree().get_nodes_in_group("enemy")
@@ -303,6 +319,8 @@ func _get_weapon_color(weapon_id: String, config: WeaponData.WeaponConfig) -> Co
 			return Color("#f1c40f")  # 黄色星星（魔理沙）
 		"phoenix_wings":
 			return Color("#ff4500")  # 橙红色火焰（妹红）
+		"phoenix_claws":
+			return Color("#ff0000")  # 红色利爪
 		"knives":
 			return Color("#bdc3c7")  # 银白色飞刀（咲夜）
 		"yin_yang_orb":

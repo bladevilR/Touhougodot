@@ -198,7 +198,7 @@ func _setup_bullet_visual():
 		# 根据半径缩放
 		var radius = collision_shape.shape.radius if collision_shape and collision_shape.shape else 10.0
 		var target_scale = radius / base_radius
-		sprite.scale = Vector2(target_scale, target_scale)
+		sprite.scale = Vector2(target_scale * 0.5, target_scale * 0.5) # Reduced scale by 50%
 
 		# 旋转朝向运动方向
 		if should_rotate and velocity.length() > 0:
@@ -360,7 +360,7 @@ func _hit_enemy(enemy):
 	if knockback > 0:
 		var knock_dir = (enemy.global_position - global_position).normalized()
 		if enemy.has_method("apply_knockback"):
-			enemy.apply_knockback(knock_dir * knockback)
+			enemy.apply_knockback(knock_dir, knockback)
 		elif enemy.has_method("velocity"):
 			enemy.velocity += knock_dir * knockback * 100
 
@@ -526,7 +526,7 @@ func _explode():
 			if knockback > 0:
 				var knock_dir = (enemy.global_position - global_position).normalized()
 				if enemy.has_method("apply_knockback"):
-					enemy.apply_knockback(knock_dir * knockback * 2.0)
+					enemy.apply_knockback(knock_dir, knockback * 2.0)
 
 	# TODO: Spawn explosion visual effect
 	# SignalBus.emit_signal("spawn_explosion", global_position, explosion_radius)

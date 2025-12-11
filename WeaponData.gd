@@ -87,6 +87,12 @@ static var WEAPON_UPGRADE_TREES = {}
 static var WEAPON_RECIPES = []
 
 static func initialize():
+	WEAPONS.clear()
+	# WEAPON_UPGRADE_TREES and WEAPON_RECIPES are initialized in separate functions but good to clear here if they were appended.
+	# Since they are dictionaries/assigned directly, it might be fine, but let's be safe if we change logic later.
+	# Actually upgrade trees are assigned via key, so overwrite is fine. Recipes are array, need clear.
+	# Wait, _initialize_weapon_recipes assigns a new array `WEAPON_RECIPES = [...]`, so it's fine.
+	
 	# ==================== 初始武器 (6个) ====================
 
 	# 1. 博丽符纸 (灵梦专属)
@@ -121,7 +127,7 @@ static func initialize():
 		"phoenix_wings",
 		"凤凰羽衣",
 		"环绕自身的火焰羽翼，持续造成伤害。",
-		8, 99999.0, 8.0, GameConstants.WeaponType.ORBITAL
+		8, 0.2, 15.0, GameConstants.WeaponType.ORBITAL
 	)
 	phoenix_wings.exclusive_to = GameConstants.CharacterId.MOKOU
 	phoenix_wings.is_orbital = true
@@ -131,6 +137,22 @@ static func initialize():
 	phoenix_wings.penetration = 999
 	phoenix_wings.element_type = GameConstants.ElementType.FIRE
 	WEAPONS["phoenix_wings"] = phoenix_wings
+
+	# 3.5 凤凰利爪 (妹红基础攻击) - Added to give her active offense
+	var phoenix_claws = WeaponConfig.new(
+		"phoenix_claws",
+		"凤凰利爪",
+		"向前方挥出火焰利爪。",
+		8, 1.2, 15.0, GameConstants.WeaponType.PROJECTILE
+	)
+	phoenix_claws.exclusive_to = GameConstants.CharacterId.MOKOU
+	phoenix_claws.projectile_count = 1
+	phoenix_claws.projectile_speed = 400.0
+	phoenix_claws.projectile_lifetime = 0.5
+	phoenix_claws.penetration = 2
+	phoenix_claws.element_type = GameConstants.ElementType.FIRE
+	phoenix_claws.knockback = 20.0
+	WEAPONS["phoenix_claws"] = phoenix_claws
 
 	# 4. 银制飞刀 (咲夜专属)
 	var knives = WeaponConfig.new(
@@ -310,7 +332,7 @@ static func initialize():
 		"phoenix_rebirth",
 		"凤凰涅槃",
 		"死亡时自动复活，并产生超大范围火焰爆炸！",
-		8, 99999.0, 500.0, GameConstants.WeaponType.PASSIVE
+		8, 60.0, 500.0, GameConstants.WeaponType.PASSIVE
 	)
 	phoenix_rebirth.is_spell_card = true
 	phoenix_rebirth.explosion_radius = 300.0
@@ -428,6 +450,21 @@ static func _initialize_upgrade_trees():
 		WeaponUpgradeChoice.new("wings_double", "phoenix_wings", 3, "双重旋转", "添加反向旋转的第二层", "♾️"),
 		WeaponUpgradeChoice.new("wings_pull", "phoenix_wings", 3, "火焰漩涡", "吸引敌人和宝石", "🌀"),
 		WeaponUpgradeChoice.new("wings_explode", "phoenix_wings", 3, "爆裂之翼", "击杀敌人触发爆炸", "💣")
+	]
+	
+	WEAPON_UPGRADE_TREES["phoenix_claws"] = [
+		# Tier 1
+		WeaponUpgradeChoice.new("claw_size", "phoenix_claws", 1, "巨型利爪", "大小 +50%，伤害 +30%", "🐾"),
+		WeaponUpgradeChoice.new("claw_speed", "phoenix_claws", 1, "迅捷利爪", "冷却时间 -30%", "⚡"),
+		WeaponUpgradeChoice.new("claw_burn", "phoenix_claws", 1, "灼烧之痕", "命中施加燃烧效果", "🔥"),
+		# Tier 2
+		WeaponUpgradeChoice.new("claw_multi", "phoenix_claws", 2, "多重利爪", "同时发射 3 道爪击", "🔱"),
+		WeaponUpgradeChoice.new("claw_vamp", "phoenix_claws", 2, "浴火重生", "击杀敌人回复 1 HP", "❤️"),
+		WeaponUpgradeChoice.new("claw_pierce", "phoenix_claws", 2, "锐利之爪", "穿透 +3", "🗡️"),
+		# Tier 3
+		WeaponUpgradeChoice.new("claw_dash", "phoenix_claws", 3, "火鸟突击", "爪击伴随火鸟冲刺", "🦅"),
+		WeaponUpgradeChoice.new("claw_x", "phoenix_claws", 3, "十字交叉", "向四个方向同时挥爪", "❌"),
+		WeaponUpgradeChoice.new("claw_inferno", "phoenix_claws", 3, "炼狱爪击", "爪击留下持续燃烧的火焰路径", "🌋")
 	]
 
 	# --- Sakuya (十六夜咲夜) Weapons ---

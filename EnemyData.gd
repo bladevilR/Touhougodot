@@ -14,6 +14,7 @@ class EnemyConfig:
 	var color: Color
 	var radius: float
 	var mass: float  # 质量（影响击退抗性）
+	var scale: float # 视觉缩放
 
 	# 特殊行为
 	var can_shoot: bool = false
@@ -21,7 +22,7 @@ class EnemyConfig:
 	var can_jump: bool = false
 	var jump_interval: float = 1.0
 
-	func _init(t: int, n: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 10.0):
+	func _init(t: int, n: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 10.0, sc: float = 0.05):
 		enemy_type = t
 		enemy_name = n
 		hp = h
@@ -31,6 +32,7 @@ class EnemyConfig:
 		color = c
 		radius = r
 		mass = m
+		scale = sc
 
 # Boss配置类
 class BossConfig extends EnemyConfig:
@@ -38,8 +40,8 @@ class BossConfig extends EnemyConfig:
 	var boss_title: String
 	var attack_patterns: Array = []  # 攻击模式列表
 
-	func _init(bt: int, n: String, title: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 50.0):
-		super._init(GameConstants.EnemyType.BOSS, n, h, d, s, e, c, r, m)
+	func _init(bt: int, n: String, title: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 50.0, sc: float = 0.08):
+		super._init(GameConstants.EnemyType.BOSS, n, h, d, s, e, c, r, m, sc)
 		boss_type = bt
 		boss_title = title
 
@@ -70,6 +72,11 @@ static var BOSSES = {}
 static var WAVES = []
 
 static func initialize():
+	# Clear existing data to prevent accumulation on restart
+	ENEMIES.clear()
+	BOSSES.clear()
+	WAVES.clear()
+
 	# ==================== 普通敌人 ====================
 
 	# 小妖精 - 基础敌人
@@ -81,7 +88,7 @@ static func initialize():
 		2.0,    # 速度
 		3,      # 经验
 		Color("#ff69b4"),  # 粉色
-		20.0,   # 半径
+		12.0,   # 半径 (Reduced from 20.0)
 		5.0     # 质量 - 很轻，容易被击退
 	)
 	ENEMIES[GameConstants.EnemyType.FAIRY] = fairy
@@ -95,7 +102,7 @@ static func initialize():
 		1.5,
 		5,
 		Color("#9b59b6"),  # 紫色
-		25.0,
+		15.0,   # 半径 (Reduced from 25.0)
 		8.0     # 质量 - 轻盈
 	)
 	ENEMIES[GameConstants.EnemyType.GHOST] = ghost
@@ -109,7 +116,7 @@ static func initialize():
 		1.8,
 		8,
 		Color("#3498db"),  # 蓝色
-		30.0,
+		18.0,   # 半径 (Reduced from 30.0)
 		15.0    # 质量 - 较重
 	)
 	slime.can_jump = true
@@ -125,7 +132,7 @@ static func initialize():
 		2.2,
 		10,
 		Color("#2ecc71"),  # 绿色
-		22.0,
+		13.0,   # 半径 (Reduced from 22.0)
 		6.0     # 质量 - 很轻
 	)
 	elf.can_shoot = true
@@ -144,7 +151,7 @@ static func initialize():
 		1.5,     # 速度
 		500,     # 经验
 		Color("#00ffff"),  # 青色
-		60.0,    # 半径
+		36.0,    # 半径 (Reduced from 60.0)
 		30.0     # 质量 - Boss级别抗击退
 	)
 	cirno.attack_patterns = ["ice_spread", "freeze_circle"]
@@ -160,7 +167,7 @@ static func initialize():
 		2.0,
 		800,
 		Color("#e0e0e0"),  # 银白色
-		60.0,
+		36.0,    # 半径 (Reduced from 60.0)
 		40.0     # 质量 - 更重的Boss
 	)
 	youmu.attack_patterns = ["sword_dash", "spirit_split"]
@@ -176,7 +183,7 @@ static func initialize():
 		1.2,
 		1200,
 		Color("#ffd700"),  # 金色
-		60.0,
+		36.0,    # 半径 (Reduced from 60.0)
 		50.0     # 质量 - 最重的Boss
 	)
 	kaguya.attack_patterns = ["impossible_bullet_hell", "time_stop"]

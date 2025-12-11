@@ -64,14 +64,15 @@ func _ready():
 		# 应用敌人属性
 		health_comp.max_hp = enemy_data.hp
 		health_comp.current_hp = enemy_data.hp
-		speed = enemy_data.speed * 50.0
+		speed = enemy_data.speed * 100.0
 		xp_value = enemy_data.exp
 		mass = enemy_data.mass  # 应用质量
 
-		# 设置颜色（Sprite2D使用modulate而不是color）
 		if sprite:
 			sprite.modulate = enemy_data.color
-			original_color = enemy_data.color
+			if "scale" in enemy_data:
+				var s = enemy_data.scale
+				sprite.scale = Vector2(s, s)
 
 	# Store base speed for status effect calculations
 	base_speed = speed
@@ -229,7 +230,7 @@ func setup(type: int, wave: int = 1):
 
 		health_comp.max_hp = enemy_data.hp * difficulty_multiplier
 		health_comp.current_hp = health_comp.max_hp
-		speed = enemy_data.speed * 50.0
+		speed = enemy_data.speed * 100.0
 		xp_value = int(enemy_data.exp * difficulty_multiplier)
 		mass = enemy_data.mass  # 应用质量
 

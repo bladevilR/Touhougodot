@@ -22,6 +22,16 @@ var is_invulnerable: bool = false
 var contact_damage_cooldown: float = 0.0
 const CONTACT_DAMAGE_INTERVAL: float = 0.5  # 每0.5秒受一次伤害
 
+# ==================== DASH SYSTEM ====================
+var can_dash: bool = true
+var is_dashing: bool = false
+var dash_timer: float = 0.0
+var dash_cooldown_timer: float = 0.0
+const DASH_DURATION: float = 0.2
+const DASH_COOLDOWN: float = 1.0
+const DASH_SPEED_MULTIPLIER: float = 3.0
+var dash_direction: Vector2 = Vector2.ZERO
+
 # 妹红动画系统
 var mokou_textures = {
 	"sprite": [],  # 水平移动帧
@@ -99,7 +109,7 @@ func _load_character_data(char_id: int):
 		# 应用角色属性
 		health_comp.max_hp = character_data.stats.max_hp
 		health_comp.current_hp = character_data.stats.max_hp
-		base_speed = character_data.stats.speed * 50.0  # 调整速度比例
+		base_speed = character_data.stats.speed * 100.0  # 调整速度比例 (Increased from 50.0 to 100.0)
 		speed = base_speed
 
 		# 应用物理属性
@@ -116,6 +126,14 @@ func _load_character_data(char_id: int):
 			elif collision_shape.shape is RectangleShape2D:
 				collision_shape.shape.size *= hitbox_scale
 
+		# 应用视觉缩放
+		if sprite:
+			if "scale" in character_data:
+				var s = character_data.scale
+				sprite.scale = Vector2(s, s)
+			else:
+				sprite.scale = Vector2(0.08, 0.08) # Default if not found
+
 		print("玩家角色: ", character_data.char_name)
 		print("初始武器: ", character_data.starting_weapon_id)
 		print("物理属性 - 质量: ", mass, ", 摩擦力: ", friction, ", 判定倍率: ", hitbox_scale)
@@ -123,9 +141,17 @@ func _load_character_data(char_id: int):
 		# 加载妹红动画（如果是妹红）
 		if char_id == GameConstants.CharacterId.MOKOU:
 			_load_mokou_textures()
+			# Give her a secondary active weapon since wings are passive
+			SignalBus.weapon_added.emit("phoenix_claws")
 
 		# 装备初始武器
 		SignalBus.weapon_added.emit(character_data.starting_weapon_id)
+
+	# Adjust Camera Zoom (Zoom out for wider view)
+	var camera = get_node_or_null("Camera2D")
+	if camera:
+		camera.zoom = Vector2(0.45, 0.45)  # 更小的zoom值 = 更开阔的视野
+		camera.make_current() # Ensure camera follows player
 
 func _setup_collision_layers():
 	# Layer 1: Player
@@ -153,6 +179,21 @@ func _physics_process(delta):
 	# 更新接触伤害冷却
 	if contact_damage_cooldown > 0:
 		contact_damage_cooldown -= delta
+
+	# ==================== DASH LOGIC ====================
+	_update_dash_timers(delta)
+
+	# 使用"dash"输入动作触发冲刺（Shift键或空格键）
+	if Input.is_action_just_pressed("dash") and can_dash and not is_dashing:
+		start_dash()
+
+	if is_dashing:
+		velocity = dash_direction * (base_speed * DASH_SPEED_MULTIPLIER)
+		move_and_slide()
+		_check_enemy_contact_damage() # Dash might still take damage or maybe not? usually dash is iframe.
+		# For now, let's keep collision but maybe make invulnerable? 
+		# If we want iframes, we should set is_invulnerable.
+		return
 
 	# 如果正在执行技能，跳过普通移动逻辑
 	if character_skills and character_skills.is_skill_active():
@@ -304,7 +345,7 @@ func _check_enemy_contact_damage():
 
 			# 击退
 			var knockback_dir = (global_position - collider.global_position).normalized()
-			apply_knockback(knockback_dir, 50.0)
+			apply_knockback(knockback_dir, 300.0)
 
 			break  # 一次只处理一个敌人碰撞
 
@@ -320,6 +361,48 @@ func on_level_up(new_level):
 		health_comp.current_hp = health_comp.max_hp
 		SignalBus.player_health_changed.emit(health_comp.current_hp, health_comp.max_hp)
 		print("玩家升级到 Lv.", new_level, "，生命值已回复！")
+
+# ==================== DASH METHODS ====================
+
+func start_dash():
+	is_dashing = true
+	can_dash = false
+	dash_timer = DASH_DURATION
+	dash_cooldown_timer = DASH_COOLDOWN
+	
+	# Determine dash direction
+	var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	if input_dir.length() > 0:
+		dash_direction = input_dir.normalized()
+	else:
+		# If no input, dash in facing direction or right by default
+		if sprite.flip_h:
+			dash_direction = Vector2.LEFT
+		else:
+			dash_direction = Vector2.RIGHT
+			
+	# Optional: Visual effect
+	if sprite:
+		sprite.modulate.a = 0.5 # Ghost effect transparency
+		
+	# Optional: Invulnerability during dash
+	set_invulnerable(DASH_DURATION)
+	print("Dash started!")
+
+func _update_dash_timers(delta: float):
+	if is_dashing:
+		dash_timer -= delta
+		if dash_timer <= 0:
+			is_dashing = false
+			if sprite:
+				sprite.modulate.a = 1.0 # Restore opacity
+			velocity = Vector2.ZERO # Stop momentum after dash? Or keep it? keeping it feels better usually but let's reset to avoid sliding forever.
+			
+	if not can_dash:
+		dash_cooldown_timer -= delta
+		if dash_cooldown_timer <= 0:
+			can_dash = true
+			print("Dash ready!")
 
 # ==================== SKILL SUPPORT METHODS ====================
 
@@ -401,6 +484,12 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 	if not sprite or mokou_textures.sprite.size() == 0:
 		return
 
+	# 优先处理冲刺动画（飞踢）
+	if is_dashing and mokou_textures.kick:
+		sprite.texture = mokou_textures.kick
+		sprite.scale = Vector2(0.15, 0.15)  # 飞踢使用HD纹理大小
+		return  # 冲刺时不处理其他动画
+
 	var is_moving = input_dir.length() > 0.1
 
 	# 更新动画计时器
@@ -433,8 +522,12 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 		# 水平翻转（朝向移动方向）
 		if input_dir.x != 0:
 			sprite.flip_h = input_dir.x < 0
+
+		# 运动时使用像素艺术纹理大小
+		sprite.scale = Vector2(0.5, 0.5)
 	else:
 		# 停止移动，显示站立
 		animation_timer = 0.0
 		if mokou_textures.stand:
 			sprite.texture = mokou_textures.stand
+			sprite.scale = Vector2(0.15, 0.15)  # 站立使用HD纹理大小

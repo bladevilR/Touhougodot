@@ -117,11 +117,10 @@ func setup_layers():
 	background_layer.name = "BackgroundLayer"
 	background_layer.z_index = -10
 	add_child(background_layer)
-
-	walls_layer = Node2D.new()
-	walls_layer.name = "WallsLayer"
-	walls_layer.z_index = 0
-	add_child(walls_layer)
+	
+	# We don't need a separate walls_layer node if we want them to Y-sort with Player in World
+	# But we'll keep the variable to track walls or if we change our mind.
+	# For now, we add walls directly to World (parent) so they sort with Player.
 
 func create_background():
 	print("MapSystem: Creating grass background...")
@@ -171,7 +170,9 @@ func create_walls():
 
 		var wall_node = create_wall(texture_index, x, y, scale_factor)
 		if wall_node:
-			walls_layer.add_child(wall_node)
+			# Add to parent (World) for correct Y-sorting with Player
+			get_parent().call_deferred("add_child", wall_node)
+			# walls_layer.add_child(wall_node) 
 			wall_bodies.append(wall_node)
 			walls_created += 1
 
@@ -194,7 +195,7 @@ func create_wall(texture_index: int, x: float, y: float, scale_factor: float) ->
 
 	var sprite = Sprite2D.new()
 	sprite.texture = texture
-	sprite.scale = Vector2(scale_factor, scale_factor)
+	sprite.scale = Vector2(scale_factor * 0.5, scale_factor * 0.5) # Reduced scale by 50%
 	sprite.centered = true
 	wall_body.add_child(sprite)
 
@@ -204,8 +205,8 @@ func create_wall(texture_index: int, x: float, y: float, scale_factor: float) ->
 
 	# Calculate collision size based on texture dimensions and scale
 	var texture_size = texture.get_size()
-	var collision_width = texture_size.x * scale_factor * 0.5  # 50% of visual width for tighter fit
-	var collision_height = texture_size.y * scale_factor * 0.6  # 60% of visual height
+	var collision_width = texture_size.x * (scale_factor * 0.5) * 0.5  # 50% of visual width for tighter fit
+	var collision_height = texture_size.y * (scale_factor * 0.5) * 0.6  # 60% of visual height
 
 	shape.size = Vector2(collision_width, collision_height)
 	collision_shape.shape = shape
