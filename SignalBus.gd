@@ -3,6 +3,9 @@ extends Node
 # SignalBus - 全局信号总线
 # 这是整个游戏的"电话局"，所有节点只跟它说话，不互相找
 
+# --- 全局状态变量 ---
+var selected_character_id: int = 0  # 当前选择的角色ID
+
 # --- 战斗相关信号 ---
 signal player_health_changed(current_hp, max_hp)
 signal player_died()
@@ -28,3 +31,7 @@ signal boss_spawned(boss_name: String, boss_hp: float, boss_max_hp: float)
 signal boss_health_changed(boss_hp: float, boss_max_hp: float)
 signal boss_defeated()
 signal damage_dealt(damage_amount: float, position: Vector2, is_critical: bool)
+
+# --- 视觉反馈信号 ---
+signal screen_shake(duration: float, intensity: float)  # 屏幕震动
+signal spawn_death_particles(position: Vector2, color: Color, count: int)  # 死亡粒子

@@ -103,6 +103,7 @@ var walls_layer: Node2D
 var wall_bodies: Array = []
 
 func _ready():
+	add_to_group("map_system")  # 加入组以便EnemySpawner查找
 	print("MapSystem: Initializing bamboo forest map...")
 	setup_layers()
 	create_background()
@@ -124,22 +125,24 @@ func setup_layers():
 
 func create_background():
 	print("MapSystem: Creating grass background...")
-	# Create tiled grass background
-	var grass_texture = load("res://assets/grassnew.png")
+	# 使用原项目的 grass (2).png
+	var grass_texture = load("res://assets/grass2.png")
 
 	if grass_texture:
-		# Calculate how many tiles we need
-		var texture_width = grass_texture.get_width()
-		var texture_height = grass_texture.get_height()
-		var tiles_x = ceil(MAP_WIDTH / float(texture_width)) + 1
-		var tiles_y = ceil(MAP_HEIGHT / float(texture_height)) + 1
+		# 原项目使用256px的贴图尺寸
+		var GRASS_TILE_SIZE = 256
+		var tiles_x = ceil(MAP_WIDTH / float(GRASS_TILE_SIZE)) + 1
+		var tiles_y = ceil(MAP_HEIGHT / float(GRASS_TILE_SIZE)) + 1
 
-		# Create tiles
+		# Create tiles with scaling
 		for x in range(tiles_x):
 			for y in range(tiles_y):
 				var sprite = Sprite2D.new()
 				sprite.texture = grass_texture
-				sprite.position = Vector2(x * texture_width, y * texture_height)
+				# Scale to match 256px tile size
+				var scale_factor = GRASS_TILE_SIZE / float(grass_texture.get_width())
+				sprite.scale = Vector2(scale_factor, scale_factor)
+				sprite.position = Vector2(x * GRASS_TILE_SIZE, y * GRASS_TILE_SIZE)
 				sprite.centered = false
 				background_layer.add_child(sprite)
 

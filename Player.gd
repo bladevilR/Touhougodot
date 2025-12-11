@@ -18,6 +18,22 @@ var character_data = null
 var invulnerable_timer: float = 0.0
 var is_invulnerable: bool = false
 
+# 接触伤害冷却
+var contact_damage_cooldown: float = 0.0
+const CONTACT_DAMAGE_INTERVAL: float = 0.5  # 每0.5秒受一次伤害
+
+# 妹红动画系统
+var mokou_textures = {
+	"sprite": [],  # 水平移动帧
+	"up": [],      # 向上移动帧
+	"down": [],    # 向下移动帧
+	"stand": null, # 站立
+	"kick": null   # 飞踢
+}
+var animation_frame: int = 0
+var animation_timer: float = 0.0
+const ANIMATION_SPEED: float = 0.08  # 每帧持续时间
+
 # ==================== PHYSICS SYSTEM ====================
 # Physics properties from CharacterData
 var mass: float = 10.0
@@ -39,7 +55,7 @@ const WALL_AVOIDANCE_DISTANCE: float = 50.0
 func _ready():
 	add_to_group("player")
 
-	# 获取子节点引用
+	# 获取子节点���用
 	health_comp = get_node_or_null("HealthComponent")
 	sprite = get_node_or_null("Sprite2D")
 	weapon_system = get_node_or_null("WeaponSystem")
@@ -49,8 +65,36 @@ func _ready():
 	# 初始化角色数据
 	CharacterData.initialize()
 
-	# 加载角色配置
-	character_data = CharacterData.CHARACTERS.get(character_id)
+	# 监听角色选择信号（用于游戏运行时切换角色）
+	SignalBus.character_selected.connect(_on_character_selected)
+
+	# 从MainMenu获取选择的角色ID
+	if SignalBus.selected_character_id >= 0:
+		character_id = SignalBus.selected_character_id
+
+	# 加载角色配置（使用选择的角色或默认角色）
+	_load_character_data(character_id)
+
+	# 设置碰撞层
+	_setup_collision_layers()
+
+	# 连接生命值组件信号
+	if health_comp:
+		health_comp.died.connect(on_player_died)
+
+	# 监听升级事件
+	SignalBus.level_up.connect(on_level_up)
+
+func _on_character_selected(selected_id: int):
+	"""角色选择信号回调"""
+	print("收到角色选择信号: ", selected_id)
+	character_id = selected_id
+	# 重新加载角色数据（如果在游戏运行时）
+	# _load_character_data(character_id)
+
+func _load_character_data(char_id: int):
+	"""加载并应用角色数据"""
+	character_data = CharacterData.CHARACTERS.get(char_id)
 	if character_data and health_comp:
 		# 应用角色属性
 		health_comp.max_hp = character_data.stats.max_hp
@@ -76,18 +120,12 @@ func _ready():
 		print("初始武器: ", character_data.starting_weapon_id)
 		print("物理属性 - 质量: ", mass, ", 摩擦力: ", friction, ", 判定倍率: ", hitbox_scale)
 
+		# 加载妹红动画（如果是妹红）
+		if char_id == GameConstants.CharacterId.MOKOU:
+			_load_mokou_textures()
+
 		# 装备初始武器
 		SignalBus.weapon_added.emit(character_data.starting_weapon_id)
-
-	# 设置碰撞层
-	_setup_collision_layers()
-
-	# 连接生命值组件信号
-	if health_comp:
-		health_comp.died.connect(on_player_died)
-
-	# 监听升级事件
-	SignalBus.level_up.connect(on_level_up)
 
 func _setup_collision_layers():
 	# Layer 1: Player
@@ -111,6 +149,10 @@ func _physics_process(delta):
 	if invulnerable_timer > 0:
 		invulnerable_timer -= delta
 		is_invulnerable = invulnerable_timer > 0
+
+	# 更新接触伤害冷却
+	if contact_damage_cooldown > 0:
+		contact_damage_cooldown -= delta
 
 	# 如果正在执行技能，跳过普通移动逻辑
 	if character_skills and character_skills.is_skill_active():
@@ -150,7 +192,15 @@ func _physics_process(delta):
 	# Move with collision
 	move_and_slide()
 
+	# Check for collisions with enemies and apply contact damage
+	_check_enemy_contact_damage()
+
+	# 更新妹红动画（如果是妹红）
+	if character_id == GameConstants.CharacterId.MOKOU:
+		_update_mokou_animation(delta, input_dir)
+
 	# 翻转精灵（面向移动方向）
+	# 妹红的翻转由_update_mokou_animation处理
 	# ColorRect不支持flip_h，暂时跳过
 	# if input_dir.x != 0:
 	# 	sprite.flip_h = input_dir.x < 0
@@ -225,9 +275,38 @@ func take_damage(amount: float):
 
 		# 播放受击效果
 		if sprite:
-			sprite.color = Color.RED
+			sprite.modulate = Color.RED
 			await get_tree().create_timer(0.1).timeout
-			sprite.color = Color(0, 1, 0, 1)
+			sprite.modulate = Color.WHITE
+
+func _check_enemy_contact_damage():
+	"""检查与敌人的接触并造成伤害"""
+	# 如果在冷却中，跳过
+	if contact_damage_cooldown > 0:
+		return
+
+	# 检查与敌人的碰撞
+	for i in range(get_slide_collision_count()):
+		var collision = get_slide_collision(i)
+		var collider = collision.get_collider()
+
+		if collider and collider.is_in_group("enemy"):
+			# 获取敌人的伤害值
+			var damage = 10.0  # 默认伤害
+			if collider.enemy_data and "damage" in collider.enemy_data:
+				damage = collider.enemy_data.damage
+
+			# 造成伤害
+			take_damage(damage)
+
+			# 设置冷却时间
+			contact_damage_cooldown = CONTACT_DAMAGE_INTERVAL
+
+			# 击退
+			var knockback_dir = (global_position - collider.global_position).normalized()
+			apply_knockback(knockback_dir, 50.0)
+
+			break  # 一次只处理一个敌人碰撞
 
 func on_player_died():
 	print("玩家死亡！")
@@ -249,3 +328,113 @@ func set_invulnerable(duration: float):
 	invulnerable_timer = duration
 	is_invulnerable = true
 	print("无敌时间: %.2f秒" % duration)
+
+# ==================== MOKOU ANIMATION SYSTEM ====================
+
+func _load_mokou_textures():
+	"""加载妹红的雪碧图动画纹理"""
+	# sprite.png - 8帧水平移动动画（水平排列）
+	var sprite_texture = load("res://assets/sprite.png")
+	if sprite_texture:
+		var frame_width = sprite_texture.get_width() / 8
+		var frame_height = sprite_texture.get_height()
+		mokou_textures.sprite = []
+		for i in range(8):
+			var atlas = AtlasTexture.new()
+			atlas.atlas = sprite_texture
+			atlas.region = Rect2(i * frame_width, 0, frame_width, frame_height)
+			mokou_textures.sprite.append(atlas)
+		print("妹红水平动画加载完成：8帧")
+
+	# up.png - 4帧向上移动动画（水平排列）
+	var up_texture = load("res://assets/up.png")
+	if up_texture:
+		var frame_width = up_texture.get_width() / 4
+		var frame_height = up_texture.get_height()
+		mokou_textures.up = []
+		for i in range(4):
+			var atlas = AtlasTexture.new()
+			atlas.atlas = up_texture
+			atlas.region = Rect2(i * frame_width, 0, frame_width, frame_height)
+			mokou_textures.up.append(atlas)
+		print("妹红向上动画加载完成：4帧")
+
+	# down.png - 17帧向下移动动画（检测垂直/水平排列）
+	var down_texture = load("res://assets/down.png")
+	if down_texture:
+		var is_vertical_layout = down_texture.get_height() > down_texture.get_width()
+		mokou_textures.down = []
+
+		if is_vertical_layout:
+			# 垂直排列（上下堆叠）
+			var frame_width = down_texture.get_width()
+			var frame_height = down_texture.get_height() / 17
+			for i in range(17):
+				var atlas = AtlasTexture.new()
+				atlas.atlas = down_texture
+				atlas.region = Rect2(0, i * frame_height, frame_width, frame_height)
+				mokou_textures.down.append(atlas)
+			print("妹红向下动画加载完成：17帧（垂直排列）")
+		else:
+			# 水平排列（左右排列）
+			var frame_width = down_texture.get_width() / 17
+			var frame_height = down_texture.get_height()
+			for i in range(17):
+				var atlas = AtlasTexture.new()
+				atlas.atlas = down_texture
+				atlas.region = Rect2(i * frame_width, 0, frame_width, frame_height)
+				mokou_textures.down.append(atlas)
+			print("妹红向下动画加载完成：17帧（水平排列）")
+
+	# stand.png - 站立
+	mokou_textures.stand = load("res://assets/stand.png")
+	if mokou_textures.stand:
+		print("妹红站立纹理加载完成")
+
+	# mokuokick.png - 飞踢
+	mokou_textures.kick = load("res://assets/mokuokick.png")
+	if mokou_textures.kick:
+		print("妹红飞踢纹理加载完成")
+
+func _update_mokou_animation(delta: float, input_dir: Vector2):
+	"""更新妹红的动画帧"""
+	if not sprite or mokou_textures.sprite.size() == 0:
+		return
+
+	var is_moving = input_dir.length() > 0.1
+
+	# 更新动画计时器
+	if is_moving:
+		animation_timer += delta
+		# 60帧=1秒动画周期
+		var animation_cycle = 1.0  # 1秒一个完整循环
+		var progress = fmod(animation_timer, animation_cycle) / animation_cycle
+
+		# 根据方向选择动画
+		var is_moving_up = input_dir.y < -0.5
+		var is_moving_down = input_dir.y > 0.5
+
+		if is_moving_up and mokou_textures.up.size() > 0:
+			# 向上移动（4帧）
+			var frame_index = int(progress * 4) % 4
+			# 原项目使用倒序播放：spriteUp[3 - frame]
+			sprite.texture = mokou_textures.up[3 - frame_index]
+		elif is_moving_down and mokou_textures.down.size() > 0:
+			# 向下移动（17帧）
+			var frame_index = int(progress * 17) % 17
+			# 原项目使用倒序播放：spriteDown[16 - frame]
+			sprite.texture = mokou_textures.down[16 - frame_index]
+		else:
+			# 水平移动（8帧）
+			var frame_index = int(progress * 8) % 8
+			# 原项目使用倒序播放：sprite[(8-1) - frame]
+			sprite.texture = mokou_textures.sprite[7 - frame_index]
+
+		# 水平翻转（朝向移动方向）
+		if input_dir.x != 0:
+			sprite.flip_h = input_dir.x < 0
+	else:
+		# 停止移动，显示站立
+		animation_timer = 0.0
+		if mokou_textures.stand:
+			sprite.texture = mokou_textures.stand

@@ -84,17 +84,17 @@ func fire_weapon(weapon_id: String):
 	# 根据武器类型发射
 	match config.weapon_type:
 		GameConstants.WeaponType.PROJECTILE:
-			_fire_projectile(config, stats, weapon_level)
+			_fire_projectile(weapon_id, config, stats, weapon_level)
 		GameConstants.WeaponType.ORBITAL:
-			_fire_orbital(config, stats, weapon_level)
+			_fire_orbital(weapon_id, config, stats, weapon_level)
 		GameConstants.WeaponType.LASER:
-			_fire_laser(config, stats, weapon_level)
+			_fire_laser(weapon_id, config, stats, weapon_level)
 		GameConstants.WeaponType.SPECIAL:
-			_fire_special(config, stats, weapon_level)
+			_fire_special(weapon_id, config, stats, weapon_level)
 		_:
 			print("未实现的武器类型: ", config.weapon_type)
 
-func _fire_projectile(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
+func _fire_projectile(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 获取最近的敌人作为目标
 	var target = get_nearest_enemy()
 	var target_pos = target.global_position if target else player.global_position + Vector2(100, 0)
@@ -123,6 +123,8 @@ func _fire_projectile(config: WeaponData.WeaponConfig, stats: Dictionary, weapon
 
 		# 配置子弹属性 - 使用Bullet.setup()方法
 		bullet.setup({
+			"weapon_id": weapon_id,
+			"bullet_color": _get_weapon_color(weapon_id, config),
 			"damage": config.base_damage * stats.might * level_damage_bonus,
 			"speed": config.projectile_speed,
 			"lifetime": config.projectile_lifetime,
@@ -143,7 +145,7 @@ func _fire_projectile(config: WeaponData.WeaponConfig, stats: Dictionary, weapon
 		# 添加到场景
 		get_tree().root.add_child(bullet)
 
-func _fire_orbital(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
+func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 环绕武器（如凤凰羽衣）
 	# 这类武器应该持续存在，每次发射刷新环绕弹幕
 
@@ -160,6 +162,8 @@ func _fire_orbital(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_le
 		var level_damage_bonus = 1.0 + (weapon_level - 1) * 0.15
 
 		bullet.setup({
+			"weapon_id": weapon_id,
+			"bullet_color": _get_weapon_color(weapon_id, config),
 			"damage": config.base_damage * stats.might * level_damage_bonus,
 			"speed": 0.0,  # 环绕弹幕不需要速度，位置跟随玩家
 			"lifetime": 0.2,  # 短生命周期，持续重新生成
@@ -176,7 +180,7 @@ func _fire_orbital(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_le
 		bullet.global_position = player.global_position
 		get_tree().root.add_child(bullet)
 
-func _fire_laser(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
+func _fire_laser(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 激光武器
 	var target = get_nearest_enemy()
 	if not target:
@@ -190,6 +194,8 @@ func _fire_laser(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_leve
 
 	var bullet = bullet_scene.instantiate()
 	bullet.setup({
+		"weapon_id": weapon_id,
+		"bullet_color": _get_weapon_color(weapon_id, config),
 		"damage": config.base_damage * stats.might * level_damage_bonus,
 		"speed": config.projectile_speed,
 		"lifetime": config.projectile_lifetime * (1.0 + (weapon_level - 1) * 0.1),  # 每级+10%持续时间
@@ -203,7 +209,7 @@ func _fire_laser(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_leve
 	bullet.global_position = player.global_position
 	get_tree().root.add_child(bullet)
 
-func _fire_special(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
+func _fire_special(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 特殊武器（如地雷）
 	var level_damage_bonus = 1.0 + (weapon_level - 1) * 0.15
 	var projectile_count = config.projectile_count + max(0, int((weapon_level - 1) * 0.5))
@@ -218,6 +224,8 @@ func _fire_special(config: WeaponData.WeaponConfig, stats: Dictionary, weapon_le
 		)
 
 		bullet.setup({
+			"weapon_id": weapon_id,
+			"bullet_color": _get_weapon_color(weapon_id, config),
 			"damage": config.base_damage * stats.might * level_damage_bonus,
 			"speed": 0.0,  # 地雷静止
 			"lifetime": config.projectile_lifetime,
@@ -284,3 +292,37 @@ func _element_type_to_string(element_type: int) -> String:
 			return "poison"
 		_:
 			return "none"
+
+func _get_weapon_color(weapon_id: String, config: WeaponData.WeaponConfig) -> Color:
+	"""根据weapon_id和元素类型返回弹幕颜色"""
+	# 优先根据武器特性设置颜色
+	match weapon_id:
+		"homing_amulet":
+			return Color("#e74c3c")  # 红色符札（灵梦）
+		"star_dust":
+			return Color("#f1c40f")  # 黄色星星（魔理沙）
+		"phoenix_wings":
+			return Color("#ff4500")  # 橙红色火焰（妹红）
+		"knives":
+			return Color("#bdc3c7")  # 银白色飞刀（咲夜）
+		"yin_yang_orb":
+			return Color("#e74c3c")  # 红色阴阳玉（灵梦）
+		"spoon":
+			return Color("#8e44ad")  # 紫色汤勺（尤魔）
+		"mines":
+			return Color("#2ecc71")  # 绿色地雷（恋）
+		"laser":
+			return Color("#f1c40f")  # 黄色激光（魔理沙）
+
+	# 其次根据元素类型设置颜色
+	match config.element_type:
+		GameConstants.ElementType.FIRE:
+			return Color("#ff4500")  # 橙红色
+		GameConstants.ElementType.ICE:
+			return Color("#00ffff")  # 青色
+		GameConstants.ElementType.LIGHTNING:
+			return Color("#ffff00")  # 黄色
+		GameConstants.ElementType.POISON:
+			return Color("#00ff00")  # 绿色
+		_:
+			return Color.WHITE  # 默认白色

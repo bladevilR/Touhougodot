@@ -59,7 +59,7 @@ func _update_active_waves():
 			if not already_active:
 				active_waves.append({
 					"config": wave_config,
-					"timer": 0.0  # 立即生成第一波
+					"timer": wave_config.interval  # 第一次也要等待interval秒再生成
 				})
 				print("波次激活: ", wave_config.enemy_type, " - 每", wave_config.interval, "秒生成")
 
@@ -155,11 +155,20 @@ func spawn_boss(boss_config: EnemyData.BossConfig):
 	get_parent().add_child(boss)
 
 func _get_random_spawn_position() -> Vector2:
+	# 使用MapSystem中定义的固定spawn points，而不是玩家周围随机位置
+	var map_system = get_tree().get_first_node_in_group("map_system")
+	if map_system and map_system.has_method("get_enemy_spawn_points"):
+		var spawn_points = map_system.get_enemy_spawn_points()
+		if spawn_points.size() > 0:
+			# 随机选择一个spawn point
+			return spawn_points[randi() % spawn_points.size()]
+
+	# 如果找不到map_system，回退到玩家周围生成（但只在前方180度）
 	if not is_instance_valid(player):
 		return Vector2.ZERO
 
-	# 在玩家周围随机角度生成
-	var angle = randf() * TAU
+	# 只在玩家前方和侧面生成，避免从后方突然出现
+	var angle = randf_range(-PI/2, PI/2)  # -90度到+90度（前方半圆）
 	var offset = Vector2(cos(angle), sin(angle)) * spawn_distance
 
 	return player.global_position + offset

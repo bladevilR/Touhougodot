@@ -24,9 +24,9 @@ var knockback_immunity: bool = false
 const KNOCKBACK_DECAY: float = 5.0  # How fast knockback decays
 
 # Collision avoidance
-const ENEMY_SEPARATION_RADIUS: float = 50.0
-const ENEMY_SEPARATION_STRENGTH: float = 50.0
-const MAX_SEPARATION_FORCE: float = 200.0
+const ENEMY_SEPARATION_RADIUS: float = 80.0  # 增加检测范围
+const ENEMY_SEPARATION_STRENGTH: float = 150.0  # 增加分离力度
+const MAX_SEPARATION_FORCE: float = 400.0  # 增加最大分离力
 
 # ==================== STATUS EFFECT SYSTEM ====================
 # Status effect tracking structures
@@ -68,9 +68,9 @@ func _ready():
 		xp_value = enemy_data.exp
 		mass = enemy_data.mass  # 应用质量
 
-		# 设置颜色
+		# 设置颜色（Sprite2D使用modulate而不是color）
 		if sprite:
-			sprite.color = enemy_data.color
+			sprite.modulate = enemy_data.color
 			original_color = enemy_data.color
 
 	# Store base speed for status effect calculations
@@ -189,17 +189,27 @@ func apply_knockback(direction: Vector2, force: float):
 func take_damage(amount):
 	if health_comp:
 		health_comp.damage(amount)
+		# 发射伤害数字
+		SignalBus.damage_dealt.emit(amount, global_position, false)
 
 		# 播放受击闪白
 		if sprite:
-			sprite.color = Color.WHITE
+			sprite.modulate = Color.WHITE
 			await get_tree().create_timer(0.1).timeout
 			if enemy_data:
-				sprite.color = enemy_data.color
+				sprite.modulate = enemy_data.color
 			else:
-				sprite.color = Color.RED
+				sprite.modulate = Color.RED
 
 func die():
+	# 发射死亡粒子效果
+	var particle_color = original_color if original_color != Color.RED else Color.WHITE
+	SignalBus.spawn_death_particles.emit(global_position, particle_color, 20)
+
+	# 触发轻微屏幕震动
+	# 原项目：triggerScreenShake(5, 10) 用于普通敌人死亡
+	SignalBus.screen_shake.emit(0.08, 5.0)  # 0.08秒，5像素
+
 	# 通知全世界：这里死怪了，掉经验吧，播音效吧
 	SignalBus.enemy_killed.emit(xp_value, global_position)
 	queue_free()
@@ -224,7 +234,7 @@ func setup(type: int, wave: int = 1):
 		mass = enemy_data.mass  # 应用质量
 
 		if sprite:
-			sprite.color = enemy_data.color
+			sprite.modulate = enemy_data.color
 
 # ==================== STATUS EFFECT APPLICATION METHODS ====================
 # These methods are called by Bullet.gd when status effects are applied

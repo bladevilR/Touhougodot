@@ -26,6 +26,10 @@ class_name Bullet
 var direction: Vector2 = Vector2.RIGHT
 var velocity: Vector2 = Vector2.ZERO  # Actual velocity vector
 
+# Visual properties
+var weapon_id: String = ""  # Weapon ID for texture selection
+var bullet_color: Color = Color.WHITE  # Color for tinting
+
 # ==================== PROJECTILE MECHANICS ====================
 # Penetration & Knockback
 @export var penetration: int = 1  # Number of enemies to pierce through
@@ -50,9 +54,13 @@ var velocity: Vector2 = Vector2.ZERO  # Actual velocity vector
 var player_reference: Node2D = null  # Reference to player for orbital weapons
 
 # ==================== SPECIAL MECHANICS ====================
-# Gravity
+# Gravity (物理重力 - 让子弹往下掉)
 @export var has_gravity: bool = false
 var gravity_strength: float = 400.0  # Gravity acceleration
+
+# Gravity Pull (引力拉扯 - 吸引周围敌人)
+@export var gravity_pull_strength: float = 0.0  # Pull force (黑洞效果)
+@export var gravity_pull_range: float = 300.0  # Pull range in pixels
 
 # Laser
 @export var is_laser: bool = false  # Instant raycast laser
@@ -122,8 +130,8 @@ func _ready():
 	body_entered.connect(_on_body_entered)
 
 	# Set collision layers
-	collision_layer = 4  # Player bullet layer
-	collision_mask = 2   # Detect enemy layer
+	collision_layer = 8  # Player bullet layer (Layer 4)
+	collision_mask = 6   # Detect enemies (Layer 3=4) + walls (Layer 2=2) = 6
 
 	# Initialize velocity from direction and speed
 	if velocity == Vector2.ZERO and direction != Vector2.ZERO:
@@ -133,7 +141,68 @@ func _ready():
 	if orbit_radius > 0.0 or return_to_player:
 		player_reference = get_tree().get_first_node_in_group("player")
 
+	# Setup visual appearance
+	_setup_bullet_visual()
+
 	is_initialized = true
+
+func _setup_bullet_visual():
+	"""根据weapon_id加载正确的纹理并设置混合模式"""
+	if not sprite:
+		return
+
+	# 根据weapon_id选择纹理
+	var texture_path = ""
+	var base_radius = 10.0
+	var should_rotate = false
+
+	match weapon_id:
+		"homing_amulet":
+			texture_path = "res://assets/bullets/amulet.png"
+			base_radius = 180.0
+			should_rotate = true
+		"star_dust":
+			texture_path = "res://assets/bullets/star.png"
+			base_radius = 240.0
+			should_rotate = true
+		"knives":
+			texture_path = "res://assets/bullets/knife.png"
+			base_radius = 240.0
+			should_rotate = true
+		"yin_yang_orb":
+			texture_path = "res://assets/bullets/yinyang.png"
+			base_radius = 200.0
+			should_rotate = false
+		_:
+			# 根据半径选择通用弹幕
+			var radius = collision_shape.shape.radius if collision_shape and collision_shape.shape else 10.0
+			if radius > 15:
+				texture_path = "res://assets/bullets/big_bullet.png"
+				base_radius = 340.0
+			else:
+				texture_path = "res://assets/bullets/rice_bullet.png"
+				base_radius = 240.0
+			should_rotate = true
+
+	# 加载纹理
+	if texture_path != "" and ResourceLoader.exists(texture_path):
+		sprite.texture = load(texture_path)
+
+		# 设置混合模式为ADD（发光效果）
+		sprite.material = CanvasItemMaterial.new()
+		sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+
+		# 使用modulate着色（tint效果）
+		sprite.modulate = bullet_color
+
+		# 根据半径缩放
+		var radius = collision_shape.shape.radius if collision_shape and collision_shape.shape else 10.0
+		var target_scale = radius / base_radius
+		sprite.scale = Vector2(target_scale, target_scale)
+
+		# 旋转朝向运动方向
+		if should_rotate and velocity.length() > 0:
+			sprite.rotation = velocity.angle() + PI/2  # +90度因为贴图默认朝上
 
 # ==================== PHYSICS PROCESS ====================
 func _physics_process(delta):
@@ -168,11 +237,15 @@ func _physics_process(delta):
 			var to_target = (target.global_position - global_position).normalized()
 			velocity = velocity.normalized().lerp(to_target, homing_strength * delta * 60.0).normalized() * speed
 
-	# ===== GRAVITY MECHANICS =====
+	# ===== GRAVITY MECHANICS (物理重力) =====
 	if has_gravity:
 		velocity.y += gravity_strength * delta
 		# Cap falling speed
 		velocity.y = min(velocity.y, 800.0)
+
+	# ===== GRAVITY PULL MECHANICS (引力拉扯) =====
+	if gravity_pull_strength > 0.0:
+		_apply_gravity_pull()
 
 	# ===== MOVEMENT =====
 	global_position += velocity * delta
@@ -492,9 +565,53 @@ func _find_nearest_enemy() -> Node2D:
 
 	return nearest
 
+# Apply gravity pull effect to nearby enemies (黑洞效果)
+func _apply_gravity_pull():
+	var enemies = get_tree().get_nodes_in_group("enemy")
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		var dx = global_position.x - enemy.global_position.x
+		var dy = global_position.y - enemy.global_position.y
+		var dist = sqrt(dx * dx + dy * dy)
+
+		# Only pull enemies within range
+		if dist < gravity_pull_range and dist > 0.1:
+			# Pull force inversely proportional to distance squared
+			# 原项目公式：pullForce = gravityStrength / (dist * dist + 1)
+			var pull_force = gravity_pull_strength / (dist * dist + 1.0)
+
+			# Normalize direction and apply pull
+			var pull_x = (dx / dist) * pull_force
+			var pull_y = (dy / dist) * pull_force
+
+			# Apply to enemy velocity (if enemy has velocity property)
+			if enemy.has_method("apply_knockback"):
+				# Use knockback system to apply pull force
+				var pull_direction = Vector2(pull_x, pull_y).normalized()
+				enemy.apply_knockback(pull_direction, pull_force * 10.0)
+			elif "velocity" in enemy:
+				enemy.velocity.x += pull_x
+				enemy.velocity.y += pull_y
+
 # ==================== SETUP HELPER ====================
 # Setup bullet from dictionary config (for WeaponSystem integration)
 func setup(config: Dictionary):
+	# Visual properties
+	if config.has("weapon_id"):
+		weapon_id = config.weapon_id
+	if config.has("bullet_color"):
+		bullet_color = config.bullet_color
+	elif config.has("color"):
+		# 支持Color对象或颜色字符串
+		var color_value = config.color
+		if color_value is Color:
+			bullet_color = color_value
+		elif color_value is String:
+			bullet_color = Color(color_value)
+
 	# Core properties
 	if config.has("damage"):
 		damage = config.damage
@@ -535,6 +652,10 @@ func setup(config: Dictionary):
 	# Special mechanics
 	if config.has("has_gravity"):
 		has_gravity = config.has_gravity
+	if config.has("gravity_pull_strength"):
+		gravity_pull_strength = config.gravity_pull_strength
+	if config.has("gravity_pull_range"):
+		gravity_pull_range = config.gravity_pull_range
 	if config.has("is_laser"):
 		is_laser = config.is_laser
 	if config.has("is_barrier_field"):

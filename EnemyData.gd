@@ -185,10 +185,10 @@ static func initialize():
 	# ==================== 波次系统 ====================
 	# 完整的10波敌人配置（基于原项目的WAVES）
 
-	# Wave 1: 史莱姆 - 每1秒生成，持续整局
+	# Wave 1: 史莱姆 - 每2秒生成，持续整局
 	WAVES.append(WaveConfig.new(
 		0.0,          # 开始时间
-		1.0,          # 每1秒生成
+		2.0,          # 每2秒生成（调整为2秒，原来1秒太快）
 		"slime",
 		20.0,         # HP
 		5.0,          # 伤害
@@ -197,10 +197,10 @@ static func initialize():
 		Color("#a8e6cf")  # 浅绿色
 	))
 
-	# Wave 2: 精灵 - 每3秒生成，从开始
+	# Wave 2: 精灵 - 每5秒生成，从30秒后开始（原来从0秒开始太快）
 	WAVES.append(WaveConfig.new(
-		0.0,
-		3.0,          # 每3秒生成
+		30.0,         # 30秒后开始
+		5.0,          # 每5秒生成
 		"elf",
 		40.0,
 		6.0,
@@ -209,10 +209,10 @@ static func initialize():
 		Color("#87ceeb")  # 天蓝色
 	))
 
-	# Wave 3: 史莱姆强化 - 1分钟后，每45秒生成
+	# Wave 3: 史莱姆强化 - 1分钟后，每1.5秒生成
 	WAVES.append(WaveConfig.new(
 		60.0,         # 1分钟后
-		0.75,         # 每0.75秒生成
+		1.5,          # 每1.5秒生成（原来0.75太快）
 		"slime",
 		60.0,
 		8.0,
@@ -221,10 +221,10 @@ static func initialize():
 		Color("#3b7a57")  # 深绿色
 	))
 
-	# Wave 4: 精灵强化 - 3分钟后，每30秒生成
+	# Wave 4: 精灵强化 - 3分钟后，每1秒生成
 	WAVES.append(WaveConfig.new(
 		180.0,        # 3分钟后
-		0.5,          # 每0.5秒生成
+		1.0,          # 每1秒生成（原来0.5太快）
 		"elf",
 		120.0,
 		10.0,
@@ -245,10 +245,10 @@ static func initialize():
 		Color("#4dd2ff")  # 亮青色
 	))
 
-	# Wave 6: 精灵高级 - 6分钟后，每15秒生成
+	# Wave 6: 精灵高级 - 6分钟后，每0.8秒生成
 	WAVES.append(WaveConfig.new(
 		360.0,        # 6分钟后
-		0.25,         # 每0.25秒生成
+		0.8,          # 每0.8秒生成（原来0.25太快）
 		"elf",
 		200.0,
 		15.0,
@@ -257,10 +257,10 @@ static func initialize():
 		Color("#4682b4")
 	))
 
-	# Wave 7: 幽灵 - 10分钟后，每10秒生成
+	# Wave 7: 幽灵 - 10分钟后，每0.5秒生成
 	WAVES.append(WaveConfig.new(
 		600.0,        # 10分钟后
-		0.17,         # 每0.17秒生成
+		0.5,          # 每0.5秒生成（原来0.17太快）
 		"ghost",
 		400.0,
 		20.0,
@@ -281,10 +281,10 @@ static func initialize():
 		Color("#90ee90")  # 浅绿色
 	))
 
-	# Wave 9: 幽灵强化 - 16分钟后，每8秒生成
+	# Wave 9: 幽灵强化 - 16分钟后，每0.4秒生成
 	WAVES.append(WaveConfig.new(
 		960.0,        # 16分钟后
-		0.13,         # 每0.13秒生成
+		0.4,          # 每0.4秒生成（原来0.13太快）
 		"ghost",
 		600.0,
 		25.0,

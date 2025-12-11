@@ -22,13 +22,14 @@ func _ready():
 	start_button.pressed.connect(_on_start_button_pressed)
 
 func create_character_cards():
+	# 必须按照GameConstants.CharacterId枚举顺序排列
 	var character_ids = [
-		GameConstants.CharacterId.REIMU,
-		GameConstants.CharacterId.MARISA,
-		GameConstants.CharacterId.MOKOU,
-		GameConstants.CharacterId.SAKUYA,
-		GameConstants.CharacterId.YUMA,
-		GameConstants.CharacterId.KOISHI
+		GameConstants.CharacterId.REIMU,    # 0
+		GameConstants.CharacterId.MOKOU,    # 1
+		GameConstants.CharacterId.MARISA,   # 2
+		GameConstants.CharacterId.SAKUYA,   # 3
+		GameConstants.CharacterId.YUMA,     # 4
+		GameConstants.CharacterId.KOISHI    # 5
 	]
 
 	for char_id in character_ids:
@@ -40,7 +41,7 @@ func create_character_cards():
 
 func create_character_card(character_data: CharacterData.Character) -> PanelContainer:
 	var card = PanelContainer.new()
-	card.custom_minimum_size = Vector2(280, 400)
+	card.custom_minimum_size = Vector2(240, 340)  # 缩小卡片尺寸以适应屏幕
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Add style
@@ -63,27 +64,28 @@ func create_character_card(character_data: CharacterData.Character) -> PanelCont
 
 	# Character Portrait
 	var portrait_container = CenterContainer.new()
-	portrait_container.custom_minimum_size = Vector2(0, 180)
+	portrait_container.custom_minimum_size = Vector2(0, 140)  # 缩小头像区域
 	vbox.add_child(portrait_container)
 
 	var portrait = ColorRect.new()
-	portrait.custom_minimum_size = Vector2(150, 150)
+	portrait.custom_minimum_size = Vector2(120, 120)  # 缩小头像
 	portrait.color = character_data.color
 	portrait_container.add_child(portrait)
 
-	# Try to load character sprite
+	# Try to load character sprite (使用正确的路径，按GameConstants.CharacterId顺序)
+	# GameConstants中的顺序: REIMU, MOKOU, MARISA, SAKUYA, YUMA, KOISHI
 	var sprite_paths = [
-		"res://assets/characters/leimu.png",
-		"res://assets/characters/marisa.png",
-		"res://assets/characters/mokuo.png",
-		"res://assets/characters/xiaoye.png",
-		"res://assets/characters/taotie.png",
-		"res://assets/characters/koyi.png"
+		"res://assets/leimuF.png",        # 0: Reimu
+		"res://assets/stand.png",         # 1: Mokou (妹红)
+		"res://assets/marisaF.png",       # 2: Marisa
+		"res://assets/sakuyaF.png",       # 3: Sakuya
+		"res://assets/taotie.png",        # 4: Yuma
+		"res://assets/koyiF.png"          # 5: Koishi
 	]
 	if character_data.id < sprite_paths.size():
 		var texture_rect = TextureRect.new()
 		texture_rect.texture = load(sprite_paths[character_data.id])
-		texture_rect.custom_minimum_size = Vector2(150, 150)
+		texture_rect.custom_minimum_size = Vector2(120, 120)  # 缩小图片
 		texture_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait_container.add_child(texture_rect)
@@ -94,38 +96,38 @@ func create_character_card(character_data: CharacterData.Character) -> PanelCont
 	name_label.text = character_data.char_name
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_color_override("font_color", character_data.color)
-	name_label.add_theme_font_size_override("font_size", 20)
+	name_label.add_theme_font_size_override("font_size", 18)  # 缩小字体
 	vbox.add_child(name_label)
 
 	# Character Title
 	var title_label = Label.new()
 	title_label.text = character_data.title
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 14)
+	title_label.add_theme_font_size_override("font_size", 12)  # 缩小字体
 	title_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	vbox.add_child(title_label)
 
-	# Stats Panel
-	var stats_container = VBoxContainer.new()
-	stats_container.add_theme_constant_override("separation", 4)
-	vbox.add_child(stats_container)
+	# Stats Panel (隐藏详细属性条，节省空间)
+	# var stats_container = VBoxContainer.new()
+	# stats_container.add_theme_constant_override("separation", 4)
+	# vbox.add_child(stats_container)
 
-	# HP Bar
-	stats_container.add_child(create_stat_bar("HP", character_data.stats.max_hp, 150, Color(0.8, 0.2, 0.2)))
-
-	# Speed Bar
-	stats_container.add_child(create_stat_bar("Speed", character_data.stats.speed, 5, Color(0.2, 0.8, 0.8)))
-
-	# ATK Bar (Might)
-	stats_container.add_child(create_stat_bar("ATK", character_data.stats.might, 1.5, Color(0.8, 0.6, 0.2)))
+	# 简化显示：只显示关键属性文字
+	var stats_label = Label.new()
+	stats_label.text = "HP:%d SPD:%.1f ATK:%.1f" % [character_data.stats.max_hp, character_data.stats.speed, character_data.stats.might]
+	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats_label.add_theme_font_size_override("font_size", 11)
+	stats_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	vbox.add_child(stats_label)
 
 	# Description
 	var desc_label = Label.new()
 	desc_label.text = character_data.description
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_label.add_theme_font_size_override("font_size", 12)
+	desc_label.add_theme_font_size_override("font_size", 10)  # 缩小描述字体
 	desc_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	desc_label.custom_minimum_size = Vector2(220, 0)  # 限制宽度确保换行
 	vbox.add_child(desc_label)
 
 	# Store character ID
@@ -220,7 +222,9 @@ func select_character(card: PanelContainer, character_data: CharacterData.Charac
 
 func _on_start_button_pressed():
 	if selected_character_id >= 0:
+		# 保存选择的角色到全局变量
+		SignalBus.selected_character_id = selected_character_id
 		SignalBus.character_selected.emit(selected_character_id)
 		print("Starting with character ID: ", selected_character_id)
-		# Load bond selection screen
-		get_tree().change_scene_to_file("res://BondSelectionScreen.tscn")
+		# 直接进入游戏（暂时跳过羁绊选择）
+		get_tree().change_scene_to_file("res://world.tscn")

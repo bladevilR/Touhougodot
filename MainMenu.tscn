@@ -10,6 +10,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
+metadata/_edit_use_anchors_ = true
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -38,17 +39,20 @@ theme_override_constants/separation = 20
 
 [node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "东方幻魔录 - 角色选择"
+size_flags_vertical = 0
+custom_minimum_size = Vector2(0, 80)
+text = "东方幻灵乱舞
+Touhou Phantom Spirit Dance"
 horizontal_alignment = 1
 vertical_alignment = 1
 theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1)
-theme_override_font_sizes/font_size = 48
+theme_override_font_sizes/font_size = 36
 
 [node name="CharacterGrid" type="GridContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/h_separation = 20
-theme_override_constants/v_separation = 20
+theme_override_constants/h_separation = 30
+theme_override_constants/v_separation = 30
 columns = 3
 
 [node name="BottomPanel" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
