@@ -165,6 +165,17 @@ func _setup_bullet_visual():
 			texture_path = "res://assets/bullets/star.png"
 			base_radius = 240.0
 			should_rotate = true
+		"phoenix_wings":
+			texture_path = "res://assets/bullets/big_bullet.png"
+			base_radius = 340.0
+			should_rotate = false
+			# 增大phoenix_wings的碰撞半径
+			if collision_shape and collision_shape.shape:
+				collision_shape.shape.radius = 20.0  # 从默认5.0增加到20.0
+		"phoenix_claws":
+			texture_path = "res://assets/bullets/big_bullet.png"
+			base_radius = 340.0
+			should_rotate = true
 		"knives":
 			texture_path = "res://assets/bullets/knife.png"
 			base_radius = 240.0
@@ -195,10 +206,10 @@ func _setup_bullet_visual():
 		# 使用modulate着色（tint效果）
 		sprite.modulate = bullet_color
 
-		# 根据半径缩放
+		# 根据半径缩放 - 增大视觉效果让弹幕更清晰
 		var radius = collision_shape.shape.radius if collision_shape and collision_shape.shape else 10.0
 		var target_scale = radius / base_radius
-		sprite.scale = Vector2(target_scale * 0.5, target_scale * 0.5) # Reduced scale by 50%
+		sprite.scale = Vector2(target_scale * 1.2, target_scale * 1.2) # 增大120%让弹幕更清晰
 
 		# 旋转朝向运动方向
 		if should_rotate and velocity.length() > 0:
@@ -281,6 +292,19 @@ func _update_orbital_movement(delta: float):
 	# Rotate sprite to face outward
 	if sprite:
 		sprite.rotation = orbit_angle
+
+	# 主动检测并伤害重叠的敌人（修复光环不造成伤害的问题）
+	var overlapping_bodies = get_overlapping_bodies()
+	var overlapping_areas = get_overlapping_areas()
+
+	for body in overlapping_bodies:
+		if body.is_in_group("enemy"):
+			_hit_enemy(body)
+
+	for area in overlapping_areas:
+		var parent = area.get_parent()
+		if parent and parent.is_in_group("enemy"):
+			_hit_enemy(parent)
 
 # ==================== BARRIER FIELD ====================
 func _update_barrier_field(delta: float):
@@ -383,6 +407,7 @@ func _hit_enemy(enemy):
 
 # ==================== STATUS EFFECTS ====================
 func _apply_status_effect(enemy):
+	# 首先应用明确指定的on_hit_effect
 	match on_hit_effect:
 		"burn":
 			if enemy.has_method("apply_burn"):
@@ -413,6 +438,137 @@ func _apply_status_effect(enemy):
 
 		"split":
 			_split_projectile()
+
+	# 然后根据元素类型应用额外效果
+	_apply_element_effect(enemy)
+
+	# 检查元素反应
+	_check_element_reaction(enemy)
+
+func _apply_element_effect(enemy):
+	"""根据子弹的element类型应用对应的元素效果"""
+	match element:
+		"fire":
+			# 火元素：点燃效果 (DOT 5dmg/s，持续3s)
+			if enemy.has_method("apply_burn"):
+				enemy.apply_burn(5.0, 3.0)
+			if enemy.has_method("add_element_stack"):
+				enemy.add_element_stack(GameConstants.ElementType.FIRE)
+
+		"ice":
+			# 冰元素：叠加寒冷值，3层冻结
+			if enemy.has_method("add_frost_stack"):
+				enemy.add_frost_stack()
+			elif enemy.has_method("add_element_stack"):
+				enemy.add_element_stack(GameConstants.ElementType.ICE)
+
+		"lightning":
+			# 雷元素：连锁闪电 (已经在chain_count处理)
+			if enemy.has_method("add_element_stack"):
+				enemy.add_element_stack(GameConstants.ElementType.LIGHTNING)
+
+		"poison":
+			# 毒元素：易伤效果 (每层+5固定伤害)
+			if enemy.has_method("add_vulnerability_stack"):
+				enemy.add_vulnerability_stack()
+			elif enemy.has_method("add_element_stack"):
+				enemy.add_element_stack(GameConstants.ElementType.POISON)
+
+func _check_element_reaction(enemy):
+	"""检查并触发元素反应"""
+	if element == "none" or element == "":
+		return
+
+	# 获取敌人当前的元素状态
+	if not enemy.has_method("get_active_elements"):
+		return
+
+	var enemy_elements = enemy.get_active_elements()
+
+	# 转换当前元素为ElementType
+	var current_element = _string_to_element_type(element)
+	if current_element == -1:
+		return
+
+	# 检查每个敌人身上的元素
+	for enemy_element in enemy_elements:
+		if enemy_element == current_element:
+			continue  # 跳过相同元素
+
+		# 检查反应
+		var reaction = ElementData.check_reaction(current_element, enemy_element)
+		if reaction:
+			_trigger_element_reaction(enemy, reaction)
+			break  # 只触发一次反应
+
+func _trigger_element_reaction(enemy, reaction):
+	"""触发元素反应效果"""
+	print("触发元素反应: ", reaction.reaction_name)
+
+	match reaction.effect_type:
+		"explosion":
+			# 地狱火：大范围爆炸
+			_create_reaction_explosion(enemy.global_position, reaction.radius, damage * reaction.damage_multiplier)
+
+		"freeze_shatter":
+			# 碎冰：对冻结敌人暴击
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(damage * reaction.damage_multiplier)
+			# 清除冻结状态
+			if enemy.has_method("clear_freeze"):
+				enemy.clear_freeze()
+
+		"corrosion":
+			# 腐蚀：降低防御
+			if enemy.has_method("apply_armor_reduction"):
+				enemy.apply_armor_reduction(0.5, 5.0)  # 50%护甲降低，5秒
+
+		"steam":
+			# 蒸汽：范围伤害+遮蔽
+			_create_reaction_explosion(enemy.global_position, reaction.radius, 120.0)
+
+		"thunder_field":
+			# 雷暴领域：持续电击区域
+			_create_thunder_field(enemy.global_position, reaction.radius, damage * reaction.damage_multiplier)
+
+	# 清除参与反应的元素
+	if enemy.has_method("clear_element_stacks"):
+		enemy.clear_element_stacks()
+
+func _create_reaction_explosion(pos: Vector2, radius: float, dmg: float):
+	"""创建元素反应爆炸"""
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for enemy in enemies:
+		var distance = pos.distance_to(enemy.global_position)
+		if distance <= radius:
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(dmg)
+
+func _create_thunder_field(pos: Vector2, radius: float, dmg: float):
+	"""创建雷暴领域（持续电击区域）"""
+	# 简化实现：直接对范围内敌人造成伤害
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for enemy in enemies:
+		var distance = pos.distance_to(enemy.global_position)
+		if distance <= radius:
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(dmg)
+			if enemy.has_method("apply_stun"):
+				enemy.apply_stun(0.5)
+
+func _string_to_element_type(elem_str: String) -> int:
+	"""将元素字符串转换为ElementType枚举"""
+	match elem_str:
+		"fire":
+			return GameConstants.ElementType.FIRE
+		"ice":
+			return GameConstants.ElementType.ICE
+		"lightning":
+			return GameConstants.ElementType.LIGHTNING
+		"poison":
+			return GameConstants.ElementType.POISON
+		_:
+			return -1
 
 # ==================== CHAIN LIGHTNING ====================
 func _chain_to_nearby_enemies(source_enemy):

@@ -88,7 +88,7 @@ static func initialize():
 		2.0,    # 速度
 		3,      # 经验
 		Color("#ff69b4"),  # 粉色
-		12.0,   # 半径 (Reduced from 20.0)
+		8.0,    # 半径 - 缩小到人的一半大小
 		5.0     # 质量 - 很轻，容易被击退
 	)
 	ENEMIES[GameConstants.EnemyType.FAIRY] = fairy
@@ -102,26 +102,26 @@ static func initialize():
 		1.5,
 		5,
 		Color("#9b59b6"),  # 紫色
-		15.0,   # 半径 (Reduced from 25.0)
+		10.0,   # 半径 - 缩小到人的一半大小
 		8.0     # 质量 - 轻盈
 	)
 	ENEMIES[GameConstants.EnemyType.GHOST] = ghost
 
-	# 史莱姆 - 跳跃敌人
-	var slime = EnemyConfig.new(
-		GameConstants.EnemyType.SLIME,
-		"史莱姆",
+	# 毛玉 - 跳跃敌人
+	var kedama = EnemyConfig.new(
+		GameConstants.EnemyType.KEDAMA,
+		"毛玉",
 		100.0,
 		20.0,
 		1.8,
 		8,
 		Color("#3498db"),  # 蓝色
-		18.0,   # 半径 (Reduced from 30.0)
+		12.0,   # 半径 - 缩小到人的一半大小
 		15.0    # 质量 - 较重
 	)
-	slime.can_jump = true
-	slime.jump_interval = 1.0
-	ENEMIES[GameConstants.EnemyType.SLIME] = slime
+	kedama.can_jump = true
+	kedama.jump_interval = 1.0
+	ENEMIES[GameConstants.EnemyType.KEDAMA] = kedama
 
 	# 精灵 - 远程射击敌人
 	var elf = EnemyConfig.new(
@@ -132,7 +132,7 @@ static func initialize():
 		2.2,
 		10,
 		Color("#2ecc71"),  # 绿色
-		13.0,   # 半径 (Reduced from 22.0)
+		9.0,    # 半径 - 缩小到人的一半大小
 		6.0     # 质量 - 很轻
 	)
 	elf.can_shoot = true
@@ -151,7 +151,7 @@ static func initialize():
 		1.5,     # 速度
 		500,     # 经验
 		Color("#00ffff"),  # 青色
-		36.0,    # 半径 (Reduced from 60.0)
+		25.0,    # 半径 - Boss稍大但也缩小
 		30.0     # 质量 - Boss级别抗击退
 	)
 	cirno.attack_patterns = ["ice_spread", "freeze_circle"]
@@ -167,7 +167,7 @@ static func initialize():
 		2.0,
 		800,
 		Color("#e0e0e0"),  # 银白色
-		36.0,    # 半径 (Reduced from 60.0)
+		25.0,    # 半径 - Boss稍大但也缩小
 		40.0     # 质量 - 更重的Boss
 	)
 	youmu.attack_patterns = ["sword_dash", "spirit_split"]
@@ -183,7 +183,7 @@ static func initialize():
 		1.2,
 		1200,
 		Color("#ffd700"),  # 金色
-		36.0,    # 半径 (Reduced from 60.0)
+		25.0,    # 半径 - Boss稍大但也缩小
 		50.0     # 质量 - 最重的Boss
 	)
 	kaguya.attack_patterns = ["impossible_bullet_hell", "time_stop"]
@@ -192,22 +192,22 @@ static func initialize():
 	# ==================== 波次系统 ====================
 	# 完整的10波敌人配置（基于原项目的WAVES）
 
-	# Wave 1: 史莱姆 - 每2秒生成，持续整局
+	# Wave 1: 毛玉 - 每3秒生成，持续整局
 	WAVES.append(WaveConfig.new(
 		0.0,          # 开始时间
-		2.0,          # 每2秒生成（调整为2秒，原来1秒太快）
-		"slime",
+		3.0,          # 每3秒生成（进一步放慢节奏）
+		"kedama",
 		20.0,         # HP
 		5.0,          # 伤害
-		1.5,          # 速度
+		1.0,          # 速度（降低到1.0，更慢）
 		3,            # 经验
 		Color("#a8e6cf")  # 浅绿色
 	))
 
-	# Wave 2: 精灵 - 每5秒生成，从30秒后开始（原来从0秒开始太快）
+	# Wave 2: 精灵 - 每6秒生成，从30秒后开始
 	WAVES.append(WaveConfig.new(
 		30.0,         # 30秒后开始
-		5.0,          # 每5秒生成
+		6.0,          # 每6秒生成（进一步放慢）
 		"elf",
 		40.0,
 		6.0,
@@ -216,11 +216,11 @@ static func initialize():
 		Color("#87ceeb")  # 天蓝色
 	))
 
-	# Wave 3: 史莱姆强化 - 1分钟后，每1.5秒生成
+	# Wave 3: 毛玉强化 - 1分钟后，每2秒生成
 	WAVES.append(WaveConfig.new(
 		60.0,         # 1分钟后
-		1.5,          # 每1.5秒生成（原来0.75太快）
-		"slime",
+		2.0,          # 每2秒生成（进一步放慢）
+		"kedama",
 		60.0,
 		8.0,
 		2.0,
@@ -228,10 +228,10 @@ static func initialize():
 		Color("#3b7a57")  # 深绿色
 	))
 
-	# Wave 4: 精灵强化 - 3分钟后，每1秒生成
+	# Wave 4: 精灵强化 - 3分钟后，每1.5秒生成
 	WAVES.append(WaveConfig.new(
 		180.0,        # 3分钟后
-		1.0,          # 每1秒生成（原来0.5太快）
+		1.5,          # 每1.5秒生成（进一步放慢）
 		"elf",
 		120.0,
 		10.0,
@@ -252,10 +252,10 @@ static func initialize():
 		Color("#4dd2ff")  # 亮青色
 	))
 
-	# Wave 6: 精灵高级 - 6分钟后，每0.8秒生成
+	# Wave 6: 精灵高级 - 6分钟后，每1.2秒生成
 	WAVES.append(WaveConfig.new(
 		360.0,        # 6分钟后
-		0.8,          # 每0.8秒生成（原来0.25太快）
+		1.2,          # 每1.2秒生成（进一步放慢）
 		"elf",
 		200.0,
 		15.0,
@@ -264,10 +264,10 @@ static func initialize():
 		Color("#4682b4")
 	))
 
-	# Wave 7: 幽灵 - 10分钟后，每0.5秒生成
+	# Wave 7: 幽灵 - 10分钟后，每1秒生成
 	WAVES.append(WaveConfig.new(
 		600.0,        # 10分钟后
-		0.5,          # 每0.5秒生成（原来0.17太快）
+		1.0,          # 每1秒生成（进一步放慢）
 		"ghost",
 		400.0,
 		20.0,
@@ -288,10 +288,10 @@ static func initialize():
 		Color("#90ee90")  # 浅绿色
 	))
 
-	# Wave 9: 幽灵强化 - 16分钟后，每0.4秒生成
+	# Wave 9: 幽灵强化 - 16分钟后，每0.8秒生成
 	WAVES.append(WaveConfig.new(
 		960.0,        # 16分钟后
-		0.4,          # 每0.4秒生成（原来0.13太快）
+		0.8,          # 每0.8秒生成（进一步放慢）
 		"ghost",
 		600.0,
 		25.0,
@@ -320,7 +320,7 @@ static func get_enemy_for_wave(wave: int) -> EnemyConfig:
 	elif wave <= 10:
 		return ENEMIES[GameConstants.EnemyType.GHOST]
 	elif wave <= 15:
-		return ENEMIES[GameConstants.EnemyType.SLIME]
+		return ENEMIES[GameConstants.EnemyType.KEDAMA]
 	elif wave <= 20:
 		return ENEMIES[GameConstants.EnemyType.ELF]
 	else:
@@ -328,7 +328,7 @@ static func get_enemy_for_wave(wave: int) -> EnemyConfig:
 		var types = [
 			GameConstants.EnemyType.FAIRY,
 			GameConstants.EnemyType.GHOST,
-			GameConstants.EnemyType.SLIME,
+			GameConstants.EnemyType.KEDAMA,
 			GameConstants.EnemyType.ELF
 		]
 		return ENEMIES[types[randi() % types.size()]]

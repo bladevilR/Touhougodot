@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://daw61onyah6o1"]
+[gd_scene load_steps=8 format=3 uid="uid://daw61onyah6o1"]
 
 [ext_resource type="Script" path="res://world.gd" id="1"]
 [ext_resource type="PackedScene" path="res://Player.tscn" id="2"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://GameUI.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://Enemy.tscn" id="6"]
 [ext_resource type="Script" path="res://MapSystem.gd" id="7"]
+[ext_resource type="Script" path="res://WaveManager.gd" id="8"]
 
 [node name="World" type="Node2D"]
 y_sort_enabled = true
@@ -24,5 +25,8 @@ script = ExtResource("3")
 [node name="EnemySpawner" type="Node2D" parent="."]
 script = ExtResource("4")
 enemy_scene = ExtResource("6")
+
+[node name="WaveManager" type="Node" parent="."]
+script = ExtResource("8")
 
 [node name="GameUI" parent="." instance=ExtResource("5")]

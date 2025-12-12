@@ -191,8 +191,8 @@ func _get_random_spawn_position() -> Vector2:
 func _get_enemy_type_from_string(enemy_type_str: String) -> int:
 	# 将字符串敌人类型转换为GameConstants枚举
 	match enemy_type_str:
-		"slime":
-			return GameConstants.EnemyType.SLIME
+		"kedama":
+			return GameConstants.EnemyType.KEDAMA
 		"elf":
 			return GameConstants.EnemyType.ELF
 		"ghost":

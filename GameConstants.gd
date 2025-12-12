@@ -25,7 +25,7 @@ enum CharacterId {
 enum EnemyType {
 	FAIRY,    # 小妖精
 	GHOST,    # 幽灵
-	SLIME,    # 史莱姆（跳跃）
+	KEDAMA,   # 毛玉（跳跃）
 	ELF,      # 精灵（远程射击）
 	BOSS      # Boss
 }

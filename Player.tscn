@@ -1,9 +1,13 @@
-[gd_scene load_steps=5 format=3 uid="uid://player001"]
+[gd_scene load_steps=9 format=3 uid="uid://player001"]
 
 [ext_resource type="Script" path="res://Player.gd" id="1"]
 [ext_resource type="Script" path="res://HealthComponent.gd" id="2"]
 [ext_resource type="Script" path="res://WeaponSystem.gd" id="3"]
 [ext_resource type="Texture2D" path="res://assets/marisaF.png" id="4"]
+[ext_resource type="Script" path="res://AimSystem.gd" id="5"]
+[ext_resource type="Script" path="res://BondSystem.gd" id="6"]
+[ext_resource type="Script" path="res://FusionSystem.gd" id="7"]
+[ext_resource type="Script" path="res://NitoriShop.gd" id="8"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_1"]
 radius = 20.0
@@ -28,6 +32,18 @@ max_hp = 100.0
 
 [node name="WeaponSystem" type="Node2D" parent="."]
 script = ExtResource("3")
+
+[node name="AimSystem" type="Node" parent="."]
+script = ExtResource("5")
+
+[node name="BondSystem" type="Node" parent="."]
+script = ExtResource("6")
+
+[node name="FusionSystem" type="Node" parent="."]
+script = ExtResource("7")
+
+[node name="NitoriShop" type="Node" parent="." groups=["shop", "shop_system"]]
+script = ExtResource("8")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 enabled = true

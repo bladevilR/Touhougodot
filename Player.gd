@@ -10,6 +10,7 @@ var sprite = null
 var weapon_system = null
 var collision_shape = null
 var character_skills = null
+var bond_system = null
 
 # 角色数据
 var character_data = null
@@ -31,6 +32,8 @@ const DASH_DURATION: float = 0.2
 const DASH_COOLDOWN: float = 1.0
 const DASH_SPEED_MULTIPLIER: float = 3.0
 var dash_direction: Vector2 = Vector2.ZERO
+var dash_damage: float = 30.0  # 飞踢伤害
+var dash_hit_enemies: Array = []  # 记录已经伤害过的敌人
 
 # 妹红动画系统
 var mokou_textures = {
@@ -71,6 +74,7 @@ func _ready():
 	weapon_system = get_node_or_null("WeaponSystem")
 	collision_shape = get_node_or_null("CollisionShape2D")
 	character_skills = get_node_or_null("CharacterSkills")
+	bond_system = get_node_or_null("BondSystem")
 
 	# 初始化角色数据
 	CharacterData.initialize()
@@ -147,10 +151,10 @@ func _load_character_data(char_id: int):
 		# 装备初始武器
 		SignalBus.weapon_added.emit(character_data.starting_weapon_id)
 
-	# Adjust Camera Zoom (Zoom out for wider view)
+	# Adjust Camera Zoom (适当的视野大小)
 	var camera = get_node_or_null("Camera2D")
 	if camera:
-		camera.zoom = Vector2(0.45, 0.45)  # 更小的zoom值 = 更开阔的视野
+		camera.zoom = Vector2(1.5, 1.5)  # 适中的zoom值，人物清晰可见
 		camera.make_current() # Ensure camera follows player
 
 func _setup_collision_layers():
@@ -190,9 +194,17 @@ func _physics_process(delta):
 	if is_dashing:
 		velocity = dash_direction * (base_speed * DASH_SPEED_MULTIPLIER)
 		move_and_slide()
-		_check_enemy_contact_damage() # Dash might still take damage or maybe not? usually dash is iframe.
-		# For now, let's keep collision but maybe make invulnerable? 
-		# If we want iframes, we should set is_invulnerable.
+
+		# 飞踢伤害判定（妹红专属）
+		if character_id == GameConstants.CharacterId.MOKOU:
+			_check_dash_damage()
+		else:
+			_check_enemy_contact_damage() # 其他角色dash时仍然可能受伤
+
+		# 更新妹红飞踢动画（如果是妹红）
+		if character_id == GameConstants.CharacterId.MOKOU:
+			_update_mokou_animation(delta, dash_direction)
+
 		return
 
 	# 如果正在执行技能，跳过普通移动逻辑
@@ -326,7 +338,7 @@ func _check_enemy_contact_damage():
 	if contact_damage_cooldown > 0:
 		return
 
-	# 检查与敌人的碰撞
+	# 检查与敌��的碰撞
 	for i in range(get_slide_collision_count()):
 		var collision = get_slide_collision(i)
 		var collider = collision.get_collider()
@@ -349,6 +361,56 @@ func _check_enemy_contact_damage():
 
 			break  # 一次只处理一个敌人碰撞
 
+func _check_dash_damage():
+	"""检查飞踢伤害（妹红专属）- 增强版"""
+	# 使用区域检测而不是碰撞检测
+	var dash_detection_radius = 80.0
+	var enemies = get_tree().get_nodes_in_group("enemy")
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		var distance = global_position.distance_to(enemy.global_position)
+		if distance > dash_detection_radius:
+			continue
+
+		var enemy_id = enemy.get_instance_id()
+		# 避免重复伤害同一个敌人
+		if enemy_id in dash_hit_enemies:
+			continue
+
+		dash_hit_enemies.append(enemy_id)
+
+		# 计算敌人相对于冲刺方向的位置
+		var to_enemy = (enemy.global_position - global_position).normalized()
+		var dot = dash_direction.dot(to_enemy)
+
+		# 前方的敌人（dot > 0.7，约45度内）
+		if dot > 0.7:
+			# 向前击飞
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(dash_damage * 1.5)  # 前方敌人受到更高伤害
+
+			if enemy.has_method("apply_knockback"):
+				enemy.apply_knockback(dash_direction, 800.0)  # 强力前冲击飞
+
+			# 火焰特效
+			SignalBus.spawn_death_particles.emit(enemy.global_position, Color("#ff4500"), 15)
+
+		# 两侧的敌人
+		elif dot > 0:
+			# 向两侧击退
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(dash_damage)
+
+			if enemy.has_method("apply_knockback"):
+				# 计算垂直于冲刺方向的击退
+				var perpendicular = Vector2(-dash_direction.y, dash_direction.x)
+				var side = sign(perpendicular.dot(to_enemy))
+				var knockback_dir = perpendicular * side + dash_direction * 0.3
+				enemy.apply_knockback(knockback_dir.normalized(), 600.0)
+
 func on_player_died():
 	print("玩家死亡！")
 	SignalBus.player_died.emit()
@@ -369,25 +431,26 @@ func start_dash():
 	can_dash = false
 	dash_timer = DASH_DURATION
 	dash_cooldown_timer = DASH_COOLDOWN
-	
+	dash_hit_enemies.clear()  # 清空已击中敌人列表
+
 	# Determine dash direction
 	var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	if input_dir.length() > 0:
 		dash_direction = input_dir.normalized()
 	else:
 		# If no input, dash in facing direction or right by default
-		if sprite.flip_h:
+		if sprite and sprite.flip_h:
 			dash_direction = Vector2.LEFT
 		else:
 			dash_direction = Vector2.RIGHT
-			
+
 	# Optional: Visual effect
 	if sprite:
 		sprite.modulate.a = 0.5 # Ghost effect transparency
-		
+
 	# Optional: Invulnerability during dash
 	set_invulnerable(DASH_DURATION)
-	print("Dash started!")
+	print("Dash started! Direction: ", dash_direction)
 
 func _update_dash_timers(delta: float):
 	if is_dashing:
@@ -396,8 +459,12 @@ func _update_dash_timers(delta: float):
 			is_dashing = false
 			if sprite:
 				sprite.modulate.a = 1.0 # Restore opacity
-			velocity = Vector2.ZERO # Stop momentum after dash? Or keep it? keeping it feels better usually but let's reset to avoid sliding forever.
-			
+			velocity = Vector2.ZERO # Stop momentum after dash
+
+			# 飞踢落地视觉效果（妹红专属）
+			if character_id == GameConstants.CharacterId.MOKOU:
+				_spawn_dash_landing_effect()
+
 	if not can_dash:
 		dash_cooldown_timer -= delta
 		if dash_cooldown_timer <= 0:
@@ -411,6 +478,39 @@ func set_invulnerable(duration: float):
 	invulnerable_timer = duration
 	is_invulnerable = true
 	print("无敌时间: %.2f秒" % duration)
+
+func _spawn_dash_landing_effect():
+	"""生成飞踢落地视觉效果（火焰爆炸） + 范围伤害"""
+	# 发射橙红色火焰粒子
+	SignalBus.spawn_death_particles.emit(global_position, Color("#ff4500"), 30)
+
+	# 触发轻微屏幕震动
+	SignalBus.screen_shake.emit(0.1, 8.0)  # 0.1秒，8像素
+
+	# 范围伤害
+	var landing_damage = dash_damage * 0.8
+	var landing_radius = 100.0
+	var enemies = get_tree().get_nodes_in_group("enemy")
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		var distance = global_position.distance_to(enemy.global_position)
+		if distance <= landing_radius:
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(landing_damage)
+
+			# 向外击退
+			if enemy.has_method("apply_knockback"):
+				var knockback_dir = (enemy.global_position - global_position).normalized()
+				enemy.apply_knockback(knockback_dir, 400.0)
+
+			# 应用燃烧效果
+			if enemy.has_method("apply_burn"):
+				enemy.apply_burn(5.0, 3.0)  # 5伤害/秒，持续3秒
+
+	print("飞踢落地！范围伤害: %.0f" % landing_damage)
 
 # ==================== MOKOU ANIMATION SYSTEM ====================
 
@@ -484,10 +584,16 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 	if not sprite or mokou_textures.sprite.size() == 0:
 		return
 
+	# 目标视觉高度：约100像素
+	const TARGET_HEIGHT = 100.0
+
 	# 优先处理冲刺动画（飞踢）
 	if is_dashing and mokou_textures.kick:
 		sprite.texture = mokou_textures.kick
-		sprite.scale = Vector2(0.15, 0.15)  # 飞踢使用HD纹理大小
+		# mokuokick.png: 2496x1696，计算缩放 = 100/1696 = 0.059
+		sprite.scale = Vector2(TARGET_HEIGHT / 1696.0, TARGET_HEIGHT / 1696.0)
+		# 根据dash方向翻转（如果图片默认朝左，向右时需要翻转）
+		sprite.flip_h = dash_direction.x > 0
 		return  # 冲刺时不处理其他动画
 
 	var is_moving = input_dir.length() > 0.1
@@ -523,11 +629,12 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 		if input_dir.x != 0:
 			sprite.flip_h = input_dir.x < 0
 
-		# 运动时使用像素艺术纹理大小
-		sprite.scale = Vector2(0.5, 0.5)
+		# 运动帧：sprite.png, up.png, down.png都是720px高，计算缩放 = 100/720 = 0.139
+		sprite.scale = Vector2(TARGET_HEIGHT / 720.0, TARGET_HEIGHT / 720.0)
 	else:
 		# 停止移动，显示站立
 		animation_timer = 0.0
 		if mokou_textures.stand:
 			sprite.texture = mokou_textures.stand
-			sprite.scale = Vector2(0.15, 0.15)  # 站立使用HD纹理大小
+			# stand.png: 2048x2048，计算缩放 = 100/2048 = 0.049
+			sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)

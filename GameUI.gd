@@ -6,6 +6,7 @@ extends CanvasLayer
 @onready var hp_bar = $HealthBar # 血条节点
 @onready var xp_bar = $ExpBar    # 经验条节点
 @onready var level_label = $LevelLabel
+@onready var coins_label = $CoinsLabel
 
 func _ready():
 	# UI 只监听总线，完全不知道 Player 的存在
@@ -13,6 +14,7 @@ func _ready():
 	SignalBus.xp_gained.connect(update_xp)
 	SignalBus.level_up.connect(on_level_up)
 	SignalBus.game_over.connect(on_game_over)
+	SignalBus.coins_changed.connect(update_coins)
 
 func update_hp(current, max_val):
 	if hp_bar:
@@ -23,6 +25,10 @@ func update_xp(current, max_val, level):
 		xp_bar.value = (float(current) / float(max_val)) * 100
 	if level_label:
 		level_label.text = "Lv." + str(level)
+
+func update_coins(amount: int):
+	if coins_label:
+		coins_label.text = "金币: " + str(amount)
 
 func on_level_up(new_level):
 	# 这里可以弹出一个升级选择窗口

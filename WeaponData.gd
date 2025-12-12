@@ -122,36 +122,36 @@ static func initialize():
 	star_dust.projectile_lifetime = 1.0
 	WEAPONS["star_dust"] = star_dust
 
-	# 3. 凤凰羽衣 (妹红专属)
+	# 3. 凤凰羽衣 (妹红专属) - 持续存在的火焰光环
 	var phoenix_wings = WeaponConfig.new(
 		"phoenix_wings",
 		"凤凰羽衣",
 		"环绕自身的火焰羽翼，持续造成伤害。",
-		8, 0.2, 15.0, GameConstants.WeaponType.ORBITAL
+		8, 0.2, 8.0, GameConstants.WeaponType.ORBITAL  # 策划稿: Dmg 8 每0.2秒
 	)
 	phoenix_wings.exclusive_to = GameConstants.CharacterId.MOKOU
 	phoenix_wings.is_orbital = true
-	phoenix_wings.orbit_radius = 150.0
+	phoenix_wings.orbit_radius = 150.0  # 策划稿: Range 150px
 	phoenix_wings.orbit_speed = 0.03
 	phoenix_wings.projectile_count = 4
 	phoenix_wings.penetration = 999
 	phoenix_wings.element_type = GameConstants.ElementType.FIRE
 	WEAPONS["phoenix_wings"] = phoenix_wings
 
-	# 3.5 凤凰利爪 (妹红基础攻击) - Added to give her active offense
+	# 3.5 凤凰利爪 (妹红基础攻击) - 近战扇形攻击
 	var phoenix_claws = WeaponConfig.new(
 		"phoenix_claws",
 		"凤凰利爪",
-		"向前方挥出火焰利爪。",
-		8, 1.2, 15.0, GameConstants.WeaponType.PROJECTILE
+		"向前方挥出火焰利爪，近战扇形攻击。",
+		8, 1.2, 30.0, GameConstants.WeaponType.PROJECTILE
 	)
 	phoenix_claws.exclusive_to = GameConstants.CharacterId.MOKOU
-	phoenix_claws.projectile_count = 1
-	phoenix_claws.projectile_speed = 400.0
-	phoenix_claws.projectile_lifetime = 0.5
-	phoenix_claws.penetration = 2
+	phoenix_claws.projectile_count = 5  # 扇形5发
+	phoenix_claws.projectile_speed = 50.0  # 很慢的速度，几乎不移动
+	phoenix_claws.projectile_lifetime = 0.3  # 短暂存在
+	phoenix_claws.penetration = 999  # 无限穿透
 	phoenix_claws.element_type = GameConstants.ElementType.FIRE
-	phoenix_claws.knockback = 20.0
+	phoenix_claws.knockback = 30.0  # 高击退
 	WEAPONS["phoenix_claws"] = phoenix_claws
 
 	# 4. 银制飞刀 (咲夜专属)

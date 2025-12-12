@@ -11,6 +11,7 @@ signal player_health_changed(current_hp, max_hp)
 signal player_died()
 signal enemy_killed(xp_value, position) # 怪物死了，通知掉落系统和经验系统
 signal xp_gained(current_xp, max_xp, level)
+signal xp_pickup(xp_value) # 拾取经验球
 
 # --- 系统相关信号 ---
 signal game_started()
@@ -35,3 +36,15 @@ signal damage_dealt(damage_amount: float, position: Vector2, is_critical: bool)
 # --- 视觉反馈信号 ---
 signal screen_shake(duration: float, intensity: float)  # 屏幕震动
 signal spawn_death_particles(position: Vector2, color: Color, count: int)  # 死亡粒子
+
+# --- 技能效果信号 ---
+signal time_stopped(duration: float)  # 时停开始
+signal time_resumed()  # 时停结束
+signal attack_speed_modifier_changed(modifier: float)  # 攻速修正变化
+
+# --- 商店相关信号 ---
+signal coins_changed(current_coins: int)  # 金币变化
+signal shop_opened()  # 商店打开
+signal shop_closed()  # 商店关闭
+signal item_purchased(item_id: String)  # 购买物品
+signal shop_available()  # 商店可用（波次间隙）

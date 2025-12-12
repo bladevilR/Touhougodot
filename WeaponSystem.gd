@@ -10,12 +10,14 @@ var bullet_scene = preload("res://Bullet.tscn")
 # 当前装备的武器列表
 var weapons = {}  # {weapon_id: {config, timer, level}}
 
-# 引用玩家
+# 引用
 var player: Node2D = null
+var aim_system: Node = null  # 瞄准系统
 
 func _ready():
 	# 获取父节点（应该是Player）
 	player = get_parent()
+	aim_system = player.get_node_or_null("AimSystem")
 
 	# 监听武器添加信号
 	SignalBus.weapon_added.connect(add_weapon)
@@ -37,21 +39,10 @@ func _process(delta):
 		if weapon_data.timer <= 0:
 			# Auto-fire for most weapons
 			fire_weapon(weapon_id)
-			# 重置冷却，应用角色的cooldown属性
+			# 重置冷却，应用角色的cooldown属性和等级加成
 			var stats = _get_player_stats()
-			weapon_data.timer = weapon_data.config.cooldown_max * stats.cooldown
-
-	# Manual Fire Override - 鼠标左键触发妹红的凤凰利爪攻击
-	# 检测鼠标按下（而不是按住）以提供更好的反馈
-	if Input.is_action_just_pressed("ui_accept") or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		if "phoenix_claws" in weapons:
-			var weapon_data = weapons["phoenix_claws"]
-			if weapon_data.timer <= 0:
-				# Force fire at mouse position
-				_fire_projectile_at_target("phoenix_claws", weapon_data.config, _get_player_stats(), weapon_data.level, get_global_mouse_position())
-				# Reset timer
-				var stats = _get_player_stats()
-				weapon_data.timer = weapon_data.config.cooldown_max * stats.cooldown
+			var level_cooldown_mult = weapon_data.level_bonuses.get("cooldown_mult", 1.0) if weapon_data.has("level_bonuses") else 1.0
+			weapon_data.timer = weapon_data.config.cooldown_max * stats.cooldown * level_cooldown_mult
 
 func add_weapon(weapon_id: String):
 	if weapon_id in weapons:
@@ -81,7 +72,145 @@ func upgrade_weapon(weapon_id: String):
 		return
 
 	weapon_data.level += 1
-	print("武器升级: ", weapon_data.config.weapon_name, " -> Lv.", weapon_data.level)
+	var new_level = weapon_data.level
+
+	# 应用等级加成
+	_apply_level_bonuses(weapon_id, weapon_data, new_level)
+
+	# Lv.3 MAX 质变效果
+	if new_level == 3:
+		_apply_qualitative_change(weapon_id, weapon_data)
+
+	print("武器升级: ", weapon_data.config.weapon_name, " -> Lv.", new_level)
+
+func _apply_level_bonuses(weapon_id: String, weapon_data: Dictionary, level: int):
+	"""应用等级加成 (策划稿数值)"""
+	# 存储等级加成到weapon_data
+	if not weapon_data.has("level_bonuses"):
+		weapon_data["level_bonuses"] = {}
+
+	match level:
+		2:
+			# Lv.2: +30%伤害, +15%攻速
+			weapon_data.level_bonuses["damage_mult"] = 1.3
+			weapon_data.level_bonuses["cooldown_mult"] = 0.85
+			print("  → 伤害+30%, 攻速+15%")
+		3:
+			# Lv.3 MAX: +60%伤害, +30%攻速
+			weapon_data.level_bonuses["damage_mult"] = 1.6
+			weapon_data.level_bonuses["cooldown_mult"] = 0.7
+			print("  → 伤害+60%, 攻速+30% (MAX)")
+
+func _apply_qualitative_change(weapon_id: String, weapon_data: Dictionary):
+	"""应用Lv.3 MAX质变效果"""
+	var config = weapon_data.config
+
+	# 存储质变状态
+	weapon_data["has_qualitative_change"] = true
+
+	print("  ★ 质变解锁!")
+
+	# 根据武器ID应用不同的质变效果
+	match weapon_id:
+		"molotov":
+			# 鸡尾酒瓶 → Zone范围扩大50% / 附带减速效果
+			weapon_data["qualitative_effect"] = "expanded_zone"
+			weapon_data["zone_size_mult"] = 1.5
+			weapon_data["has_slow"] = true
+			print("  → 火焰区域+50%, 附带减速")
+
+		"laser":
+			# 恋符·激光 → 双射线 / 判定频率翻倍
+			weapon_data["qualitative_effect"] = "double_beam"
+			weapon_data["beam_count"] = 2
+			weapon_data["hit_rate_mult"] = 2.0
+			print("  → 双射线, 判定频率×2")
+
+		"yin_yang_orb":
+			# 阴阳玉 → 永动机制（不消失）/ 分裂成两个小球
+			weapon_data["qualitative_effect"] = "eternal_split"
+			weapon_data["no_despawn"] = true
+			weapon_data["split_on_hit"] = true
+			print("  → 永动机制, 命中时分裂")
+
+		"shanghai_doll":
+			# 上海人形 → 数量增加至5个 / 死亡时自爆
+			weapon_data["qualitative_effect"] = "explosive_dolls"
+			weapon_data["projectile_bonus"] = 2
+			weapon_data["explode_on_death"] = true
+			print("  → 人偶数量+2, 死亡自爆")
+
+		"homing_amulet":
+			# 博丽符纸 → 散弹扇形 + 回旋特性
+			weapon_data["qualitative_effect"] = "scatter_return"
+			weapon_data["scatter_angle"] = 0.6
+			weapon_data["return_to_player"] = true
+			print("  → 扇形散射, 回旋效果")
+
+		"star_dust":
+			# 星符 → 全屏发射 / 留下星尘轨迹
+			weapon_data["qualitative_effect"] = "stardust_trail"
+			weapon_data["all_directions"] = true
+			weapon_data["trail_damage"] = true
+			print("  → 全向发射, 星尘轨迹")
+
+		"phoenix_wings":
+			# 凤凰羽衣 → 双层旋转 / 击杀爆炸
+			weapon_data["qualitative_effect"] = "double_rotation"
+			weapon_data["second_layer"] = true
+			weapon_data["kill_explosion"] = true
+			print("  → 双层旋转, 击杀爆炸")
+
+		"knives":
+			# 银制飞刀 → 弹幕密度 / 时停飞刀
+			weapon_data["qualitative_effect"] = "knife_barrage"
+			weapon_data["barrage_mode"] = true
+			weapon_data["suspend_delay"] = 0.3
+			print("  → 弹幕模式, 悬停后射出")
+
+		"spoon":
+			# 刚欲汤勺 → 吞噬小型敌人 / 爆裂回收
+			weapon_data["qualitative_effect"] = "devour_explode"
+			weapon_data["devour_small"] = true
+			weapon_data["explode_on_return"] = true
+			print("  → 吞噬小怪, 爆裂回收")
+
+		"mines":
+			# 本我地雷 → 连锁爆炸 / 超大范围
+			weapon_data["qualitative_effect"] = "chain_nuclear"
+			weapon_data["chain_explode"] = true
+			weapon_data["radius_mult"] = 2.0
+			print("  → 连锁爆炸, 范围×2")
+
+func get_weapon_level_multipliers(weapon_id: String) -> Dictionary:
+	"""获取武器等级加成"""
+	if not weapon_id in weapons:
+		return {"damage_mult": 1.0, "cooldown_mult": 1.0}
+
+	var weapon_data = weapons[weapon_id]
+	if weapon_data.has("level_bonuses"):
+		return {
+			"damage_mult": weapon_data.level_bonuses.get("damage_mult", 1.0),
+			"cooldown_mult": weapon_data.level_bonuses.get("cooldown_mult", 1.0)
+		}
+
+	return {"damage_mult": 1.0, "cooldown_mult": 1.0}
+
+func has_qualitative_change(weapon_id: String) -> bool:
+	"""检查武器是否有质变"""
+	if not weapon_id in weapons:
+		return false
+	return weapons[weapon_id].get("has_qualitative_change", false)
+
+func get_qualitative_effect(weapon_id: String) -> String:
+	"""获取质变效果类型"""
+	if not weapon_id in weapons:
+		return ""
+	return weapons[weapon_id].get("qualitative_effect", "")
+
+func get_owned_weapon_ids() -> Array:
+	"""返回当前拥有的所有武器ID列表"""
+	return weapons.keys()
 
 func fire_weapon(weapon_id: String):
 	if not weapon_id in weapons:
@@ -108,40 +237,68 @@ func fire_weapon(weapon_id: String):
 			print("未实现的武器类型: ", config.weapon_type)
 
 func _fire_projectile(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
-	# 获取最近的敌人作为目标
-	var target = get_nearest_enemy()
-	var target_pos = target.global_position if target else player.global_position + Vector2(100, 0)
-	
-	_fire_projectile_at_target(weapon_id, config, stats, weapon_level, target_pos)
+	# 使用瞄准系统的方向
+	var direction: Vector2
+	if aim_system:
+		direction = aim_system.get_aim_direction()
+	else:
+		# 备用：瞄准最近的敌人
+		var target = get_nearest_enemy()
+		if target:
+			direction = (target.global_position - player.global_position).normalized()
+		else:
+			direction = Vector2.RIGHT
 
-func _fire_projectile_at_target(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int, target_pos: Vector2):
-	# 计算方向
-	var direction = (target_pos - player.global_position).normalized()
+	_fire_projectile_in_direction(weapon_id, config, stats, weapon_level, direction)
+
+func _fire_projectile_in_direction(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int, direction: Vector2):
+	# 获取武器数据（包含质变效果）
+	var weapon_data = weapons.get(weapon_id, {})
+	var has_qualitative = weapon_data.get("has_qualitative_change", false)
+
+	# 获取等级加成
+	var level_bonuses = weapon_data.get("level_bonuses", {})
+	var damage_mult = level_bonuses.get("damage_mult", 1.0)
 
 	# 根据武器配置生成多个子弹（等级提升增加子弹数量）
 	var projectile_count = config.projectile_count + max(0, weapon_level - 1)
 
+	# 质变效果：额外弹幕
+	if has_qualitative:
+		projectile_count += weapon_data.get("projectile_bonus", 0)
+
+	# 质变效果：全向发射（star_dust）
+	var all_directions = weapon_data.get("all_directions", false)
+	if all_directions:
+		projectile_count = 8  # 8方向
+
+	# 计算扇形角度
+	var base_spread = 0.3
+	if has_qualitative:
+		base_spread = weapon_data.get("scatter_angle", base_spread)
+
 	for i in range(projectile_count):
 		var bullet = bullet_scene.instantiate()
 
-		# 计算扇形发射角度
+		# 计算发射角度
 		var angle_offset = 0.0
-		if projectile_count > 1:
-			var spread = 0.3  # 扇形角度
-			angle_offset = -spread + (spread * 2.0 * i / (projectile_count - 1))
+		if all_directions:
+			# 全向发射（8方向）
+			angle_offset = (i * TAU / projectile_count)
+		elif projectile_count > 1:
+			angle_offset = -base_spread + (base_spread * 2.0 * i / (projectile_count - 1))
 
 		var final_angle = direction.angle() + angle_offset
 		var final_direction = Vector2(cos(final_angle), sin(final_angle))
 
-		# 计算等级加成
-		var level_damage_bonus = 1.0 + (weapon_level - 1) * 0.15  # 每级+15%伤害
+		# 计算等级加成（使用存储的乘数）
 		var level_penetration = config.penetration + int((weapon_level - 1) * 0.5)  # 每2级+1穿透
 
-		# 配置子弹属性 - 使用Bullet.setup()方法
-		bullet.setup({
+		# 基础子弹配置
+		var bullet_config = {
 			"weapon_id": weapon_id,
 			"bullet_color": _get_weapon_color(weapon_id, config),
-			"damage": config.base_damage * stats.might * level_damage_bonus,
+			"damage": config.base_damage * stats.might * damage_mult,
 			"speed": config.projectile_speed,
 			"lifetime": config.projectile_lifetime,
 			"direction": final_direction,
@@ -153,7 +310,46 @@ func _fire_projectile_at_target(weapon_id: String, config: WeaponData.WeaponConf
 			"knockback": config.knockback,
 			"on_hit_effect": config.on_hit_effect,
 			"has_gravity": config.has_gravity
-		})
+		}
+
+		# 应用质变效果
+		if has_qualitative:
+			# 回旋效果（homing_amulet）
+			if weapon_data.get("return_to_player", false):
+				bullet_config["return_to_player"] = true
+
+			# 永动机制（yin_yang_orb）- 超长生命周期
+			if weapon_data.get("no_despawn", false):
+				bullet_config["lifetime"] = 999.0
+
+			# 命中分裂（yin_yang_orb）
+			if weapon_data.get("split_on_hit", false):
+				bullet_config["split_count"] = 2
+				bullet_config["split_angle_spread"] = 0.8
+
+			# 弹幕模式悬停（knives）
+			if weapon_data.get("barrage_mode", false):
+				# 初始速度为0，延迟后加速
+				bullet_config["speed"] = 0.0
+				# 使用自定义延迟发射逻辑
+				_schedule_delayed_bullet(bullet, config.projectile_speed, weapon_data.get("suspend_delay", 0.3))
+
+			# 星尘轨迹（star_dust）
+			if weapon_data.get("trail_damage", false):
+				bullet_config["is_barrier_field"] = true
+				bullet_config["damage_interval"] = 0.3
+
+			# 减速效果（molotov）
+			if weapon_data.get("has_slow", false):
+				bullet_config["on_hit_effect"] = "slow"
+				bullet_config["slow_amount"] = 0.5
+				bullet_config["slow_duration"] = 2.0
+
+			# 范围扩大（molotov）
+			if weapon_data.has("zone_size_mult"):
+				bullet_config["explosion_radius"] *= weapon_data.zone_size_mult
+
+		bullet.setup(bullet_config)
 
 		# 设置子弹位置
 		bullet.global_position = player.global_position
@@ -165,36 +361,67 @@ func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 	# 环绕武器（如凤凰羽衣）
 	# 这类武器应该持续存在，每次发射刷新环绕弹幕
 
+	# 获取武器数据（包含质变效果）
+	var weapon_data = weapons.get(weapon_id, {})
+	var has_qualitative = weapon_data.get("has_qualitative_change", false)
+
+	# 获取等级加成
+	var level_bonuses = weapon_data.get("level_bonuses", {})
+	var damage_mult = level_bonuses.get("damage_mult", 1.0)
+
 	var time = Time.get_ticks_msec() / 1000.0
 	var projectile_count = config.projectile_count + int((weapon_level - 1) * 0.5)  # 每2级+1环绕
 
-	for i in range(projectile_count):
-		var bullet = bullet_scene.instantiate()
+	# 质变效果：双层旋转（phoenix_wings）
+	var layer_count = 1
+	if has_qualitative and weapon_data.get("second_layer", false):
+		layer_count = 2
 
-		# 计算环绕角度
-		var angle = (i * TAU / projectile_count) + (time * config.orbit_speed)
+	for layer in range(layer_count):
+		var layer_radius = config.orbit_radius * stats.area
+		var layer_speed = config.orbit_speed
+		var layer_offset = 0.0
 
-		# 计算等级加成
-		var level_damage_bonus = 1.0 + (weapon_level - 1) * 0.15
+		if layer == 1:
+			# 第二层：更大半径，反向旋转
+			layer_radius *= 1.5
+			layer_speed *= -0.7
+			layer_offset = PI / projectile_count  # 交错排列
 
-		bullet.setup({
-			"weapon_id": weapon_id,
-			"bullet_color": _get_weapon_color(weapon_id, config),
-			"damage": config.base_damage * stats.might * level_damage_bonus,
-			"speed": 0.0,  # 环绕弹幕不需要速度，位置跟随玩家
-			"lifetime": 0.2,  # 短生命周期，持续重新生成
-			"direction": Vector2.ZERO,
-			"penetration": config.penetration,
-			"orbit_radius": config.orbit_radius * stats.area,
-			"orbit_angle": angle,
-			"orbit_speed": config.orbit_speed,
-			"element": _element_type_to_string(config.element_type),
-			"knockback": config.knockback,
-			"on_hit_effect": config.on_hit_effect
-		})
+		for i in range(projectile_count):
+			var bullet = bullet_scene.instantiate()
 
-		bullet.global_position = player.global_position
-		get_tree().current_scene.call_deferred("add_child", bullet)
+			# 计算环绕角度
+			var angle = (i * TAU / projectile_count) + (time * layer_speed) + layer_offset
+
+			# 计算初始位置（围绕玩家）
+			var offset = Vector2(cos(angle), sin(angle)) * layer_radius
+			var start_pos = player.global_position + offset
+
+			var bullet_config = {
+				"weapon_id": weapon_id,
+				"bullet_color": _get_weapon_color(weapon_id, config),
+				"damage": config.base_damage * stats.might * damage_mult,
+				"speed": 0.0,  # 环绕弹幕不需要速度，位��跟随玩家
+				"lifetime": config.cooldown_max,  # 生命周期等于冷却时间，保持连续
+				"direction": Vector2.ZERO,
+				"penetration": config.penetration,
+				"orbit_radius": layer_radius,
+				"orbit_angle": angle,
+				"orbit_speed": layer_speed,
+				"element": _element_type_to_string(config.element_type),
+				"knockback": config.knockback,
+				"on_hit_effect": config.on_hit_effect
+			}
+
+			# 质变效果：击杀爆炸
+			if has_qualitative and weapon_data.get("kill_explosion", false):
+				bullet_config["explosion_radius"] = 50.0 * stats.area
+				bullet_config["explosion_damage"] = config.base_damage * 0.5
+
+			bullet.setup(bullet_config)
+			bullet.global_position = start_pos  # 使用计算出的环绕位置
+			get_tree().current_scene.call_deferred("add_child", bullet)
 
 func _fire_laser(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 激光武器
@@ -202,33 +429,77 @@ func _fire_laser(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dict
 	if not target:
 		return
 
+	# 获取武器数据（包含质变效果）
+	var weapon_data = weapons.get(weapon_id, {})
+	var has_qualitative = weapon_data.get("has_qualitative_change", false)
+
+	# 获取等级加成
+	var level_bonuses = weapon_data.get("level_bonuses", {})
+	var damage_mult = level_bonuses.get("damage_mult", 1.0)
+
 	var direction = (target.global_position - player.global_position).normalized()
 
 	# 计算等级加成
-	var level_damage_bonus = 1.0 + (weapon_level - 1) * 0.2  # 激光每级+20%伤害
 	var level_penetration = config.penetration + weapon_level - 1  # 每级+1穿透
 
-	var bullet = bullet_scene.instantiate()
-	bullet.setup({
-		"weapon_id": weapon_id,
-		"bullet_color": _get_weapon_color(weapon_id, config),
-		"damage": config.base_damage * stats.might * level_damage_bonus,
-		"speed": config.projectile_speed,
-		"lifetime": config.projectile_lifetime * (1.0 + (weapon_level - 1) * 0.1),  # 每级+10%持续时间
-		"direction": direction,
-		"penetration": level_penetration,
-		"is_laser": config.is_laser,
-		"element": _element_type_to_string(config.element_type),
-		"knockback": config.knockback
-	})
+	# 质变效果：双射线（laser）
+	var beam_count = 1
+	if has_qualitative:
+		beam_count = weapon_data.get("beam_count", 1)
 
-	bullet.global_position = player.global_position
-	get_tree().current_scene.call_deferred("add_child", bullet)
+	# 质变效果：判定频率翻倍
+	var damage_interval = 0.2
+	if has_qualitative and weapon_data.get("hit_rate_mult", 1.0) > 1.0:
+		damage_interval /= weapon_data.hit_rate_mult
+
+	for beam in range(beam_count):
+		var bullet = bullet_scene.instantiate()
+
+		# 双射线时，第二道偏移角度
+		var beam_direction = direction
+		if beam_count > 1 and beam == 1:
+			var offset_angle = 0.15  # 约8.6度偏移
+			beam_direction = direction.rotated(offset_angle if randf() > 0.5 else -offset_angle)
+
+		var bullet_config = {
+			"weapon_id": weapon_id,
+			"bullet_color": _get_weapon_color(weapon_id, config),
+			"damage": config.base_damage * stats.might * damage_mult,
+			"speed": config.projectile_speed,
+			"lifetime": config.projectile_lifetime * (1.0 + (weapon_level - 1) * 0.1),  # 每级+10%持续时间
+			"direction": beam_direction,
+			"penetration": level_penetration,
+			"is_laser": config.is_laser,
+			"element": _element_type_to_string(config.element_type),
+			"knockback": config.knockback
+		}
+
+		# 应用判定频率
+		if has_qualitative:
+			bullet_config["is_barrier_field"] = true
+			bullet_config["damage_interval"] = damage_interval
+
+		bullet.setup(bullet_config)
+		bullet.global_position = player.global_position
+		get_tree().current_scene.call_deferred("add_child", bullet)
 
 func _fire_special(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 特殊武器（如地雷）
-	var level_damage_bonus = 1.0 + (weapon_level - 1) * 0.15
+
+	# 获取武器数据（包含质变效果）
+	var weapon_data = weapons.get(weapon_id, {})
+	var has_qualitative = weapon_data.get("has_qualitative_change", false)
+
+	# 获取等级加成
+	var level_bonuses = weapon_data.get("level_bonuses", {})
+	var damage_mult = level_bonuses.get("damage_mult", 1.0)
+
 	var projectile_count = config.projectile_count + max(0, int((weapon_level - 1) * 0.5))
+
+	# 质变效果：范围倍率（mines）
+	var radius_mult = 1.0
+	if has_qualitative:
+		radius_mult = weapon_data.get("radius_mult", 1.0)
 
 	for i in range(projectile_count):
 		var bullet = bullet_scene.instantiate()
@@ -239,19 +510,35 @@ func _fire_special(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 			randf_range(-200, 200)
 		)
 
-		bullet.setup({
+		var bullet_config = {
 			"weapon_id": weapon_id,
 			"bullet_color": _get_weapon_color(weapon_id, config),
-			"damage": config.base_damage * stats.might * level_damage_bonus,
+			"damage": config.base_damage * stats.might * damage_mult,
 			"speed": 0.0,  # 地雷静止
 			"lifetime": config.projectile_lifetime,
 			"direction": Vector2.ZERO,
 			"penetration": config.penetration,
-			"explosion_radius": config.explosion_radius * stats.area,
+			"explosion_radius": config.explosion_radius * stats.area * radius_mult,
 			"element": _element_type_to_string(config.element_type),
 			"on_hit_effect": config.on_hit_effect
-		})
+		}
 
+		# 质变效果：连锁爆炸（mines）
+		if has_qualitative and weapon_data.get("chain_explode", false):
+			bullet_config["chain_count"] = 3
+			bullet_config["chain_range"] = 150.0
+
+		# 质变效果：吞噬小怪（spoon）
+		if has_qualitative and weapon_data.get("devour_small", false):
+			bullet_config["gravity_pull_strength"] = 200.0
+			bullet_config["gravity_pull_range"] = 100.0
+
+		# 质变效果：爆裂回收（spoon）
+		if has_qualitative and weapon_data.get("explode_on_return", false):
+			bullet_config["return_to_player"] = true
+			bullet_config["explosion_radius"] = 80.0 * stats.area
+
+		bullet.setup(bullet_config)
 		bullet.global_position = player.global_position + random_offset
 		get_tree().current_scene.call_deferred("add_child", bullet)
 
@@ -344,3 +631,26 @@ func _get_weapon_color(weapon_id: String, config: WeaponData.WeaponConfig) -> Co
 			return Color("#00ff00")  # 绿色
 		_:
 			return Color.WHITE  # 默认白色
+
+# ==================== HELPER FUNCTIONS ====================
+
+func _schedule_delayed_bullet(bullet: Node, final_speed: float, delay: float):
+	"""延迟发射子弹（用于咲夜飞刀的时停效果）"""
+	# 创建一个计时器来延迟加速
+	var timer = get_tree().create_timer(delay)
+	timer.timeout.connect(func():
+		if is_instance_valid(bullet):
+			# 使用保存的方向加速
+			bullet.velocity = bullet.direction * final_speed
+			bullet.speed = final_speed
+	)
+
+func get_weapon_data(weapon_id: String) -> Dictionary:
+	"""获取武器的完整数据（包括质变效果）"""
+	if weapon_id in weapons:
+		return weapons[weapon_id]
+	return {}
+
+func get_all_weapons() -> Dictionary:
+	"""获取所有已装备武器"""
+	return weapons

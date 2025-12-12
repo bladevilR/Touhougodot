@@ -9,6 +9,7 @@ extends CharacterBody2D
 var health_comp = null
 var sprite = null
 var collision_shape = null
+var health_bar = null  # 血量条引用
 
 var target: Node2D = null
 var enemy_data = null
@@ -28,6 +29,18 @@ const ENEMY_SEPARATION_RADIUS: float = 80.0  # 增加检测范围
 const ENEMY_SEPARATION_STRENGTH: float = 150.0  # 增加分离力度
 const MAX_SEPARATION_FORCE: float = 400.0  # 增加最大分离力
 
+# ==================== JUMP SYSTEM ====================
+var can_jump: bool = false  # 是否可以跳跃（毛玉特性）
+var jump_interval: float = 1.0  # 跳跃间隔
+var jump_timer: float = 0.0  # 跳跃计时器
+var jump_height: float = 0.0  # 当前跳跃高度（视觉用）
+var jump_progress: float = 0.0  # 跳跃进度 0-1
+const JUMP_MAX_HEIGHT: float = 30.0  # 跳跃最大高度（像素）
+const JUMP_DURATION: float = 0.5  # 跳跃持续时间（秒）
+
+# ==================== VISUAL EFFECTS ====================
+var shadow_sprite: Sprite2D = null  # 地面影子
+
 # ==================== STATUS EFFECT SYSTEM ====================
 # Status effect tracking structures
 var active_status_effects = {
@@ -37,6 +50,16 @@ var active_status_effects = {
 	"stun": null,       # {duration: float, timer: float} or null
 	"slow": null,       # {amount: float, duration: float, timer: float} or null
 }
+
+# ==================== ELEMENT SYSTEM ====================
+# 元素叠加追踪
+var element_stacks = {}  # {ElementType: stack_count}
+var frost_stacks: int = 0  # 冰元素寒冷叠层
+const FROST_FREEZE_THRESHOLD: int = 3  # 3层冻结
+var vulnerability_stacks: int = 0  # 毒元素易伤叠层
+const VULNERABILITY_DAMAGE_PER_STACK: float = 5.0  # 每层+5固定伤害
+var armor_reduction: float = 0.0  # 护甲降低百分比
+var armor_reduction_timer: float = 0.0
 
 # Status effect timers (for damage ticks)
 var burn_tick_timer: float = 0.0
@@ -54,6 +77,7 @@ func _ready():
 	health_comp = get_node_or_null("HealthComponent")
 	sprite = get_node_or_null("Sprite2D")
 	collision_shape = get_node_or_null("CollisionShape2D")
+	health_bar = get_node_or_null("HealthBar")
 
 	# 初始化敌人数据
 	EnemyData.initialize()
@@ -74,6 +98,9 @@ func _ready():
 				var s = enemy_data.scale
 				sprite.scale = Vector2(s, s)
 
+		# 初始化血量条
+		_update_health_bar()
+
 	# Store base speed for status effect calculations
 	base_speed = speed
 
@@ -88,6 +115,9 @@ func _ready():
 	# 连接组件信号：当组件说"我死了"，我就执行 die()
 	if health_comp:
 		health_comp.died.connect(die)
+
+	# 创建地面影子（椭圆形）
+	_create_shadow()
 
 func _setup_collision_layers():
 	# Layer 1: Player
@@ -113,6 +143,27 @@ func _physics_process(delta):
 
 	# Calculate current movement speed with status modifiers
 	var current_speed = _get_modified_speed()
+
+	# ==================== JUMP SYSTEM (上下弹跳动画) ====================
+	if can_jump:
+		jump_timer += delta
+
+		# 更新跳跃动画（连续弹跳）
+		jump_progress += delta / JUMP_DURATION
+		if jump_progress >= 1.0:
+			jump_progress = 0.0  # 重置，继续弹跳
+
+		# 使用sin函数创建平滑的上下弹跳
+		jump_height = sin(jump_progress * PI) * JUMP_MAX_HEIGHT
+
+		# 更新sprite的视觉位置（向上偏移）
+		if sprite:
+			sprite.position.y = -jump_height
+
+		# 更新影子的缩放（跳得越高，影子越小）
+		if shadow_sprite:
+			var shadow_scale = 1.0 - (jump_height / JUMP_MAX_HEIGHT) * 0.5  # 最多缩小50%
+			shadow_sprite.scale = Vector2(shadow_scale, shadow_scale * 0.5)  # 椭圆形影子
 
 	# ==================== PHYSICS-BASED MOVEMENT ====================
 	var desired_velocity = Vector2.ZERO
@@ -186,12 +237,51 @@ func apply_knockback(direction: Vector2, force: float):
 	if knockback_velocity.length() > max_knockback:
 		knockback_velocity = knockback_velocity.normalized() * max_knockback
 
+# ==================== VISUAL EFFECTS ====================
+func _create_shadow():
+	"""创建地面影子（椭圆形）"""
+	# 创建影子sprite
+	shadow_sprite = Sprite2D.new()
+
+	# 创建一个简单的椭圆形纹理（使用圆形纹理压扁）
+	# 如果有专门的影子纹理更好，这里先用代码生成
+	var shadow_size = 20
+	var shadow_image = Image.create(shadow_size, shadow_size, false, Image.FORMAT_RGBA8)
+
+	# 画一个黑色半透明圆形
+	for x in range(shadow_size):
+		for y in range(shadow_size):
+			var dx = x - shadow_size / 2.0
+			var dy = y - shadow_size / 2.0
+			var dist = sqrt(dx * dx + dy * dy)
+			if dist < shadow_size / 2.0:
+				var alpha = (1.0 - dist / (shadow_size / 2.0)) * 0.3  # 半透明
+				shadow_image.set_pixel(x, y, Color(0, 0, 0, alpha))
+
+	var shadow_texture = ImageTexture.create_from_image(shadow_image)
+	shadow_sprite.texture = shadow_texture
+	shadow_sprite.scale = Vector2(1.5, 0.75)  # 椭圆形（扁的）
+	shadow_sprite.z_index = -1  # 在敌人下方
+	shadow_sprite.position = Vector2(0, 5)  # 稍微往下偏移
+
+	add_child(shadow_sprite)
+
 # 子弹打中敌人时，调用这个函数
 func take_damage(amount):
+	# 应用易伤加成
+	var final_damage = amount + get_vulnerability_bonus()
+
+	# 应用护甲降低（如果有）
+	if armor_reduction > 0:
+		final_damage *= (1.0 + armor_reduction)
+
 	if health_comp:
-		health_comp.damage(amount)
+		health_comp.damage(final_damage)
 		# 发射伤害数字
-		SignalBus.damage_dealt.emit(amount, global_position, false)
+		SignalBus.damage_dealt.emit(final_damage, global_position, false)
+
+		# 更新血量条
+		_update_health_bar()
 
 		# 播放受击闪白
 		if sprite:
@@ -215,7 +305,121 @@ func die():
 	SignalBus.enemy_killed.emit(xp_value, global_position)
 	queue_free()
 
-# 设置敌人类型和属性
+# 从波次配置设置敌人（新接口，用于波次系统）
+func setup_from_wave(wave_config: EnemyData.WaveConfig):
+	# 0. 先获取节点引用（因为此函数在add_child之前调用，_ready还没执行）
+	if not health_comp:
+		health_comp = get_node_or_null("HealthComponent")
+	if not sprite:
+		sprite = get_node_or_null("Sprite2D")
+	if not collision_shape:
+		collision_shape = get_node_or_null("CollisionShape2D")
+	if not health_bar:
+		health_bar = get_node_or_null("HealthBar")
+
+	print("setup_from_wave 被调用: ", wave_config.enemy_type)
+
+	# 1. 根据字符串类型找到对应的GameConstants枚举
+	enemy_type = _get_enemy_type_from_string(wave_config.enemy_type)
+
+	# 2. 应用波次配置的数值
+	if health_comp:
+		health_comp.max_hp = wave_config.hp
+		health_comp.current_hp = wave_config.hp
+
+	speed = wave_config.speed * 100.0
+	base_speed = speed
+	xp_value = wave_config.exp
+
+	# 3. 从EnemyData获取对应类型的完整配置（用于获取mass、radius、scale等）
+	enemy_data = EnemyData.ENEMIES.get(enemy_type)
+	if enemy_data:
+		mass = enemy_data.mass
+		original_color = wave_config.color
+
+		# 4. 应用视觉效果
+		if sprite:
+			# 根据敌人类型加载对应的纹理
+			var texture_path = _get_texture_path_for_type(enemy_type)
+			print("尝试加载纹理: ", texture_path)
+			print("纹理文件存在? ", ResourceLoader.exists(texture_path))
+
+			if ResourceLoader.exists(texture_path):
+				sprite.texture = load(texture_path)
+				print("✓ 纹理已加载: ", texture_path)
+			else:
+				print("✗ 纹理文件不存在: ", texture_path)
+
+			sprite.modulate = wave_config.color
+
+			# 应用缩放
+			if "scale" in enemy_data:
+				var s = enemy_data.scale
+				sprite.scale = Vector2(s, s)
+			else:
+				sprite.scale = Vector2(0.015, 0.015)  # 默认缩放
+		else:
+			print("✗ sprite 为 null，无法设置纹理")
+
+		# 5. 应用碰撞半径
+		if collision_shape and collision_shape.shape:
+			collision_shape.shape.radius = enemy_data.radius
+
+		# 6. 应用特殊行为属性（跳跃、射击等）
+		if "can_jump" in enemy_data:
+			can_jump = enemy_data.can_jump
+			if "jump_interval" in enemy_data:
+				jump_interval = enemy_data.jump_interval
+			print("✓ 跳跃能力已启用，间隔: ", jump_interval, "秒")
+
+		# 更新血量条
+		_update_health_bar()
+
+		print("生成敌人: ", enemy_data.enemy_name, " (", wave_config.enemy_type, ") HP:", wave_config.hp, " 半径:", enemy_data.radius, " 颜色:", wave_config.color)
+
+func _get_enemy_type_from_string(enemy_type_str: String) -> int:
+	"""将字符串敌人类型转换为GameConstants枚举"""
+	match enemy_type_str:
+		"kedama":
+			return GameConstants.EnemyType.KEDAMA
+		"elf":
+			return GameConstants.EnemyType.ELF
+		"ghost":
+			return GameConstants.EnemyType.GHOST
+		"fairy":
+			return GameConstants.EnemyType.FAIRY
+		_:
+			return GameConstants.EnemyType.KEDAMA  # 默认毛玉
+
+func _get_texture_path_for_type(type: int) -> String:
+	"""根据敌人类型返回对应的纹理路径"""
+	match type:
+		GameConstants.EnemyType.KEDAMA:
+			return "res://assets/maoyu.png"
+		GameConstants.EnemyType.ELF:
+			return "res://assets/elf.png"
+		GameConstants.EnemyType.FAIRY:
+			return "res://assets/elf.png"  # 妖精和精灵用同一个图
+		GameConstants.EnemyType.GHOST:
+			return "res://assets/elf.png"  # 暂时用elf，通过颜色区分
+		GameConstants.EnemyType.BOSS:
+			return "res://assets/9.png"  # 默认Boss纹理
+		_:
+			return "res://assets/elf.png"
+
+func _get_boss_texture_path(boss_type: int) -> String:
+	"""根据Boss类型返回对应的纹理路径"""
+	match boss_type:
+		GameConstants.BossType.CIRNO:
+			return "res://assets/9.png"
+		GameConstants.BossType.YOUMU:
+			return "res://assets/yaomeng.png"
+		GameConstants.BossType.KAGUYA:
+			return "res://assets/huiye2.png"
+		_:
+			return "res://assets/9.png"
+
+# 设置敌人类型和属性（旧接口，保留兼容性）
 func setup(type: int, wave: int = 1):
 	enemy_type = type
 
@@ -236,6 +440,9 @@ func setup(type: int, wave: int = 1):
 
 		if sprite:
 			sprite.modulate = enemy_data.color
+
+		# 更新血量条
+		_update_health_bar()
 
 # ==================== STATUS EFFECT APPLICATION METHODS ====================
 # These methods are called by Bullet.gd when status effects are applied
@@ -323,6 +530,12 @@ func _update_status_effects(delta: float):
 		active_status_effects.slow.timer += delta
 		if active_status_effects.slow.timer >= active_status_effects.slow.duration:
 			active_status_effects.slow = null
+
+	# Update armor reduction timer
+	if armor_reduction_timer > 0:
+		armor_reduction_timer -= delta
+		if armor_reduction_timer <= 0:
+			armor_reduction = 0.0
 
 # Update burn effects with DOT damage
 func _update_burn_effects(delta: float):
@@ -464,3 +677,88 @@ func _blend_status_colors(colors: Array) -> Color:
 
 	result /= float(colors.size())
 	return result
+
+# ==================== HEALTH BAR UPDATE ====================
+
+# 更新血量条显示
+func _update_health_bar():
+	if not health_bar or not health_comp:
+		return
+
+	# 更新血量条的值
+	health_bar.max_value = health_comp.max_hp
+	health_bar.value = health_comp.current_hp
+
+	# 根据血量百分比改变颜色
+	var health_percent = health_comp.current_hp / health_comp.max_hp
+	if health_percent > 0.6:
+		# 绿色：血量充足
+		health_bar.modulate = Color(0.2, 1.0, 0.2)
+	elif health_percent > 0.3:
+		# 黄色：血量中等
+		health_bar.modulate = Color(1.0, 1.0, 0.2)
+	else:
+		# 红色：血量危险
+		health_bar.modulate = Color(1.0, 0.2, 0.2)
+
+# ==================== ELEMENT SYSTEM METHODS ====================
+
+# 添加元素叠层
+func add_element_stack(element_type: int):
+	if not element_stacks.has(element_type):
+		element_stacks[element_type] = 0
+	element_stacks[element_type] += 1
+
+# 获取当前激活的元素列表
+func get_active_elements() -> Array:
+	var active = []
+	for element_type in element_stacks.keys():
+		if element_stacks[element_type] > 0:
+			active.append(element_type)
+
+	# 也包括通过状态效果激活的元素
+	if active_status_effects.burns.size() > 0:
+		if not GameConstants.ElementType.FIRE in active:
+			active.append(GameConstants.ElementType.FIRE)
+	if frost_stacks > 0 or active_status_effects.freeze != null:
+		if not GameConstants.ElementType.ICE in active:
+			active.append(GameConstants.ElementType.ICE)
+	if active_status_effects.poisons.size() > 0 or vulnerability_stacks > 0:
+		if not GameConstants.ElementType.POISON in active:
+			active.append(GameConstants.ElementType.POISON)
+
+	return active
+
+# 清除所有元素叠层
+func clear_element_stacks():
+	element_stacks.clear()
+	frost_stacks = 0
+
+# 添加冰元素寒冷叠层
+func add_frost_stack():
+	frost_stacks += 1
+	add_element_stack(GameConstants.ElementType.ICE)
+
+	# 达到阈值时冻结
+	if frost_stacks >= FROST_FREEZE_THRESHOLD:
+		apply_freeze(2.0)  # 冻结2秒
+		frost_stacks = 0  # 重置叠层
+
+# 添加毒元素易伤叠层
+func add_vulnerability_stack():
+	vulnerability_stacks += 1
+	add_element_stack(GameConstants.ElementType.POISON)
+
+# 清除冻结状态
+func clear_freeze():
+	active_status_effects.freeze = null
+	frost_stacks = 0
+
+# 应用护甲降低效果
+func apply_armor_reduction(amount: float, duration: float):
+	armor_reduction = amount
+	armor_reduction_timer = duration
+
+# 获取易伤加成伤害
+func get_vulnerability_bonus() -> float:
+	return vulnerability_stacks * VULNERABILITY_DAMAGE_PER_STACK
