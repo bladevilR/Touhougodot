@@ -22,7 +22,7 @@ class EnemyConfig:
 	var can_jump: bool = false
 	var jump_interval: float = 1.0
 
-	func _init(t: int, n: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 10.0, sc: float = 0.05):
+	func _init(t: int, n: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 10.0, sc: float = 0.025):
 		enemy_type = t
 		enemy_name = n
 		hp = h
@@ -40,7 +40,7 @@ class BossConfig extends EnemyConfig:
 	var boss_title: String
 	var attack_patterns: Array = []  # 攻击模式列表
 
-	func _init(bt: int, n: String, title: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 50.0, sc: float = 0.08):
+	func _init(bt: int, n: String, title: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 50.0, sc: float = 0.05):
 		super._init(GameConstants.EnemyType.BOSS, n, h, d, s, e, c, r, m, sc)
 		boss_type = bt
 		boss_title = title

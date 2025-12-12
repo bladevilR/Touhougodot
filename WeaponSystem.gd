@@ -46,7 +46,8 @@ func _process(delta):
 
 func add_weapon(weapon_id: String):
 	if weapon_id in weapons:
-		print("武器已存在: ", weapon_id)
+		print("武器已存在，执行升级: ", weapon_id)
+		upgrade_weapon(weapon_id)
 		return
 
 	var config = WeaponData.get_weapon(weapon_id)
@@ -371,6 +372,10 @@ func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 
 	var time = Time.get_ticks_msec() / 1000.0
 	var projectile_count = config.projectile_count + int((weapon_level - 1) * 0.5)  # 每2级+1环绕
+
+	# 特殊处理：凤凰羽衣需要更多子弹来形成环
+	if weapon_id == "phoenix_wings":
+		projectile_count *= 3
 
 	# 质变效果：双层旋转（phoenix_wings）
 	var layer_count = 1

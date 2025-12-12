@@ -167,33 +167,67 @@ func _setup_bullet_visual():
 			should_rotate = true
 		"phoenix_wings":
 			texture_path = "res://assets/bullets/big_bullet.png"
-			base_radius = 340.0
+			base_radius = 100.0
 			should_rotate = false
 			# 增大phoenix_wings的碰撞半径
 			if collision_shape and collision_shape.shape:
-				collision_shape.shape.radius = 20.0  # 从默认5.0增加到20.0
+				collision_shape.shape.radius = 30.0  # 稍微减小一点
 		"phoenix_claws":
 			texture_path = "res://assets/bullets/big_bullet.png"
-			base_radius = 340.0
+			base_radius = 200.0
 			should_rotate = true
 		"knives":
 			texture_path = "res://assets/bullets/knife.png"
-			base_radius = 240.0
+			base_radius = 200.0
 			should_rotate = true
 		"yin_yang_orb":
 			texture_path = "res://assets/bullets/yinyang.png"
-			base_radius = 200.0
+			base_radius = 150.0
 			should_rotate = false
 		_:
 			# 根据半径选择通用弹幕
 			var radius = collision_shape.shape.radius if collision_shape and collision_shape.shape else 10.0
 			if radius > 15:
 				texture_path = "res://assets/bullets/big_bullet.png"
-				base_radius = 340.0
+				base_radius = 200.0
 			else:
 				texture_path = "res://assets/bullets/rice_bullet.png"
-				base_radius = 240.0
+				base_radius = 150.0
 			should_rotate = true
+
+	# 激光特殊处理：动态生成光束纹理
+	if is_laser:
+		var gradient = Gradient.new()
+		gradient.set_color(0, Color(1, 1, 1, 0)) # 两端透明
+		gradient.set_color(1, Color(1, 1, 1, 0))
+		gradient.add_point(0.2, Color(1, 1, 1, 0.8)) # 中间亮
+		gradient.add_point(0.8, Color(1, 1, 1, 0.8))
+		
+		var texture = GradientTexture2D.new()
+		texture.gradient = gradient
+		texture.width = 64
+		texture.height = 16 # 细长
+		texture.fill = GradientTexture2D.FILL_LINEAR
+		texture.fill_from = Vector2(0, 0)
+		texture.fill_to = Vector2(0, 1) # 纵向渐变（如果是横向激光则改横向，这里假设激光沿Y轴拉伸或旋转）
+		# 实际上激光通常是横向的。
+		# 让我们做一个横向的激光纹理：左透明 -> 中白 -> 右透明
+		texture.fill_from = Vector2(0, 0)
+		texture.fill_to = Vector2(1, 0) 
+		
+		sprite.texture = texture
+		# 激光通常不需要CanvasItemMaterial.BLEND_MODE_ADD，或者需要看效果。保持ADD通常比较亮。
+		sprite.material = CanvasItemMaterial.new()
+		sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		sprite.modulate = bullet_color
+		
+		# 激光不需要太大缩放，长度由Lifetime或逻辑决定，这里只负责宽度
+		sprite.scale = Vector2(2.0, 0.5) # 长一点，细一点
+		
+		if velocity.length() > 0:
+			sprite.rotation = velocity.angle()
+			
+		return # 激光设置完毕，直接返回
 
 	# 加载纹理
 	if texture_path != "" and ResourceLoader.exists(texture_path):
@@ -206,10 +240,18 @@ func _setup_bullet_visual():
 		# 使用modulate着色（tint效果）
 		sprite.modulate = bullet_color
 
-		# 根据半径缩放 - 增大视觉效果让弹幕更清晰
+		# 根据半径缩放
 		var radius = collision_shape.shape.radius if collision_shape and collision_shape.shape else 10.0
 		var target_scale = radius / base_radius
-		sprite.scale = Vector2(target_scale * 1.2, target_scale * 1.2) # 增大120%让弹幕更清晰
+		
+		# 特殊处理
+		if weapon_id == "phoenix_wings":
+			sprite.scale = Vector2(0.6, 0.6) # 减小尺寸
+			sprite.modulate.a = 0.4 # 大幅降低透明度
+		elif weapon_id == "yin_yang_orb":
+			sprite.scale = Vector2(0.8, 0.8) # 阴阳玉适中尺寸
+		else:
+			sprite.scale = Vector2(target_scale * 1.8, target_scale * 1.8) # 全局缩放从2.5降到1.8
 
 		# 旋转朝向运动方向
 		if should_rotate and velocity.length() > 0:
@@ -402,6 +444,15 @@ func _hit_enemy(enemy):
 	# Reduce penetration
 	if not is_barrier_field and penetration > 0:
 		penetration -= 1
+		
+		# 特殊效果：高穿透且可反弹的子弹（如阴阳玉），在击中敌人时轻微偏转，增加混乱感
+		if penetration > 10 and (bounce_count > 0 or wall_bounces > 0):
+			var deflection = deg_to_rad(randf_range(-10, 10))
+			velocity = velocity.rotated(deflection)
+			direction = velocity.normalized()
+			if sprite:
+				sprite.rotation = velocity.angle() + PI/2
+		
 		if penetration <= 0:
 			_on_penetration_depleted()
 
