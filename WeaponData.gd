@@ -18,6 +18,7 @@ class WeaponConfig:
 	var projectile_count: int = 1
 	var projectile_speed: float = 300.0
 	var projectile_lifetime: float = 3.0
+	var projectile_spread: float = 0.3  # 扇形散射角度
 	var homing_strength: float = 0.0
 	var penetration: int = 1
 	var bounce_count: int = 0
@@ -126,32 +127,33 @@ static func initialize():
 	var phoenix_wings = WeaponConfig.new(
 		"phoenix_wings",
 		"凤凰羽衣",
-		"环绕自身的火焰羽翼，持续造成伤害。",
-		8, 0.2, 8.0, GameConstants.WeaponType.ORBITAL  # 策划稿: Dmg 8 每0.2秒
+		"环绕自身的火焰圆环，持续造成伤害。",
+		8, 0.2, 8.0, GameConstants.WeaponType.ORBITAL
 	)
 	phoenix_wings.exclusive_to = GameConstants.CharacterId.MOKOU
 	phoenix_wings.is_orbital = true
-	phoenix_wings.orbit_radius = 150.0  # 策划稿: Range 150px
-	phoenix_wings.orbit_speed = 0.03
-	phoenix_wings.projectile_count = 4
+	phoenix_wings.orbit_radius = 0.0  # 0表示跟随玩家中心
+	phoenix_wings.orbit_speed = 0.0  # 不旋转
+	phoenix_wings.projectile_count = 1  # 只有一个光环
 	phoenix_wings.penetration = 999
 	phoenix_wings.element_type = GameConstants.ElementType.FIRE
 	WEAPONS["phoenix_wings"] = phoenix_wings
 
-	# 3.5 凤凰利爪 (妹红基础攻击) - 近战扇形攻击
+	# 3.5 火鸟拳 (妹红基础攻击) - 近战横扫
 	var phoenix_claws = WeaponConfig.new(
 		"phoenix_claws",
-		"凤凰利爪",
-		"向前方挥出火焰利爪，近战扇形攻击。",
-		8, 1.2, 30.0, GameConstants.WeaponType.PROJECTILE
+		"火鸟拳",
+		"向前方挥出火焰拳脚，横向一字横扫。",
+		15, 0.7, 40.0, GameConstants.WeaponType.PROJECTILE
 	)
 	phoenix_claws.exclusive_to = GameConstants.CharacterId.MOKOU
-	phoenix_claws.projectile_count = 5  # 扇形5发
-	phoenix_claws.projectile_speed = 50.0  # 很慢的速度，几乎不移动
-	phoenix_claws.projectile_lifetime = 0.3  # 短暂存在
+	phoenix_claws.projectile_count = 5  # 5发排成一排
+	phoenix_claws.projectile_speed = 5.0  # 极慢，几乎不动
+	phoenix_claws.projectile_lifetime = 0.35  # 0.35秒存在
 	phoenix_claws.penetration = 999  # 无限穿透
 	phoenix_claws.element_type = GameConstants.ElementType.FIRE
-	phoenix_claws.knockback = 30.0  # 高击退
+	phoenix_claws.knockback = 50.0  # 高击退
+	phoenix_claws.projectile_spread = 0.02  # 极小角度，几乎一条线
 	WEAPONS["phoenix_claws"] = phoenix_claws
 
 	# 4. 银制飞刀 (咲夜专属)
@@ -454,17 +456,17 @@ static func _initialize_upgrade_trees():
 	
 	WEAPON_UPGRADE_TREES["phoenix_claws"] = [
 		# Tier 1
-		WeaponUpgradeChoice.new("claw_size", "phoenix_claws", 1, "巨型利爪", "大小 +50%，伤害 +30%", "🐾"),
-		WeaponUpgradeChoice.new("claw_speed", "phoenix_claws", 1, "迅捷利爪", "冷却时间 -30%", "⚡"),
-		WeaponUpgradeChoice.new("claw_burn", "phoenix_claws", 1, "灼烧之痕", "命中施加燃烧效果", "🔥"),
+		WeaponUpgradeChoice.new("claw_size", "phoenix_claws", 1, "巨型火拳", "大小 +50%，伤害 +30%", "👊"),
+		WeaponUpgradeChoice.new("claw_speed", "phoenix_claws", 1, "迅捷连打", "冷却时间 -30%", "⚡"),
+		WeaponUpgradeChoice.new("claw_burn", "phoenix_claws", 1, "灼烧之拳", "命中施加燃烧效果", "🔥"),
 		# Tier 2
-		WeaponUpgradeChoice.new("claw_multi", "phoenix_claws", 2, "多重利爪", "同时发射 3 道爪击", "🔱"),
+		WeaponUpgradeChoice.new("claw_multi", "phoenix_claws", 2, "多重拳脚", "同时发射 3 波拳击", "🔱"),
 		WeaponUpgradeChoice.new("claw_vamp", "phoenix_claws", 2, "浴火重生", "击杀敌人回复 1 HP", "❤️"),
-		WeaponUpgradeChoice.new("claw_pierce", "phoenix_claws", 2, "锐利之爪", "穿透 +3", "🗡️"),
+		WeaponUpgradeChoice.new("claw_pierce", "phoenix_claws", 2, "破甲重击", "穿透 +3", "🗡️"),
 		# Tier 3
-		WeaponUpgradeChoice.new("claw_dash", "phoenix_claws", 3, "火鸟突击", "爪击伴随火鸟冲刺", "🦅"),
-		WeaponUpgradeChoice.new("claw_x", "phoenix_claws", 3, "十字交叉", "向四个方向同时挥爪", "❌"),
-		WeaponUpgradeChoice.new("claw_inferno", "phoenix_claws", 3, "炼狱爪击", "爪击留下持续燃烧的火焰路径", "🌋")
+		WeaponUpgradeChoice.new("claw_dash", "phoenix_claws", 3, "火鸟突击", "拳击伴随火鸟冲刺", "🦅"),
+		WeaponUpgradeChoice.new("claw_x", "phoenix_claws", 3, "四方拳劲", "向四个方向同时挥拳", "❌"),
+		WeaponUpgradeChoice.new("claw_inferno", "phoenix_claws", 3, "炼狱火拳", "拳击留下持续燃烧的火焰路径", "🌋")
 	]
 
 	# --- Sakuya (十六夜咲夜) Weapons ---

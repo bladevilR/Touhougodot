@@ -58,7 +58,8 @@ func add_weapon(weapon_id: String):
 	weapons[weapon_id] = {
 		"config": config,
 		"timer": 0.0,  # 立即发射一次
-		"level": 1      # 武器等级
+		"level": 1,      # 武器等级
+		"applied_upgrades": []  # 已应用的升级ID列表
 	}
 	print("获得武器: ", config.weapon_name)
 
@@ -83,6 +84,65 @@ func upgrade_weapon(weapon_id: String):
 		_apply_qualitative_change(weapon_id, weapon_data)
 
 	print("武器升级: ", weapon_data.config.weapon_name, " -> Lv.", new_level)
+
+func apply_weapon_upgrade(weapon_id: String, upgrade_id: String):
+	"""应用武器升级"""
+	if not weapon_id in weapons:
+		print("武器未装备，无法应用升级: ", weapon_id)
+		return
+
+	var weapon_data = weapons[weapon_id]
+	var applied_upgrades = weapon_data.get("applied_upgrades", [])
+
+	# 检查是否已应用
+	if upgrade_id in applied_upgrades:
+		print("升级已应用: ", upgrade_id)
+		return
+
+	# 记录升级
+	applied_upgrades.append(upgrade_id)
+	weapon_data["applied_upgrades"] = applied_upgrades
+
+	# 应用升级效果
+	_apply_upgrade_effect(weapon_id, weapon_data, upgrade_id)
+
+	print("应用武器升级: ", weapon_id, " - ", upgrade_id)
+
+func _apply_upgrade_effect(weapon_id: String, weapon_data: Dictionary, upgrade_id: String):
+	"""应用升级效果的具体逻辑"""
+	var config = weapon_data.config
+
+	# 初始化升级加成字典
+	if not weapon_data.has("upgrade_bonuses"):
+		weapon_data["upgrade_bonuses"] = {}
+
+	# 根据升级ID应用效果
+	match upgrade_id:
+		# === Phoenix Wings (凤凰羽衣) ===
+		"wings_count":
+			config.projectile_count += 2
+			print("  → 火焰羽翼数量 +2")
+		"wings_damage":
+			if not weapon_data.upgrade_bonuses.has("damage_mult"):
+				weapon_data.upgrade_bonuses["damage_mult"] = 1.0
+			weapon_data.upgrade_bonuses["damage_mult"] *= 1.5
+			print("  → 伤害 +50%")
+		"wings_range":
+			config.orbit_radius *= 1.5
+			print("  → 旋转范围 +50%")
+		"wings_burn":
+			config.on_hit_effect = "burn"
+			print("  → 接触施加燃烧效果")
+		"wings_double":
+			weapon_data["second_layer"] = true
+			print("  → 添加反向旋转的第二层")
+		"wings_explode":
+			weapon_data["kill_explosion"] = true
+			print("  → 击杀触发爆炸")
+
+		# 其他武器的升级可以继续添加...
+		_:
+			print("  → 未实现的升级效果: ", upgrade_id)
 
 func _apply_level_bonuses(weapon_id: String, weapon_data: Dictionary, level: int):
 	"""应用等级加成 (策划稿数值)"""
@@ -261,6 +321,10 @@ func _fire_projectile_in_direction(weapon_id: String, config: WeaponData.WeaponC
 	var level_bonuses = weapon_data.get("level_bonuses", {})
 	var damage_mult = level_bonuses.get("damage_mult", 1.0)
 
+	# 获取升级加成并合并
+	var upgrade_bonuses = weapon_data.get("upgrade_bonuses", {})
+	damage_mult *= upgrade_bonuses.get("damage_mult", 1.0)
+
 	# 根据武器配置生成多个子弹（等级提升增加子弹数量）
 	var projectile_count = config.projectile_count + max(0, weapon_level - 1)
 
@@ -274,19 +338,33 @@ func _fire_projectile_in_direction(weapon_id: String, config: WeaponData.WeaponC
 		projectile_count = 8  # 8方向
 
 	# 计算扇形角度
-	var base_spread = 0.3
+	var base_spread = config.projectile_spread  # 使用武器配置的散射角度
 	if has_qualitative:
 		base_spread = weapon_data.get("scatter_angle", base_spread)
+
+	# 特殊处理：火鸟拳横向排列（不是扇形）
+	var is_horizontal_sweep = (weapon_id == "phoenix_claws")
 
 	for i in range(projectile_count):
 		var bullet = bullet_scene.instantiate()
 
-		# 计算发射角度
+		# 计算发射角度和位置
 		var angle_offset = 0.0
+		var position_offset = Vector2.ZERO
+
 		if all_directions:
 			# 全向发射（8方向）
 			angle_offset = (i * TAU / projectile_count)
+		elif is_horizontal_sweep:
+			# 横向一字排列（火鸟拳）
+			# 计算垂直于射击方向的横向偏移
+			var perpendicular = Vector2(-direction.y, direction.x)  # 逆时针旋转90度
+			var spacing = 35.0  # 每个子弹之间的间距
+			var total_width = spacing * (projectile_count - 1)
+			var offset_distance = -total_width / 2.0 + spacing * i
+			position_offset = perpendicular * offset_distance
 		elif projectile_count > 1:
+			# 正常扇形
 			angle_offset = -base_spread + (base_spread * 2.0 * i / (projectile_count - 1))
 
 		var final_angle = direction.angle() + angle_offset
@@ -352,8 +430,8 @@ func _fire_projectile_in_direction(weapon_id: String, config: WeaponData.WeaponC
 
 		bullet.setup(bullet_config)
 
-		# 设置子弹位置
-		bullet.global_position = player.global_position
+		# 设置子弹位置（加上横向偏移）
+		bullet.global_position = player.global_position + position_offset
 
 		# 添加到场景
 		get_tree().current_scene.call_deferred("add_child", bullet)
@@ -362,6 +440,39 @@ func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 	# 环绕武器（如凤凰羽衣）
 	# 这类武器应该持续存在，每次发射刷新环绕弹幕
 
+	# 特殊处理：phoenix_wings 光环武器只生成一次，持续存在
+	if weapon_id == "phoenix_wings":
+		# 清理所有旧的光环（防止重复生成）
+		var existing_auras = get_tree().get_nodes_in_group("phoenix_aura")
+		for aura in existing_auras:
+			aura.queue_free()
+
+		# 生成持续存在的光环
+		var bullet = bullet_scene.instantiate()
+		bullet.add_to_group("phoenix_aura")  # 添加到组方便查找
+
+		var bullet_config = {
+			"weapon_id": weapon_id,
+			"bullet_color": Color(1.0, 0.5, 0.1),  # 橙黄色
+			"damage": config.base_damage * stats.might,
+			"speed": 0.0,
+			"lifetime": 999999.0,  # 超长生命周期，基本不会消失
+			"direction": Vector2.ZERO,
+			"penetration": config.penetration,
+			"orbit_radius": 0.01,  # 设置为接近0的值，避免完全为0导致逻辑不触发
+			"orbit_angle": 0.0,
+			"orbit_speed": 0.0,
+			"element": _element_type_to_string(config.element_type),
+			"knockback": config.knockback,
+			"on_hit_effect": config.on_hit_effect
+		}
+
+		bullet.setup(bullet_config)
+		bullet.global_position = player.global_position
+		get_tree().current_scene.call_deferred("add_child", bullet)
+		return
+
+	# 原有的环绕弹幕逻辑（用于其他武器）
 	# 获取武器数据（包含质变效果）
 	var weapon_data = weapons.get(weapon_id, {})
 	var has_qualitative = weapon_data.get("has_qualitative_change", false)
@@ -370,12 +481,12 @@ func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 	var level_bonuses = weapon_data.get("level_bonuses", {})
 	var damage_mult = level_bonuses.get("damage_mult", 1.0)
 
+	# 获取升级加成并合并
+	var upgrade_bonuses = weapon_data.get("upgrade_bonuses", {})
+	damage_mult *= upgrade_bonuses.get("damage_mult", 1.0)
+
 	var time = Time.get_ticks_msec() / 1000.0
 	var projectile_count = config.projectile_count + int((weapon_level - 1) * 0.5)  # 每2级+1环绕
-
-	# 特殊处理：凤凰羽衣需要更多子弹来形成环
-	if weapon_id == "phoenix_wings":
-		projectile_count *= 3
 
 	# 质变效果：双层旋转（phoenix_wings）
 	var layer_count = 1
@@ -442,6 +553,10 @@ func _fire_laser(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dict
 	var level_bonuses = weapon_data.get("level_bonuses", {})
 	var damage_mult = level_bonuses.get("damage_mult", 1.0)
 
+	# 获取升级加成并合并
+	var upgrade_bonuses = weapon_data.get("upgrade_bonuses", {})
+	damage_mult *= upgrade_bonuses.get("damage_mult", 1.0)
+
 	var direction = (target.global_position - player.global_position).normalized()
 
 	# 计算等级加成
@@ -498,6 +613,10 @@ func _fire_special(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 	# 获取等级加成
 	var level_bonuses = weapon_data.get("level_bonuses", {})
 	var damage_mult = level_bonuses.get("damage_mult", 1.0)
+
+	# 获取升级加成并合并
+	var upgrade_bonuses = weapon_data.get("upgrade_bonuses", {})
+	damage_mult *= upgrade_bonuses.get("damage_mult", 1.0)
 
 	var projectile_count = config.projectile_count + max(0, int((weapon_level - 1) * 0.5))
 
@@ -610,9 +729,9 @@ func _get_weapon_color(weapon_id: String, config: WeaponData.WeaponConfig) -> Co
 		"star_dust":
 			return Color("#f1c40f")  # 黄色星星（魔理沙）
 		"phoenix_wings":
-			return Color("#ff4500")  # 橙红色火焰（妹红）
+			return Color("#ff9500")  # 橙黄色火焰光环（妹红）
 		"phoenix_claws":
-			return Color("#ff0000")  # 红色利爪
+			return Color("#ff3300")  # 鲜艳的橙红色利爪（妹红）
 		"knives":
 			return Color("#bdc3c7")  # 银白色飞刀（咲夜）
 		"yin_yang_orb":

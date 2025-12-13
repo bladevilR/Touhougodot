@@ -38,7 +38,7 @@ func _get_upgrade_choices() -> Array:
 	if player.weapon_system:
 		owned_weapons = player.weapon_system.get_owned_weapon_ids()
 
-	# 过滤可用武器
+	# 1. 收集所有可用的新武器
 	var available_weapons = []
 	for weapon_id in WeaponData.WEAPONS.keys():
 		var weapon_config = WeaponData.WEAPONS[weapon_id]
@@ -55,22 +55,57 @@ func _get_upgrade_choices() -> Array:
 		if weapon_config.exclusive_to >= 0 and weapon_config.exclusive_to != player_character_id:
 			continue
 
-		available_weapons.append(weapon_id)
-
-	# 如果可用武器不足3个，也添加武器升级选项
-	# TODO: 实现武器升级选项
-
-	# 随机选择3个
-	available_weapons.shuffle()
-	for i in range(min(3, available_weapons.size())):
-		var weapon_id = available_weapons[i]
-		var weapon_config = WeaponData.WEAPONS[weapon_id]
-		choices.append({
+		available_weapons.append({
+			"type": "new_weapon",
 			"weapon_id": weapon_id,
 			"name": weapon_config.weapon_name,
 			"description": weapon_config.description,
 			"icon": weapon_config.id
 		})
+
+	# 2. 收集所有可用的武器升级
+	var available_upgrades = []
+	for weapon_id in owned_weapons:
+		var weapon_data = player.weapon_system.weapons.get(weapon_id)
+		if not weapon_data:
+			continue
+
+		var current_level = weapon_data.level
+		var applied_upgrades = weapon_data.get("applied_upgrades", [])
+
+		# 获取该武器的升级树
+		var upgrade_tree = WeaponData.get_upgrade_tree(weapon_id)
+		for upgrade in upgrade_tree:
+			# 跳过已应用的升级
+			if upgrade.id in applied_upgrades:
+				continue
+
+			# 添加到可用升级列表
+			available_upgrades.append({
+				"type": "weapon_upgrade",
+				"weapon_id": weapon_id,
+				"upgrade_id": upgrade.id,
+				"name": upgrade.upgrade_name,
+				"description": upgrade.description,
+				"icon": upgrade.icon
+			})
+
+	# 3. 合并并随机选择
+	var all_choices = available_weapons + available_upgrades
+	all_choices.shuffle()
+
+	print("=== 升级选项调试信息 ===")
+	print("可用新武器数量: ", available_weapons.size())
+	print("可用武器升级数量: ", available_upgrades.size())
+	print("总可选项数量: ", all_choices.size())
+
+	# 选择最多3个
+	for i in range(min(3, all_choices.size())):
+		choices.append(all_choices[i])
+		print("选项 ", i+1, ": ", all_choices[i].name, " (", all_choices[i].type, ")")
+
+	if choices.size() == 0:
+		print("警告：没有可用的升级选项！")
 
 	return choices
 
@@ -86,22 +121,48 @@ func _show_upgrades():
 		var choice = upgrade_choices[i]
 		var button = Button.new()
 		button.custom_minimum_size = Vector2(400, 150)  # 增大按钮尺寸
-		button.text = choice.name + "\n" + choice.description
+
+		# 构建按钮文本，包含图标
+		var icon = choice.get("icon", "")
+		var display_text = ""
+		if icon != "":
+			display_text = icon + " " + choice.name
+		else:
+			display_text = choice.name
+
+		display_text += "\n" + choice.description
+
+		# 如果是武器升级，显示对应的武器名称
+		if choice.type == "weapon_upgrade":
+			var weapon_config = WeaponData.get_weapon(choice.weapon_id)
+			if weapon_config:
+				display_text += "\n[" + weapon_config.weapon_name + "]"
+
+		button.text = display_text
 
 		# 增大字体
-		button.add_theme_font_size_override("font_size", 24)
+		button.add_theme_font_size_override("font_size", 20)
 
 		button.pressed.connect(_on_choice_selected.bind(choice))
 		choice_container.add_child(button)
 
 func _on_choice_selected(choice: Dictionary):
-	# 添加武器
-	SignalBus.weapon_added.emit(choice.weapon_id)
+	var player = get_tree().get_first_node_in_group("player")
+	if not player or not player.weapon_system:
+		return
+
+	# 根据类型处理选择
+	if choice.type == "new_weapon":
+		# 添加新武器
+		SignalBus.weapon_added.emit(choice.weapon_id)
+		print("选择了新武器: ", choice.name)
+	elif choice.type == "weapon_upgrade":
+		# 应用武器升级
+		player.weapon_system.apply_weapon_upgrade(choice.weapon_id, choice.upgrade_id)
+		print("选择了武器升级: ", choice.name)
 
 	# 隐藏界面
 	visible = false
 
 	# 恢复游戏
 	get_tree().paused = false
-
-	print("选择了升级: ", choice.name)

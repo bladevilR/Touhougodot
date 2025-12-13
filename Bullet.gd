@@ -166,16 +166,29 @@ func _setup_bullet_visual():
 			base_radius = 240.0
 			should_rotate = true
 		"phoenix_wings":
-			texture_path = "res://assets/bullets/big_bullet.png"
-			base_radius = 100.0
+			# 为光环创建圆形纹理（更柔和的渐变）
+			var circle_texture = _create_circle_texture(120.0, Color(1.0, 0.6, 0.2, 0.5))  # 橙黄色，半透明
+			sprite.texture = circle_texture
+			sprite.scale = Vector2(1.0, 1.0)
+			sprite.material = CanvasItemMaterial.new()
+			sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 			should_rotate = false
-			# 增大phoenix_wings的碰撞半径
+			# 增大碰撞半径形成光环区域
 			if collision_shape and collision_shape.shape:
-				collision_shape.shape.radius = 30.0  # 稍微减小一点
+				collision_shape.shape.radius = 120.0  # 光环伤害范围
+			return  # 直接返回，不执行后续通用纹理加载
 		"phoenix_claws":
-			texture_path = "res://assets/bullets/big_bullet.png"
-			base_radius = 200.0
+			# 火鸟拳：扇形横扫效果，使用拉长的矩形
+			var sweep_texture = _create_sweep_texture(60.0, 20.0, Color(1.0, 0.3, 0.0, 0.8))  # 橙红色拉长矩形
+			sprite.texture = sweep_texture
+			sprite.scale = Vector2(1.0, 1.0)
+			sprite.material = CanvasItemMaterial.new()
+			sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 			should_rotate = true
+			# 横扫碰撞使用胶囊形状
+			if collision_shape and collision_shape.shape:
+				collision_shape.shape.radius = 20.0  # 近战横扫范围
+			return  # 直接返回，使用自定义纹理
 		"knives":
 			texture_path = "res://assets/bullets/knife.png"
 			base_radius = 200.0
@@ -245,10 +258,7 @@ func _setup_bullet_visual():
 		var target_scale = radius / base_radius
 		
 		# 特殊处理
-		if weapon_id == "phoenix_wings":
-			sprite.scale = Vector2(0.6, 0.6) # 减小尺寸
-			sprite.modulate.a = 0.4 # 大幅降低透明度
-		elif weapon_id == "yin_yang_orb":
+		if weapon_id == "yin_yang_orb":
 			sprite.scale = Vector2(0.8, 0.8) # 阴阳玉适中尺寸
 		else:
 			sprite.scale = Vector2(target_scale * 1.8, target_scale * 1.8) # 全局缩放从2.5降到1.8
@@ -256,6 +266,86 @@ func _setup_bullet_visual():
 		# 旋转朝向运动方向
 		if should_rotate and velocity.length() > 0:
 			sprite.rotation = velocity.angle() + PI/2  # +90度因为贴图默认朝上
+
+func _create_circle_texture(radius: float, color: Color) -> ImageTexture:
+	"""创建圆形渐变纹理用于光环效果"""
+	var size = int(radius * 2)
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+
+	var center = Vector2(radius, radius)
+
+	# 绘制柔和的圆形光环（模拟火焰）
+	for x in range(size):
+		for y in range(size):
+			var pos = Vector2(x, y)
+			var dist = pos.distance_to(center)
+			var normalized_dist = dist / radius
+
+			var alpha = 0.0
+			var brightness = 1.0
+
+			# 创建多层渐变效果
+			if normalized_dist < 1.0:
+				# 中心到边缘的渐变
+				# 0.0-0.3: 中心较暗
+				# 0.3-0.7: 中间亮
+				# 0.7-1.0: 边缘柔和衰减
+				if normalized_dist < 0.3:
+					alpha = normalized_dist * 0.2
+					brightness = 0.8
+				elif normalized_dist < 0.7:
+					alpha = 0.06 + (normalized_dist - 0.3) * 1.5
+					brightness = 1.0
+				elif normalized_dist < 0.95:
+					var edge_factor = (normalized_dist - 0.7) / 0.25
+					alpha = 0.66 - edge_factor * 0.4
+					brightness = 1.0 - edge_factor * 0.3
+				else:
+					# 最外层快速衰减，制造柔和边缘
+					var fade = (1.0 - normalized_dist) / 0.05
+					alpha = 0.26 * fade
+					brightness = 0.7
+
+				alpha *= color.a
+
+			var pixel_color = Color(color.r * brightness, color.g * brightness, color.b * brightness, alpha)
+			image.set_pixel(x, y, pixel_color)
+
+	return ImageTexture.create_from_image(image)
+
+func _create_sweep_texture(length: float, width: float, color: Color) -> ImageTexture:
+	"""创建横扫效果���理（拉长的矩形带渐变）"""
+	var w = int(length)
+	var h = int(width)
+	var image = Image.create(w, h, false, Image.FORMAT_RGBA8)
+
+	var center_y = h / 2.0
+
+	# 绘制横扫火焰效果
+	for x in range(w):
+		for y in range(h):
+			var normalized_x = float(x) / float(w)  # 0-1，从左到右
+			var dist_y = abs(y - center_y) / center_y  # 0-1，距离中心线的距离
+
+			var alpha = 0.0
+
+			# 横向渐变：中间亮，两端衰减
+			var horizontal_fade = 1.0
+			if normalized_x < 0.2:
+				horizontal_fade = normalized_x / 0.2  # 起始淡入
+			elif normalized_x > 0.8:
+				horizontal_fade = (1.0 - normalized_x) / 0.2  # 末尾淡出
+
+			# 纵向渐变：中心亮，边缘衰减
+			var vertical_fade = 1.0 - dist_y
+
+			# 合并渐变
+			alpha = horizontal_fade * vertical_fade * color.a
+
+			var pixel_color = Color(color.r, color.g, color.b, alpha)
+			image.set_pixel(x, y, pixel_color)
+
+	return ImageTexture.create_from_image(image)
 
 # ==================== PHYSICS PROCESS ====================
 func _physics_process(delta):
@@ -333,7 +423,22 @@ func _update_orbital_movement(delta: float):
 
 	# Rotate sprite to face outward
 	if sprite:
-		sprite.rotation = orbit_angle
+		# 光环特殊效果：缓慢旋转 + 柔和脉冲
+		if weapon_id == "phoenix_wings":
+			sprite.rotation += delta * 0.5  # 缓慢旋转模拟火焰流动
+
+			# 柔和脉冲效果，模拟火焰呼吸
+			var pulse = sin(lifetime_timer * 1.5) * 0.15
+			var base_alpha = 0.4
+			sprite.modulate.a = base_alpha + pulse
+
+			# 颜色在橙色和黄色之间柔和变化
+			var color_shift = sin(lifetime_timer * 0.8) * 0.2
+			sprite.modulate.r = 1.0
+			sprite.modulate.g = 0.5 + color_shift
+			sprite.modulate.b = 0.1
+		else:
+			sprite.rotation = orbit_angle
 
 	# 主动检测并伤害重叠的敌人（修复光环不造成伤害的问题）
 	var overlapping_bodies = get_overlapping_bodies()
