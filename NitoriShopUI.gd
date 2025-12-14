@@ -3,6 +3,7 @@ extends Control
 # NitoriShopUI - 河童商店界面
 
 var shop_system: NitoriShop = null
+var nitori_portrait: TextureRect = null  # 河童立绘
 
 @onready var background = $Background
 @onready var title_label = $TitleLabel
@@ -13,6 +14,9 @@ var shop_system: NitoriShop = null
 func _ready():
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS  # 暂停时也能响应
+
+	# 创建河童立绘
+	_create_nitori_portrait()
 
 	# 监听商店信号
 	SignalBus.shop_opened.connect(_on_shop_opened)
@@ -28,14 +32,49 @@ func _ready():
 		if shops.size() > 0:
 			shop_system = shops[0]
 
+func _create_nitori_portrait():
+	"""创建河童立绘"""
+	nitori_portrait = TextureRect.new()
+	nitori_portrait.name = "NitoriPortrait"
+
+	# 加载河童立绘 - 使用2C.png（对话版）
+	var portrait_path = "res://assets/characters/2C.png"
+	if ResourceLoader.exists(portrait_path):
+		var texture = load(portrait_path)
+		nitori_portrait.texture = texture
+
+		# 计算缩放：目标宽度120像素
+		var original_size = texture.get_size()
+		var target_width = 120.0
+		var scale_factor = target_width / original_size.x
+		nitori_portrait.scale = Vector2(scale_factor, scale_factor)
+
+		print("[NitoriShopUI] 河童立绘已创建, scale=", scale_factor)
+	else:
+		print("警告: 找不到河童立绘: ", portrait_path)
+		return
+
+	# 设置立绘位置（左侧）
+	nitori_portrait.position = Vector2(50, 150)
+
+	# 添加到界面
+	add_child(nitori_portrait)
+
+	# 初始隐藏
+	nitori_portrait.visible = false
+
 func _on_shop_opened():
 	"""商店打开"""
 	visible = true
+	if nitori_portrait:
+		nitori_portrait.visible = true
 	_refresh_ui()
 
 func _on_shop_closed():
 	"""商店关闭"""
 	visible = false
+	if nitori_portrait:
+		nitori_portrait.visible = false
 
 func _on_coins_changed(amount: int):
 	"""金币变化"""

@@ -2,24 +2,94 @@ extends Node2D
 
 # World - 主场景管理
 
+var lighting_canvas_group: CanvasGroup = null
+var canvas_group_ready: bool = false
+
 func _ready():
+	# 创建CanvasGroup用于Y-sorting
+	_setup_canvas_group()
+
 	# 初始化游戏系统
 	initialize_game()
 
 	# 发送游戏开始信号
 	SignalBus.game_started.emit()
 
+	# 延迟显示开场对话（确保UI系统已初始化）
+	await get_tree().create_timer(1.0).timeout
+	_show_opening_dialogue()
+
+func _show_opening_dialogue():
+	"""显示开场对话"""
+	print("[World] 开始显示开场对话...")
+
+	# 检查是否有对话系统
+	var game_ui = get_node_or_null("GameUI")
+	if not game_ui:
+		print("[World] 错误: 找不到GameUI节点")
+		return
+
+	print("[World] 找到GameUI节点")
+
+	var dialogue_system = game_ui.get_node_or_null("DialoguePortrait")
+	if not dialogue_system:
+		print("[World] 创建DialoguePortrait...")
+		# 创建对话系统
+		var DialoguePortraitScript = load("res://DialoguePortrait.gd")
+		if DialoguePortraitScript:
+			dialogue_system = DialoguePortraitScript.new()
+			dialogue_system.name = "DialoguePortrait"
+			game_ui.add_child(dialogue_system)
+			# 等待一帧确保_ready完成
+			await get_tree().process_frame
+			print("[World] DialoguePortrait创建成功")
+		else:
+			print("[World] 错误: 无法加载DialoguePortrait.gd")
+			return
+
+	if dialogue_system and dialogue_system.has_method("show_dialogue"):
+		print("[World] 调用show_dialogue...")
+		# 显示妹红的开场白
+		var CharacterPortrait = load("res://DialoguePortrait.gd").CharacterPortrait
+		dialogue_system.show_dialogue(
+			CharacterPortrait.MOKOU,
+			"希望这次来的及"
+		)
+		print("[World] 开场对话调用完成")
+	else:
+		print("[World] 错误: dialogue_system无效或没有show_dialogue方法")
+
+func _setup_canvas_group():
+	"""设置 CanvasGroup 用于 Y-sorting"""
+	lighting_canvas_group = CanvasGroup.new()
+	lighting_canvas_group.name = "LightingCanvasGroup"
+	lighting_canvas_group.y_sort_enabled = true
+	lighting_canvas_group.z_index = 0
+
+	add_child(lighting_canvas_group)
+	move_child(lighting_canvas_group, 0)
+
+	# 延迟移动现有节点到CanvasGroup
+	call_deferred("_move_existing_nodes_to_canvas_group")
+
+func _move_existing_nodes_to_canvas_group():
+	"""将场景中已有的节点移动到CanvasGroup"""
+	var player = get_node_or_null("Player")
+	if player:
+		player.reparent(lighting_canvas_group, true)
+
+	canvas_group_ready = true
+
+func get_game_objects_parent() -> Node:
+	"""获取游戏对象的父节点（用于MapSystem和EnemySpawner）"""
+	if lighting_canvas_group and is_instance_valid(lighting_canvas_group):
+		return lighting_canvas_group
+	return self
+
 func initialize_game():
 	# 初始化所有游戏数据
-	print("开始初始化游戏数据...")
 	CharacterData.initialize()
-	print("- 角色数据加载完成（6个角色）")
 	WeaponData.initialize()
-	print("- 武器数据加载完成（17个武器 + 54个升级选项）")
 	EnemyData.initialize()
-	print("- 敌人数据加载完成（4种敌人 + 3个Boss + 10波次）")
 	ElementData.initialize()
-	print("- 元素数据加载完成（6个元素 + 5个反应）")
 	BondData.initialize()
-	print("- 羁绊角色加载完成（6个支援角色）")
-	print("✅ 游戏数据初始化完成！")

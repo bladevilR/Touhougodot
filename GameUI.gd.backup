@@ -1,0 +1,475 @@
+extends CanvasLayer
+
+# GameUI - 解耦后的 UI 系统
+# 彻底不依赖 Player。哪怕场景里没有 Player，UI 也不会报错
+
+@onready var hp_bar = $HealthBar # 血条节点
+@onready var xp_bar = $ExpBar    # 经验条节点
+@onready var level_label = $LevelLabel
+@onready var coins_label = $CoinsLabel
+
+# 元素附魔UI节点（动态创建）
+var enchant_panel: Control = null
+var enchant_icon: ColorRect = null
+var enchant_timer_bar: ProgressBar = null
+var enchant_label: Label = null
+
+# 技能冷却UI节点
+var skill_cooldown_panel: Control = null
+var skill_cooldown_bar: ProgressBar = null
+var skill_name_label: Label = null
+
+# Boss血条UI
+var boss_panel: Control = null
+var boss_name_label: Label = null
+var boss_hp_bar: ProgressBar = null
+
+# 伤害数字容器
+var damage_numbers_container: Control = null
+
+# DPS统计
+var dps_panel: Control = null
+var dps_label: Label = null
+var weapon_dps_labels: Dictionary = {}  # {weapon_id: Label}
+var damage_history: Dictionary = {}  # {weapon_id: [{damage: float, time: float}]}
+const DPS_WINDOW: float = 3.0  # 统计最近3秒的伤害
+const MAX_WEAPON_DISPLAY: int = 6  # 最多显示6个武器
+
+# 元素颜色
+const ELEMENT_COLORS = {
+	0: Color("#ff4500"),  # FIRE
+	1: Color("#00bfff"),  # ICE
+	2: Color("#9370db"),  # POISON
+	3: Color("#8b4513"),  # OIL
+	4: Color("#ffd700"),  # LIGHTNING
+	5: Color("#9932cc"),  # GRAVITY
+}
+
+const ELEMENT_NAMES = {
+	0: "火鸟废羽",
+	1: "琪露诺的水",
+	2: "铃兰花毒",
+	3: "地灵殿黑水",
+	4: "衣玖披肩",
+	5: "伊吹瓢",
+}
+
+func _ready():
+	# UI 只监听总线，完全不知道 Player 的存在
+	SignalBus.player_health_changed.connect(update_hp)
+	SignalBus.xp_gained.connect(update_xp)
+	SignalBus.level_up.connect(on_level_up)
+	SignalBus.game_over.connect(on_game_over)
+	SignalBus.coins_changed.connect(update_coins)
+
+	# 新增信号监听
+	SignalBus.element_enchant_applied.connect(_on_enchant_applied)
+	SignalBus.element_enchant_expired.connect(_on_enchant_expired)
+	SignalBus.boss_spawned.connect(_on_boss_spawned)
+	SignalBus.boss_health_changed.connect(_on_boss_health_changed)
+	SignalBus.boss_defeated.connect(_on_boss_defeated)
+	SignalBus.damage_dealt.connect(_on_damage_dealt)
+
+	# 创建UI元素
+	_create_enchant_ui()
+	_create_skill_cooldown_ui()
+	_create_boss_ui()
+	_create_damage_numbers_container()
+	_create_dps_ui()
+
+func _process(delta):
+	# 更新元素附魔计时器显示
+	_update_enchant_timer()
+	# 更新技能冷却显示
+	_update_skill_cooldown()
+	# 更新DPS显示
+	_update_dps_display(delta)
+
+func update_hp(current, max_val):
+	if hp_bar:
+		hp_bar.value = (current / max_val) * 100
+
+func update_xp(current, max_val, level):
+	if xp_bar:
+		xp_bar.value = (float(current) / float(max_val)) * 100
+	if level_label:
+		level_label.text = "Lv." + str(level)
+
+func update_coins(amount: int):
+	if coins_label:
+		coins_label.text = "金币: " + str(amount)
+
+func on_level_up(new_level):
+	# 这里可以弹出一个升级选择窗口
+	print("UI: 升级到 Lv.", new_level, "！")
+	# TODO: 显示升级选择窗口
+
+func on_game_over():
+	print("UI: Game Over received")
+
+	# 先暂停游戏处理
+	get_tree().paused = false  # 确保不暂停，以便重启
+
+	# Create Game Over UI overlay dynamically
+	var overlay = ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.7)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(overlay)
+
+	var label = Label.new()
+	label.text = "GAME OVER"
+	label.add_theme_font_size_override("font_size", 64)
+	label.set_anchors_preset(Control.PRESET_CENTER)
+	overlay.add_child(label)
+
+	# 添加重启提示
+	var restart_label = Label.new()
+	restart_label.text = "正在重启游戏..."
+	restart_label.add_theme_font_size_override("font_size", 32)
+	restart_label.set_anchors_preset(Control.PRESET_CENTER)
+	restart_label.position.y = 100
+	overlay.add_child(restart_label)
+
+	# 优化的重启逻辑：延迟更短，避免卡顿
+	await get_tree().create_timer(1.5).timeout
+
+	# 先清理敌人和子弹
+	_cleanup_game_objects()
+
+	# 使用更快的重启方式
+	await get_tree().create_timer(0.1).timeout
+	get_tree().reload_current_scene()
+
+func _cleanup_game_objects():
+	"""清理游戏对象以避免重启卡顿"""
+	# 清理所有敌人
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for enemy in enemies:
+		if is_instance_valid(enemy):
+			enemy.queue_free()
+
+	# 清理所有子弹
+	var bullets = get_tree().get_nodes_in_group("bullet")
+	for bullet in bullets:
+		if is_instance_valid(bullet):
+			bullet.queue_free()
+
+	# 清理所有拾取物
+	var pickups = get_tree().get_nodes_in_group("pickup")
+	for pickup in pickups:
+		if is_instance_valid(pickup):
+			pickup.queue_free()
+
+# ==================== 元素附魔 UI ====================
+func _create_enchant_ui():
+	"""创建元素附魔UI面板"""
+	enchant_panel = Control.new()
+	enchant_panel.name = "EnchantPanel"
+	enchant_panel.visible = false
+	enchant_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	enchant_panel.position = Vector2(20, 120)
+	enchant_panel.size = Vector2(200, 50)
+	add_child(enchant_panel)
+
+	# 背景
+	var bg = ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.5)
+	bg.size = Vector2(200, 50)
+	enchant_panel.add_child(bg)
+
+	# 元素图标
+	enchant_icon = ColorRect.new()
+	enchant_icon.size = Vector2(40, 40)
+	enchant_icon.position = Vector2(5, 5)
+	enchant_panel.add_child(enchant_icon)
+
+	# 元素名称标签
+	enchant_label = Label.new()
+	enchant_label.position = Vector2(50, 5)
+	enchant_label.add_theme_font_size_override("font_size", 14)
+	enchant_panel.add_child(enchant_label)
+
+	# 计时器条
+	enchant_timer_bar = ProgressBar.new()
+	enchant_timer_bar.position = Vector2(50, 28)
+	enchant_timer_bar.size = Vector2(145, 16)
+	enchant_timer_bar.show_percentage = false
+	enchant_timer_bar.value = 100
+	enchant_panel.add_child(enchant_timer_bar)
+
+func _on_enchant_applied(element_type: int, duration: float):
+	"""元素附魔应用时更新UI"""
+	if not enchant_panel:
+		return
+
+	enchant_panel.visible = true
+
+	# 更新图标颜色
+	var color = ELEMENT_COLORS.get(element_type, Color.WHITE)
+	if enchant_icon:
+		enchant_icon.color = color
+
+	# 更新名称
+	var name = ELEMENT_NAMES.get(element_type, "未知元素")
+	if enchant_label:
+		enchant_label.text = name
+		enchant_label.add_theme_color_override("font_color", color)
+
+	# 更新计时器条颜色
+	if enchant_timer_bar:
+		var style = StyleBoxFlat.new()
+		style.bg_color = color
+		enchant_timer_bar.add_theme_stylebox_override("fill", style)
+
+func _on_enchant_expired():
+	"""元素附魔过期时隐藏UI"""
+	if enchant_panel:
+		enchant_panel.visible = false
+
+func _update_enchant_timer():
+	"""更新元素附魔计时器显示"""
+	if not enchant_panel or not enchant_panel.visible:
+		return
+
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		return
+
+	var weapon_system = player.get_node_or_null("WeaponSystem")
+	if not weapon_system:
+		return
+
+	if weapon_system.has_method("get_enchant_time_remaining"):
+		var remaining = weapon_system.get_enchant_time_remaining()
+		var max_time = 30.0  # 默认附魔时长
+		if enchant_timer_bar:
+			enchant_timer_bar.value = (remaining / max_time) * 100
+
+# ==================== 技能冷却 UI ====================
+func _create_skill_cooldown_ui():
+	"""创建技能冷却UI"""
+	skill_cooldown_panel = Control.new()
+	skill_cooldown_panel.name = "SkillCooldownPanel"
+	skill_cooldown_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	skill_cooldown_panel.position = Vector2(20, -80)
+	skill_cooldown_panel.size = Vector2(150, 60)
+	add_child(skill_cooldown_panel)
+
+	# 背景
+	var bg = ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.5)
+	bg.size = Vector2(150, 60)
+	skill_cooldown_panel.add_child(bg)
+
+	# 技能名称
+	skill_name_label = Label.new()
+	skill_name_label.text = "[SPACE]"
+	skill_name_label.position = Vector2(10, 5)
+	skill_name_label.add_theme_font_size_override("font_size", 14)
+	skill_cooldown_panel.add_child(skill_name_label)
+
+	# 冷却条
+	skill_cooldown_bar = ProgressBar.new()
+	skill_cooldown_bar.position = Vector2(10, 30)
+	skill_cooldown_bar.size = Vector2(130, 20)
+	skill_cooldown_bar.show_percentage = false
+	skill_cooldown_bar.value = 100
+	skill_cooldown_panel.add_child(skill_cooldown_bar)
+
+func _update_skill_cooldown():
+	"""更新技能冷却显示"""
+	if not skill_cooldown_panel:
+		return
+
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		return
+
+	var char_skills = player.get_node_or_null("CharacterSkills")
+	if not char_skills:
+		return
+
+	# 更新冷却条
+	if skill_cooldown_bar and char_skills.has_method("get_cooldown_percent"):
+		var percent = char_skills.get_cooldown_percent()
+		skill_cooldown_bar.value = (1.0 - percent) * 100
+
+		# 根据冷却状态改变颜色
+		var style = StyleBoxFlat.new()
+		if percent <= 0:
+			style.bg_color = Color("#00ff00")  # 可用时绿色
+		else:
+			style.bg_color = Color("#ff6600")  # 冷却中橙色
+		skill_cooldown_bar.add_theme_stylebox_override("fill", style)
+
+# ==================== Boss血条 UI ====================
+func _create_boss_ui():
+	"""创建Boss血条UI"""
+	boss_panel = Control.new()
+	boss_panel.name = "BossPanel"
+	boss_panel.visible = false
+	boss_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	boss_panel.position = Vector2(0, 10)
+	boss_panel.size = Vector2(0, 60)
+	add_child(boss_panel)
+
+	# Boss名称
+	boss_name_label = Label.new()
+	boss_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_name_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	boss_name_label.position.y = 5
+	boss_name_label.add_theme_font_size_override("font_size", 24)
+	boss_name_label.add_theme_color_override("font_color", Color("#ff0000"))
+	boss_panel.add_child(boss_name_label)
+
+	# Boss血条容器
+	var bar_container = Control.new()
+	bar_container.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	bar_container.position = Vector2(100, 35)
+	bar_container.size = Vector2(-200, 20)
+	boss_panel.add_child(bar_container)
+
+	# Boss血条背景
+	var bar_bg = ColorRect.new()
+	bar_bg.color = Color(0.2, 0.2, 0.2, 0.8)
+	bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar_container.add_child(bar_bg)
+
+	# Boss血条
+	boss_hp_bar = ProgressBar.new()
+	boss_hp_bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	boss_hp_bar.show_percentage = false
+	boss_hp_bar.value = 100
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color("#ff0000")
+	boss_hp_bar.add_theme_stylebox_override("fill", style)
+	bar_container.add_child(boss_hp_bar)
+
+func _on_boss_spawned(boss_name: String, _boss_hp: float, _boss_max_hp: float):
+	"""Boss出现时显示血条"""
+	if boss_panel:
+		boss_panel.visible = true
+	if boss_name_label:
+		boss_name_label.text = boss_name
+
+func _on_boss_health_changed(boss_hp: float, boss_max_hp: float):
+	"""更新Boss血条"""
+	if boss_hp_bar and boss_max_hp > 0:
+		boss_hp_bar.value = (boss_hp / boss_max_hp) * 100
+
+func _on_boss_defeated():
+	"""Boss被击败时隐藏血条"""
+	if boss_panel:
+		boss_panel.visible = false
+
+# ==================== 伤害数字 UI ====================
+func _create_damage_numbers_container():
+	"""创建伤害数字容器"""
+	damage_numbers_container = Control.new()
+	damage_numbers_container.name = "DamageNumbers"
+	damage_numbers_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(damage_numbers_container)
+
+func _on_damage_dealt(damage_amount: float, pos: Vector2, is_critical: bool):
+	"""显示伤害数字并记录到DPS统计"""
+	# 记录伤害到历史
+	var current_time = Time.get_ticks_msec() / 1000.0
+	damage_history.append({"damage": damage_amount, "time": current_time})
+
+	if not damage_numbers_container:
+		return
+
+	var label = Label.new()
+	label.text = str(int(damage_amount))
+	label.position = pos + Vector2(randf_range(-20, 20), randf_range(-10, 10))
+
+	# 暴击显示更大更红
+	if is_critical:
+		label.add_theme_font_size_override("font_size", 28)
+		label.add_theme_color_override("font_color", Color("#ff0000"))
+		label.text = str(int(damage_amount)) + "!"
+	else:
+		label.add_theme_font_size_override("font_size", 18)
+		label.add_theme_color_override("font_color", Color("#ffffff"))
+
+	damage_numbers_container.add_child(label)
+
+	# 动画：向上飘动并淡出
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 50, 0.8)
+	tween.tween_property(label, "modulate:a", 0.0, 0.8)
+
+	# 动画结束后删除
+	tween.chain().tween_callback(func(): label.queue_free())
+
+# ==================== DPS统计 UI ====================
+func _create_dps_ui():
+	"""创建DPS统计面板"""
+	dps_panel = Control.new()
+	dps_panel.name = "DPSPanel"
+	dps_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	dps_panel.position = Vector2(-160, 10)
+	dps_panel.size = Vector2(150, 60)
+	add_child(dps_panel)
+
+	# 背景
+	var bg = ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.6)
+	bg.size = Vector2(150, 60)
+	dps_panel.add_child(bg)
+
+	# 标题
+	var title_label = Label.new()
+	title_label.text = "DPS"
+	title_label.position = Vector2(10, 5)
+	title_label.add_theme_font_size_override("font_size", 14)
+	title_label.add_theme_color_override("font_color", Color("#ffcc00"))
+	dps_panel.add_child(title_label)
+
+	# DPS数值
+	dps_label = Label.new()
+	dps_label.text = "0"
+	dps_label.position = Vector2(10, 28)
+	dps_label.add_theme_font_size_override("font_size", 24)
+	dps_label.add_theme_color_override("font_color", Color("#ff6600"))
+	dps_panel.add_child(dps_label)
+
+func _update_dps_display(delta: float):
+	"""更新DPS显示"""
+	if not dps_label:
+		return
+
+	var current_time = Time.get_ticks_msec() / 1000.0
+
+	# 移除超过时间窗口的伤害记录
+	var i = 0
+	while i < damage_history.size():
+		if current_time - damage_history[i].time > DPS_WINDOW:
+			damage_history.remove_at(i)
+		else:
+			i += 1
+
+	# 计算总伤害
+	var total_damage = 0.0
+	for record in damage_history:
+		total_damage += record.damage
+
+	# 计算DPS（总伤害 / 时间窗口）
+	var dps = 0.0
+	if damage_history.size() > 0:
+		var time_span = min(DPS_WINDOW, current_time - damage_history[0].time)
+		if time_span > 0:
+			dps = total_damage / time_span
+
+	# 更新显示
+	dps_label.text = str(int(dps))
+
+	# 根据DPS改变颜色
+	if dps > 500:
+		dps_label.add_theme_color_override("font_color", Color("#ff0000"))  # 高DPS红色
+	elif dps > 200:
+		dps_label.add_theme_color_override("font_color", Color("#ff6600"))  # 中等橙色
+	else:
+		dps_label.add_theme_color_override("font_color", Color("#ffcc00"))  # 低DPS黄色
+

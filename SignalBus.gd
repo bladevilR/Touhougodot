@@ -31,7 +31,7 @@ signal upgrade_selected(upgrade_choice)
 signal boss_spawned(boss_name: String, boss_hp: float, boss_max_hp: float)
 signal boss_health_changed(boss_hp: float, boss_max_hp: float)
 signal boss_defeated()
-signal damage_dealt(damage_amount: float, position: Vector2, is_critical: bool)
+signal damage_dealt(damage_amount: float, position: Vector2, is_critical: bool, weapon_id: String)
 
 # --- 视觉反馈信号 ---
 signal screen_shake(duration: float, intensity: float)  # 屏幕震动
@@ -48,3 +48,26 @@ signal shop_opened()  # 商店打开
 signal shop_closed()  # 商店关闭
 signal item_purchased(item_id: String)  # 购买物品
 signal shop_available()  # 商店可用（波次间隙）
+
+# --- 掉落物信号 ---
+signal treasure_chest_spawn(position: Vector2)  # 精英怪掉落宝箱
+signal element_enchant_spawn(position: Vector2, element_type: int)  # 元素附魔道具生成
+
+# --- 元素附魔信号 ---
+signal element_enchant_applied(element_type: int, duration: float)  # 元素附魔应用
+signal element_enchant_expired()  # 元素附魔过期
+
+# --- 房间/波次系统信号 ---
+signal spawn_wave(enemy_count: int, room_index: int)  # 生成一波敌人
+signal spawn_boss(room_index: int)  # 生成BOSS
+signal room_cleared()  # 房间清理完成
+signal wave_info_updated(current_wave: int, total_waves: int)  # 波次信息更新
+signal room_info_updated(room_type: String, room_index: int)  # 房间信息更新
+signal boss_dialogue(boss_name: String, dialogue: String)  # Boss对话
+
+# --- 货币系统信号 ---
+signal tenryu_changed(current_tenryu: int)  # 転流（杀敌数）变化
+
+# --- 设置系统信号 ---
+signal settings_changed()  # 设置改变
+signal pause_menu_toggled(is_paused: bool)  # 暂停菜单切换

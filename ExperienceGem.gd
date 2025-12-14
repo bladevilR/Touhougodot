@@ -10,7 +10,7 @@ class_name ExperienceGem
 var is_attracted: bool = false
 var player: Node2D = null
 
-@onready var visual = $ColorRect
+@onready var visual = $Sprite2D
 @onready var collision_shape = $CollisionShape2D
 
 func _ready():
@@ -21,6 +21,15 @@ func _ready():
 	# 设置碰撞层
 	collision_layer = 32  # Layer 6: Pickup
 	collision_mask = 1     # 只检测玩家 (Layer 1)
+
+	# 加载P点贴图
+	if visual:
+		var texture_path = "res://assets/P.png"
+		if ResourceLoader.exists(texture_path):
+			visual.texture = load(texture_path)
+			print("[ExperienceGem] P点贴图加载成功")
+		else:
+			print("[ExperienceGem] 警告: 找不到P点贴图: ", texture_path)
 
 	# 找到玩家
 	player = get_tree().get_first_node_in_group("player")

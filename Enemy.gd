@@ -29,6 +29,11 @@ const ENEMY_SEPARATION_RADIUS: float = 80.0  # 增加检测范围
 const ENEMY_SEPARATION_STRENGTH: float = 150.0  # 增加分离力度
 const MAX_SEPARATION_FORCE: float = 400.0  # 增加最大分离力
 
+# 性能优化：分离力计算缓存
+var _separation_force_cache: Vector2 = Vector2.ZERO
+var _separation_calc_timer: float = 0.0
+const SEPARATION_CALC_INTERVAL: float = 0.1  # 每0.1秒计算一次分离力，而非每帧
+
 # ==================== JUMP SYSTEM ====================
 var can_jump: bool = false  # 是否可以跳跃（毛玉特性）
 var jump_interval: float = 1.0  # 跳跃间隔
@@ -116,8 +121,17 @@ func _ready():
 	if health_comp:
 		health_comp.died.connect(die)
 
-	# 创建地面影子（椭圆形）
-	_create_shadow()
+	# 添加阴影（下午斜阳的长影子）
+	var map_system = get_tree().get_first_node_in_group("map_system")
+	if map_system and map_system.has_method("create_shadow_for_entity"):
+		# 根据敌人缩放调整阴影大小 - 拉长的椭圆
+		var enemy_scale = sprite.scale.x if sprite else 1.0
+		# 影子在脚下，大小根据敌人缩放调整
+		var shadow_size = Vector2(40 * enemy_scale, 10 * enemy_scale)
+		shadow_sprite = map_system.create_shadow_for_entity(self, shadow_size, Vector2(0, 0))
+	else:
+		# 备用：直接创建阴影
+		_create_enemy_shadow()
 
 func _setup_collision_layers():
 	# Layer 1: Player
@@ -173,8 +187,13 @@ func _physics_process(delta):
 		desired_velocity = direction * current_speed
 
 	# ==================== ENEMY-ENEMY COLLISION AVOIDANCE ====================
-	var separation_force = _calculate_enemy_separation()
-	desired_velocity += separation_force
+	# 性能优化：每0.1秒计算一次，而非每帧
+	_separation_calc_timer += delta
+	if _separation_calc_timer >= SEPARATION_CALC_INTERVAL:
+		_separation_calc_timer = 0.0
+		_separation_force_cache = _calculate_enemy_separation()
+
+	desired_velocity += _separation_force_cache
 
 	# Combine desired velocity with knockback
 	velocity = desired_velocity + knockback_velocity
@@ -198,21 +217,31 @@ func _calculate_enemy_separation() -> Vector2:
 	var neighbor_count = 0
 	var enemies = get_tree().get_nodes_in_group("enemy")
 
+	# 性能优化：使用距离平方避免开方，限制最大邻居数
+	var radius_sq = ENEMY_SEPARATION_RADIUS * ENEMY_SEPARATION_RADIUS
+	const MAX_NEIGHBORS = 8  # 最多检查8个最近邻居
+
 	for enemy in enemies:
+		if neighbor_count >= MAX_NEIGHBORS:
+			break  # 已经检查足够多邻居了
+
 		if not is_instance_valid(enemy) or enemy == self:
 			continue
 
-		var distance = global_position.distance_to(enemy.global_position)
+		var diff = global_position - enemy.global_position
+		var dist_sq = diff.length_squared()
 
-		# Only apply separation within radius
-		if distance < ENEMY_SEPARATION_RADIUS and distance > 0.1:
-			var direction = (global_position - enemy.global_position).normalized()
+		# 使用距离平方比较，避免开方
+		if dist_sq < radius_sq and dist_sq > 1.0:
+			var distance = sqrt(dist_sq)  # 只在需要时才开方
+			var direction = diff / distance
 			var strength = (1.0 - distance / ENEMY_SEPARATION_RADIUS) * ENEMY_SEPARATION_STRENGTH
 			separation += direction * strength
 			neighbor_count += 1
 
 	# Cap the separation force to prevent extreme values
-	if separation.length() > MAX_SEPARATION_FORCE:
+	var sep_len_sq = separation.length_squared()
+	if sep_len_sq > MAX_SEPARATION_FORCE * MAX_SEPARATION_FORCE:
 		separation = separation.normalized() * MAX_SEPARATION_FORCE
 
 	return separation
@@ -238,36 +267,8 @@ func apply_knockback(direction: Vector2, force: float):
 		knockback_velocity = knockback_velocity.normalized() * max_knockback
 
 # ==================== VISUAL EFFECTS ====================
-func _create_shadow():
-	"""创建地面影子（椭圆形）"""
-	# 创建影子sprite
-	shadow_sprite = Sprite2D.new()
-
-	# 创建一个简单的椭圆形纹理（使用圆形纹理压扁）
-	# 如果有专门的影子纹理更好，这里先用代码生成
-	var shadow_size = 20
-	var shadow_image = Image.create(shadow_size, shadow_size, false, Image.FORMAT_RGBA8)
-
-	# 画一个黑色半透明圆形
-	for x in range(shadow_size):
-		for y in range(shadow_size):
-			var dx = x - shadow_size / 2.0
-			var dy = y - shadow_size / 2.0
-			var dist = sqrt(dx * dx + dy * dy)
-			if dist < shadow_size / 2.0:
-				var alpha = (1.0 - dist / (shadow_size / 2.0)) * 0.3  # 半透明
-				shadow_image.set_pixel(x, y, Color(0, 0, 0, alpha))
-
-	var shadow_texture = ImageTexture.create_from_image(shadow_image)
-	shadow_sprite.texture = shadow_texture
-	shadow_sprite.scale = Vector2(1.5, 0.75)  # 椭圆形（扁的）
-	shadow_sprite.z_index = -1  # 在敌人下方
-	shadow_sprite.position = Vector2(0, 5)  # 稍微往下偏移
-
-	add_child(shadow_sprite)
-
 # 子弹打中敌人时，调用这个函数
-func take_damage(amount):
+func take_damage(amount, weapon_id: String = ""):
 	# 应用易伤加成
 	var final_damage = amount + get_vulnerability_bonus()
 
@@ -277,8 +278,8 @@ func take_damage(amount):
 
 	if health_comp:
 		health_comp.damage(final_damage)
-		# 发射伤害数字
-		SignalBus.damage_dealt.emit(final_damage, global_position, false)
+		# 发射伤害数字，包含武器ID
+		SignalBus.damage_dealt.emit(final_damage, global_position, false, weapon_id)
 
 		# 更新血量条
 		_update_health_bar()
@@ -297,9 +298,19 @@ func die():
 	var particle_color = original_color if original_color != Color.RED else Color.WHITE
 	SignalBus.spawn_death_particles.emit(global_position, particle_color, 20)
 
-	# 触发轻微屏幕震动
-	# 原项目：triggerScreenShake(5, 10) 用于普通敌人死亡
-	SignalBus.screen_shake.emit(0.08, 5.0)  # 0.08秒，5像素
+	# 精英怪特殊处理：更强的屏幕震动 + 掉落宝箱
+	if enemy_data and enemy_data.is_elite:
+		# 精英怪死亡震动更强
+		SignalBus.screen_shake.emit(0.2, 12.0)  # 0.2秒，12像素
+		# 额外的死亡粒子（橙色火焰效果）
+		SignalBus.spawn_death_particles.emit(global_position, Color("#ff6600"), 40)
+		# 掉落宝箱
+		if enemy_data.drops_chest:
+			SignalBus.treasure_chest_spawn.emit(global_position)
+	else:
+		# 普通敌人震动
+		# 原项目：triggerScreenShake(5, 10) 用于普通敌人死亡
+		SignalBus.screen_shake.emit(0.08, 5.0)  # 0.08秒，5像素
 
 	# 通知全世界：这里死怪了，掉经验吧，播音效吧
 	SignalBus.enemy_killed.emit(xp_value, global_position)
@@ -316,8 +327,6 @@ func setup_from_wave(wave_config: EnemyData.WaveConfig):
 		collision_shape = get_node_or_null("CollisionShape2D")
 	if not health_bar:
 		health_bar = get_node_or_null("HealthBar")
-
-	print("setup_from_wave 被调用: ", wave_config.enemy_type)
 
 	# 1. 根据字符串类型找到对应的GameConstants枚举
 	enemy_type = _get_enemy_type_from_string(wave_config.enemy_type)
@@ -341,14 +350,8 @@ func setup_from_wave(wave_config: EnemyData.WaveConfig):
 		if sprite:
 			# 根据敌人类型加载对应的纹理
 			var texture_path = _get_texture_path_for_type(enemy_type)
-			print("尝试加载纹理: ", texture_path)
-			print("纹理文件存在? ", ResourceLoader.exists(texture_path))
-
 			if ResourceLoader.exists(texture_path):
 				sprite.texture = load(texture_path)
-				print("✓ 纹理已加载: ", texture_path)
-			else:
-				print("✗ 纹理文件不存在: ", texture_path)
 
 			sprite.modulate = wave_config.color
 
@@ -357,9 +360,7 @@ func setup_from_wave(wave_config: EnemyData.WaveConfig):
 				var s = enemy_data.scale
 				sprite.scale = Vector2(s, s)
 			else:
-				sprite.scale = Vector2(0.015, 0.015)  # 默认缩放
-		else:
-			print("✗ sprite 为 null，无法设置纹理")
+				sprite.scale = Vector2(0.015, 0.015)
 
 		# 5. 应用碰撞半径
 		if collision_shape and collision_shape.shape:
@@ -370,12 +371,9 @@ func setup_from_wave(wave_config: EnemyData.WaveConfig):
 			can_jump = enemy_data.can_jump
 			if "jump_interval" in enemy_data:
 				jump_interval = enemy_data.jump_interval
-			print("✓ 跳跃能力已启用，间隔: ", jump_interval, "秒")
 
 		# 更新血量条
 		_update_health_bar()
-
-		print("生成敌人: ", enemy_data.enemy_name, " (", wave_config.enemy_type, ") HP:", wave_config.hp, " 半径:", enemy_data.radius, " 颜色:", wave_config.color)
 
 func _get_enemy_type_from_string(enemy_type_str: String) -> int:
 	"""将字符串敌人类型转换为GameConstants枚举"""
@@ -388,6 +386,8 @@ func _get_enemy_type_from_string(enemy_type_str: String) -> int:
 			return GameConstants.EnemyType.GHOST
 		"fairy":
 			return GameConstants.EnemyType.FAIRY
+		"elite":
+			return GameConstants.EnemyType.ELITE
 		_:
 			return GameConstants.EnemyType.KEDAMA  # 默认毛玉
 
@@ -402,6 +402,8 @@ func _get_texture_path_for_type(type: int) -> String:
 			return "res://assets/elf.png"  # 妖精和精灵用同一个图
 		GameConstants.EnemyType.GHOST:
 			return "res://assets/elf.png"  # 暂时用elf，通过颜色区分
+		GameConstants.EnemyType.ELITE:
+			return "res://assets/maoyu.png"  # 精英怪用毛玉图，通过颜色和大小区分
 		GameConstants.EnemyType.BOSS:
 			return "res://assets/9.png"  # 默认Boss纹理
 		_:
@@ -418,6 +420,43 @@ func _get_boss_texture_path(boss_type: int) -> String:
 			return "res://assets/huiye2.png"
 		_:
 			return "res://assets/9.png"
+
+func _create_enemy_shadow():
+	"""备用阴影创建方法"""
+	shadow_sprite = Sprite2D.new()
+	shadow_sprite.name = "Shadow"
+
+	var enemy_scale = sprite.scale.x if sprite else 1.0
+	var width = int(40 * enemy_scale)
+	var height = int(10 * enemy_scale)
+	width = max(width, 2)
+	height = max(height, 2)
+
+	var image = Image.create(width, height, false, Image.FORMAT_RGBA8)
+	var center_x = width / 2.0
+	var center_y = height / 2.0
+
+	for x in range(width):
+		for y in range(height):
+			var dx = (x - center_x) / (width / 2.0)
+			var dy = (y - center_y) / (height / 2.0)
+			var dist_sq = dx * dx + dy * dy
+
+			if dist_sq <= 1.0:
+				var dist = sqrt(dist_sq)
+				var alpha = (1.0 - dist) * 0.35
+				alpha = pow(alpha, 1.5)
+				image.set_pixel(x, y, Color(0, 0, 0, alpha))
+			else:
+				image.set_pixel(x, y, Color(0, 0, 0, 0))
+
+	shadow_sprite.texture = ImageTexture.create_from_image(image)
+	shadow_sprite.position = Vector2(12, 8)
+	shadow_sprite.rotation = 0.35
+	shadow_sprite.z_index = -10
+	shadow_sprite.centered = true
+
+	add_child(shadow_sprite)
 
 # 设置敌人类型和属性（旧接口，保留兼容性）
 func setup(type: int, wave: int = 1):
@@ -753,6 +792,23 @@ func add_vulnerability_stack():
 func clear_freeze():
 	active_status_effects.freeze = null
 	frost_stacks = 0
+
+# 冻结敌人（CharacterSkills需要的接口）
+func freeze(duration: float):
+	apply_freeze(duration)
+	# 添加视觉反馈
+	if sprite:
+		sprite.modulate = Color.CYAN
+
+# 解除冻结（CharacterSkills需要的接口）
+func unfreeze():
+	clear_freeze()
+	# 恢复原始颜色
+	if sprite:
+		if enemy_data:
+			sprite.modulate = enemy_data.color
+		else:
+			sprite.modulate = original_color
 
 # 应用护甲降低效果
 func apply_armor_reduction(amount: float, duration: float):

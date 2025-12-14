@@ -14,6 +14,24 @@ var weapons = {}  # {weapon_id: {config, timer, level}}
 var player: Node2D = null
 var aim_system: Node = null  # 瞄准系统
 
+# 近战武器冷却追踪
+var melee_cooldowns = {}  # {weapon_id: cooldown_remaining}
+var melee_attack_frame = 0  # 交替显示第0帧或第1帧
+
+# ==================== 元素附魔系统 ====================
+var current_enchant_element: int = -1  # 当前附魔的元素类型 (-1 = 无)
+var enchant_timer: float = 0.0  # 附魔剩余时间
+
+# 元素附魔颜色叠加
+const ENCHANT_COLORS = {
+	GameConstants.ElementType.FIRE: Color("#ff4500"),
+	GameConstants.ElementType.ICE: Color("#00bfff"),
+	GameConstants.ElementType.POISON: Color("#9370db"),
+	GameConstants.ElementType.OIL: Color("#8b4513"),
+	GameConstants.ElementType.LIGHTNING: Color("#ffd700"),
+	GameConstants.ElementType.GRAVITY: Color("#9932cc"),
+}
+
 func _ready():
 	# 获取父节点（应该是Player）
 	player = get_parent()
@@ -23,16 +41,50 @@ func _ready():
 	SignalBus.weapon_added.connect(add_weapon)
 	SignalBus.weapon_upgraded.connect(upgrade_weapon)
 
+	# 监听元素附魔信号
+	SignalBus.element_enchant_applied.connect(_on_element_enchant_applied)
+
 	# 初始化武器数据
 	WeaponData.initialize()
+	ElementData.initialize()
+
+func _input(event):
+	# 鼠标左键点击触发近战攻击
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_try_melee_attack()
+
+func _try_melee_attack():
+	"""尝试进行近战攻击"""
+	for weapon_id in weapons.keys():
+		var weapon_data = weapons[weapon_id]
+		if weapon_data.config.weapon_type == GameConstants.WeaponType.MELEE:
+			# 检查冷却
+			if melee_cooldowns.get(weapon_id, 0.0) <= 0:
+				fire_weapon(weapon_id)
+				# 设置冷却
+				var stats = _get_player_stats()
+				var level_cooldown_mult = weapon_data.get("level_bonuses", {}).get("cooldown_mult", 1.0)
+				melee_cooldowns[weapon_id] = weapon_data.config.cooldown_max * stats.cooldown * level_cooldown_mult
 
 func _process(delta):
 	if not player:
 		return
 
+	# 更新元素附魔计时器
+	_update_enchant_timer(delta)
+
+	# 更新近战武器冷却
+	for weapon_id in melee_cooldowns.keys():
+		melee_cooldowns[weapon_id] -= delta
+
 	# 更新所有武器的冷却计时器
 	for weapon_id in weapons.keys():
 		var weapon_data = weapons[weapon_id]
+
+		# MELEE类型不自动发射，由鼠标点击触发
+		if weapon_data.config.weapon_type == GameConstants.WeaponType.MELEE:
+			continue
+
 		weapon_data.timer -= delta
 
 		# 冷却完成，发射！
@@ -43,6 +95,80 @@ func _process(delta):
 			var stats = _get_player_stats()
 			var level_cooldown_mult = weapon_data.level_bonuses.get("cooldown_mult", 1.0) if weapon_data.has("level_bonuses") else 1.0
 			weapon_data.timer = weapon_data.config.cooldown_max * stats.cooldown * level_cooldown_mult
+
+# ==================== 元素附魔处理 ====================
+func _on_element_enchant_applied(element_type: int, duration: float):
+	"""应用元素附魔"""
+	current_enchant_element = element_type
+	enchant_timer = duration
+
+	# 获取元素信息
+	var element_item = ElementData.get_element_item(element_type)
+	var element_name = element_item.item_name if element_item else "未知"
+
+	print("元素附魔生效: ", element_name, " - ", duration, "秒")
+
+	# 视觉反馈：玩家发光
+	_apply_enchant_visual()
+
+func _update_enchant_timer(delta: float):
+	"""更新元素附魔计时器"""
+	if current_enchant_element < 0:
+		return
+
+	enchant_timer -= delta
+
+	# 附魔到期
+	if enchant_timer <= 0:
+		_expire_enchant()
+
+func _expire_enchant():
+	"""元素附魔到期"""
+	var element_item = ElementData.get_element_item(current_enchant_element)
+	var element_name = element_item.item_name if element_item else "未知"
+
+	print("元素附魔结束: ", element_name)
+
+	current_enchant_element = -1
+	enchant_timer = 0.0
+
+	# 移除视觉效果
+	_remove_enchant_visual()
+
+	# 发送信号
+	SignalBus.element_enchant_expired.emit()
+
+func _apply_enchant_visual():
+	"""应用附魔视觉效果"""
+	if not player:
+		return
+
+	var player_sprite = player.get_node_or_null("Sprite2D")
+	if player_sprite:
+		var enchant_color = ENCHANT_COLORS.get(current_enchant_element, Color.WHITE)
+		# 混合原色和附魔色
+		player_sprite.modulate = enchant_color.lightened(0.3)
+
+func _remove_enchant_visual():
+	"""移除附魔视觉效果"""
+	if not player:
+		return
+
+	var player_sprite = player.get_node_or_null("Sprite2D")
+	if player_sprite:
+		player_sprite.modulate = Color.WHITE
+
+func get_current_enchant_element() -> int:
+	"""获取当前附魔元素"""
+	return current_enchant_element
+
+func get_enchant_time_remaining() -> float:
+	"""获取附魔剩余时间"""
+	return enchant_timer
+
+func has_enchant() -> bool:
+	"""是否有激活的附魔"""
+	return current_enchant_element >= 0
 
 func add_weapon(weapon_id: String):
 	if weapon_id in weapons:
@@ -116,33 +242,353 @@ func _apply_upgrade_effect(weapon_id: String, weapon_data: Dictionary, upgrade_i
 	if not weapon_data.has("upgrade_bonuses"):
 		weapon_data["upgrade_bonuses"] = {}
 
-	# 根据升级ID应用效果
+	# 根据升��ID应用效果
 	match upgrade_id:
+		# === Homing Amulet (博丽符纸) ===
+		"amulet_count":
+			config.projectile_count += 2
+			print("  → 散弹符阵: 发射数量 +2")
+		"amulet_homing":
+			config.homing_strength *= 2.0
+			print("  → 完美追踪: 追踪强度 +100%")
+		"amulet_bounce":
+			weapon_data["enemy_bounce"] = true
+			weapon_data["bounce_count"] = 3
+			print("  → 弹跳灵符: 符札在敌人间弹跳")
+		"amulet_split":
+			weapon_data["split_on_hit"] = true
+			weapon_data["split_count"] = 2
+			print("  → 阴阳裂变: 命中后分裂成两个追踪符")
+		"amulet_pierce":
+			config.penetration += 5
+			_apply_damage_mult(weapon_data, 1.3)
+			print("  → 神灵穿透: 贯穿 +5，伤害 +30%")
+		"amulet_heal":
+			weapon_data["heal_on_hit"] = 1.0
+			print("  → 净化灵符: 命中回复 1 HP")
+		"amulet_rain":
+			weapon_data["target_all_enemies"] = true
+			print("  → 梦想天生: 向所有敌人发射符札")
+		"amulet_barrier":
+			weapon_data["orbit_shield"] = true
+			weapon_data["shield_count"] = 3
+			print("  → 常驻结界: 符札环绕身体形成护盾")
+		"amulet_explosion":
+			config.explosion_radius = 50.0
+			print("  → 灵爆符咒: 命中产生小范围爆炸")
+
+		# === Yin Yang Orb (阴阳玉) ===
+		"orb_size":
+			_apply_damage_mult(weapon_data, 2.5)
+			config.penetration += 50
+			print("  → 强化阴阳: 伤害 +150%，穿透 +50")
+		"orb_gravity":
+			weapon_data["gravity_control"] = true
+			config.has_gravity = true
+			print("  → 重力控制: 可手动控制抛物线")
+		"orb_multi":
+			config.projectile_count += 1
+			print("  → 双子阴阳: 同时投掷两个")
+		"orb_seeking":
+			weapon_data["seek_on_land"] = true
+			print("  → 寻敌阴阳: 落地时追踪最近敌人")
+		"orb_crush":
+			weapon_data["stun_on_hit"] = 3.0
+			print("  → 碾压重击: 命中眩晕敌人 3 秒")
+		"orb_bounce_ground":
+			config.bounce_count += 5
+			print("  → 地面弹跳: 落地后继续弹跳 5 次")
+		"orb_meteor":
+			weapon_data["meteor_rain"] = true
+			weapon_data["meteor_count"] = 10
+			print("  → 阴阳天降: 召唤 10 个小阴阳玉从天而降")
+		"orb_vortex":
+			weapon_data["create_vortex"] = true
+			weapon_data["vortex_radius"] = 150.0
+			print("  → 阴阳漩涡: 落地创造吸引敌人的旋涡")
+		"orb_return":
+			weapon_data["return_to_player"] = true
+			print("  → 回旋阴阳: 落地后飞回玩家")
+
+		# === Boundary (博丽结界) ===
+		"boundary_size":
+			config.explosion_radius *= 1.5
+			print("  → 扩展结界: 范围 +50%")
+		"boundary_damage":
+			_apply_damage_mult(weapon_data, 2.0)
+			print("  → 伤害结界: 伤害 +100%")
+		"boundary_duration":
+			config.projectile_lifetime *= 2.0
+			print("  → 常驻结界: 持续时间 +100%")
+		"boundary_reflect":
+			weapon_data["reflect_bullets"] = true
+			print("  → 反射护盾: 反弹敌方弹幕")
+		"boundary_heal":
+			weapon_data["heal_per_second"] = 2.0
+			print("  → 治愈结界: 每秒恢复 2 HP")
+		"boundary_slow":
+			weapon_data["slow_enemies"] = 0.3
+			print("  → 时缓领域: 结界内敌人速度 -70%")
+		"boundary_fantasy":
+			weapon_data["invincibility"] = true
+			print("  → 幻想封印: 持续时间内完全无敌")
+		"boundary_banish":
+			weapon_data["banish_on_end"] = true
+			print("  → 幻想崩坏: 结束时驱逐所有结界内敌人")
+		"boundary_double":
+			config.projectile_count = 2
+			print("  → 双重结界: 同时展开两层结界")
+
+		# === Star Dust (星符) ===
+		"star_count":
+			config.projectile_spread *= 1.5
+			print("  → 星河漫天: 发射角度范围扩大")
+		"star_speed":
+			config.projectile_speed *= 2.0
+			_apply_damage_mult(weapon_data, 1.3)
+			print("  → 光速星尘: 弹速 +100%，伤害 +30%")
+		"star_pierce":
+			config.penetration += 3
+			print("  → 穿星之力: 贯穿 +3")
+		"star_homing":
+			config.homing_strength = 0.15
+			print("  → 追星魔法: 星星获得追踪能力")
+		"star_explode":
+			config.explosion_radius = 40.0
+			print("  → 星爆魔法: 命中产生小爆炸")
+		"star_rapid":
+			_apply_cooldown_mult(weapon_data, 0.5)
+			print("  → 速射星尘: 冷却时间 -50%")
+		"star_galaxy":
+			config.projectile_count = 16
+			weapon_data["all_directions"] = true
+			print("  → 银河狂想: 向所有方向发射 16 颗星星")
+		"star_comet":
+			weapon_data["trail_damage"] = true
+			weapon_data["trail_dps"] = 5.0
+			print("  → 彗星魔法: 每颗星星留下持续伤害轨迹")
+		"star_supernova":
+			weapon_data["explode_on_death"] = true
+			weapon_data["death_explosion_radius"] = 80.0
+			print("  → 超新星: 星星消失时产生大爆炸")
+
+		# === Laser (恋符·激光) ===
+		"laser_width":
+			weapon_data["laser_width_mult"] = 2.0
+			print("  → 极宽火花: 激光宽度 +100%")
+		"laser_duration":
+			config.projectile_lifetime *= 2.0
+			print("  → 持久火花: 持续时间 +100%")
+		"laser_damage":
+			_apply_damage_mult(weapon_data, 3.0)
+			print("  → 终极火花: 伤害 +200%")
+		"laser_sweep":
+			weapon_data["sweep_mode"] = true
+			weapon_data["sweep_speed"] = 0.5
+			print("  → 扫射火花: 激光缓慢旋转扫射")
+		"laser_multi":
+			config.projectile_count = 3
+			print("  → 三重火花: 同时发射三道激光")
+		"laser_burn":
+			config.on_hit_effect = "burn"
+			weapon_data["burn_damage"] = 10.0
+			weapon_data["burn_duration"] = 3.0
+			print("  → 灼烧火花: 命中施加持续燃烧")
+		"laser_rainbow":
+			config.projectile_count = 7
+			weapon_data["rainbow_mode"] = true
+			print("  → 七彩究极火花: 发射 7 道彩虹激光")
+		"laser_penetrate":
+			weapon_data["infinite_range"] = true
+			print("  → 贯穿世界: 激光穿透地图边界")
+		"laser_charge":
+			weapon_data["charge_mode"] = true
+			weapon_data["charge_mult"] = 2.0
+			print("  → 蓄力火花: 冷却期间蓄力，伤害累加")
+
 		# === Phoenix Wings (凤凰羽衣) ===
 		"wings_count":
 			config.projectile_count += 2
-			print("  → 火焰羽翼数量 +2")
+			print("  → 六翼天使: 火焰羽翼数量 +2")
 		"wings_damage":
-			if not weapon_data.upgrade_bonuses.has("damage_mult"):
-				weapon_data.upgrade_bonuses["damage_mult"] = 1.0
-			weapon_data.upgrade_bonuses["damage_mult"] *= 1.5
-			print("  → 伤害 +50%")
+			_apply_damage_mult(weapon_data, 1.5)
+			print("  → 烈焰之翼: 伤害 +50%")
 		"wings_range":
 			config.orbit_radius *= 1.5
-			print("  → 旋转范围 +50%")
+			print("  → 展翅高飞: 旋转范围 +50%")
+		"wings_shoot":
+			weapon_data["shoot_projectiles"] = true
+			weapon_data["shoot_interval"] = 1.0
+			print("  → 羽翼射击: 定期发射火焰弹")
 		"wings_burn":
 			config.on_hit_effect = "burn"
-			print("  → 接触施加燃烧效果")
+			print("  → 灼热光环: 接触施加燃烧效果")
+		"wings_shield":
+			weapon_data["block_bullets"] = true
+			print("  → 火焰护盾: 抵挡敌方弹幕")
 		"wings_double":
 			weapon_data["second_layer"] = true
-			print("  → 添加反向旋转的第二层")
+			print("  → 双重旋转: 添加反向旋转的第二层")
+		"wings_pull":
+			weapon_data["attract_items"] = true
+			weapon_data["attract_radius"] = 200.0
+			print("  → 火焰漩涡: 吸引敌人和宝石")
 		"wings_explode":
 			weapon_data["kill_explosion"] = true
-			print("  → 击杀触发爆炸")
+			weapon_data["explosion_radius"] = 60.0
+			print("  → 爆裂之翼: 击杀触发爆炸")
+
+		# === Phoenix Claws (火鸟拳) ===
+		"claw_size":
+			weapon_data["size_mult"] = 1.5
+			_apply_damage_mult(weapon_data, 1.3)
+			print("  → 巨型火拳: 大小 +50%，伤害 +30%")
+		"claw_speed":
+			_apply_cooldown_mult(weapon_data, 0.7)
+			print("  → 迅捷连打: 冷却时间 -30%")
+		"claw_burn":
+			config.on_hit_effect = "burn"
+			weapon_data["burn_damage"] = 8.0
+			weapon_data["burn_duration"] = 2.0
+			print("  → 灼烧之拳: 命中施加燃烧效果")
+		"claw_multi":
+			weapon_data["multi_wave"] = 3
+			print("  → 多重拳脚: 同时发射 3 波拳击")
+		"claw_vamp":
+			weapon_data["heal_on_kill"] = 1.0
+			print("  → 浴火重生: 击杀敌人回复 1 HP")
+		"claw_pierce":
+			config.penetration += 3
+			print("  → 破甲重击: 穿透 +3")
+		"claw_dash":
+			weapon_data["dash_attack"] = true
+			weapon_data["dash_distance"] = 150.0
+			print("  → 火鸟突击: 拳击伴随火鸟冲刺")
+		"claw_x":
+			weapon_data["four_directions"] = true
+			print("  → 四方拳劲: 向四个方向同时挥拳")
+		"claw_inferno":
+			weapon_data["leave_fire_trail"] = true
+			weapon_data["trail_duration"] = 3.0
+			print("  → 炼狱火拳: 拳击留下持续燃烧的火焰路径")
+
+		# === Knives (银制飞刀) ===
+		"knife_count":
+			config.projectile_count = 4
+			print("  → 飞刀暴雨: 同时发射 4 把飞刀")
+		"knife_bounce":
+			config.bounce_count += 3
+			print("  → 完美弹射: 弹射次数 +3")
+		"knife_speed":
+			config.projectile_speed *= 2.5
+			print("  → 光速飞刀: 飞刀速度 +150%")
+		"knife_explode":
+			config.explosion_radius = 40.0
+			print("  → 爆裂飞刀: 命中产生小爆炸")
+		"knife_poison":
+			config.on_hit_effect = "poison"
+			weapon_data["poison_damage"] = 5.0
+			weapon_data["poison_duration"] = 4.0
+			print("  → 剧毒涂层: 命中施加持续毒伤")
+		"knife_freeze":
+			weapon_data["freeze_on_hit"] = 2.0
+			print("  → 冻结飞刀: 命中冻结敌人 2 秒")
+		"knife_danmaku":
+			weapon_data["random_barrage"] = true
+			weapon_data["barrage_count"] = 20
+			print("  → 飞刀弹幕: 全屏随机发射飞刀")
+		"knife_time":
+			weapon_data["time_stop_throw"] = true
+			weapon_data["suspend_duration"] = 3.0
+			print("  → 时停飞刀: 飞刀在空中静止 3 秒后同时射出")
+		"knife_return":
+			weapon_data["return_to_player"] = true
+			print("  → 回旋飞刀: 飞刀最终返回玩家")
+
+		# === Spoon (刚欲汤勺) ===
+		"spoon_size":
+			weapon_data["size_mult"] = 2.0
+			_apply_damage_mult(weapon_data, 2.0)
+			print("  → 巨大勺子: 大小和伤害 +100%")
+		"spoon_speed":
+			config.projectile_speed *= 2.0
+			weapon_data["return_speed_mult"] = 2.0
+			print("  → 快速回收: 飞行和返回速度 +100%")
+		"spoon_multi":
+			config.projectile_count = 3
+			print("  → 三重勺子: 同时投掷 3 把勺子")
+		"spoon_heal":
+			weapon_data["heal_on_hit"] = 3.0
+			print("  → 吞噬回复: 命中回复 3 HP")
+		"spoon_pull":
+			weapon_data["attract_during_flight"] = true
+			weapon_data["attract_radius"] = 150.0
+			print("  → 吸引勺子: 飞行时吸引敌人和宝石")
+		"spoon_spin":
+			weapon_data["spin_mode"] = true
+			_apply_damage_mult(weapon_data, 1.5)
+			print("  → 旋转勺子: 勺子高速旋转，伤害 +50%")
+		"spoon_gluttony":
+			weapon_data["devour_small"] = true
+			print("  → 暴食之勺: 命中吞噬小型敌人")
+		"spoon_orbit":
+			weapon_data["orbit_before_return"] = true
+			weapon_data["orbit_duration"] = 1.0
+			print("  → 勺子卫星: 勺子环绕身体后返回")
+		"spoon_explosion":
+			weapon_data["explode_on_return"] = true
+			weapon_data["explosion_radius"] = 80.0
+			print("  → 爆裂回收: 返回时产生爆炸伤害")
+
+		# === Mines (本我地雷) ===
+		"mine_count":
+			config.projectile_count = 5
+			print("  → 心灵陷阱: 每次放置 5 个地雷")
+		"mine_damage":
+			_apply_damage_mult(weapon_data, 2.5)
+			print("  → 爆炸之心: 爆炸伤害 +150%")
+		"mine_range":
+			weapon_data["placement_range_mult"] = 2.0
+			print("  → 扩散地雷: 放置范围 +100%")
+		"mine_chain":
+			weapon_data["chain_explosion"] = true
+			weapon_data["chain_radius"] = 150.0
+			print("  → 连锁爆炸: 爆炸触发附近地雷")
+		"mine_pull":
+			weapon_data["attract_before_explode"] = true
+			weapon_data["attract_radius"] = 100.0
+			print("  → 吸引地雷: 爆炸前吸引敌人")
+		"mine_slow":
+			weapon_data["slow_on_explode"] = 0.5
+			weapon_data["slow_duration"] = 5.0
+			print("  → 减速陷阱: 爆炸减速敌人 5 秒")
+		"mine_field":
+			config.projectile_count = 20
+			weapon_data["field_mode"] = true
+			print("  → 雷区封锁: 同时布置 20 个地雷")
+		"mine_stealth":
+			weapon_data["invisible_mines"] = true
+			print("  → 隐形地雷: 敌人无法看见地雷")
+		"mine_nuclear":
+			config.explosion_radius *= 3.0
+			_apply_damage_mult(weapon_data, 3.0)
+			print("  → 核心爆炸: 超大范围巨额伤害")
 
 		# 其他武器的升级可以继续添加...
 		_:
 			print("  → 未实现的升级效果: ", upgrade_id)
+
+# 辅助方法：应用伤害倍数
+func _apply_damage_mult(weapon_data: Dictionary, mult: float):
+	if not weapon_data.upgrade_bonuses.has("damage_mult"):
+		weapon_data.upgrade_bonuses["damage_mult"] = 1.0
+	weapon_data.upgrade_bonuses["damage_mult"] *= mult
+
+# 辅助方法：应用冷却倍数
+func _apply_cooldown_mult(weapon_data: Dictionary, mult: float):
+	if not weapon_data.upgrade_bonuses.has("cooldown_mult"):
+		weapon_data.upgrade_bonuses["cooldown_mult"] = 1.0
+	weapon_data.upgrade_bonuses["cooldown_mult"] *= mult
 
 func _apply_level_bonuses(weapon_id: String, weapon_data: Dictionary, level: int):
 	"""应用等级加成 (策划稿数值)"""
@@ -288,12 +734,16 @@ func fire_weapon(weapon_id: String):
 	match config.weapon_type:
 		GameConstants.WeaponType.PROJECTILE:
 			_fire_projectile(weapon_id, config, stats, weapon_level)
+		GameConstants.WeaponType.AURA:
+			_fire_aura(weapon_id, config, stats, weapon_level)
 		GameConstants.WeaponType.ORBITAL:
 			_fire_orbital(weapon_id, config, stats, weapon_level)
 		GameConstants.WeaponType.LASER:
 			_fire_laser(weapon_id, config, stats, weapon_level)
 		GameConstants.WeaponType.SPECIAL:
 			_fire_special(weapon_id, config, stats, weapon_level)
+		GameConstants.WeaponType.MELEE:
+			_fire_melee(weapon_id, config, stats, weapon_level)
 		_:
 			print("未实现的武器类型: ", config.weapon_type)
 
@@ -390,6 +840,14 @@ func _fire_projectile_in_direction(weapon_id: String, config: WeaponData.WeaponC
 			"on_hit_effect": config.on_hit_effect,
 			"has_gravity": config.has_gravity
 		}
+
+		# 应用元素附魔（覆盖武器原有元素）
+		if current_enchant_element >= 0:
+			bullet_config["element"] = _element_type_to_string(current_enchant_element)
+			# 混合附魔颜色
+			var enchant_color = ENCHANT_COLORS.get(current_enchant_element, Color.WHITE)
+			var base_color = bullet_config["bullet_color"]
+			bullet_config["bullet_color"] = base_color.lerp(enchant_color, 0.6)
 
 		# 应用质变效果
 		if has_qualitative:
@@ -665,6 +1123,258 @@ func _fire_special(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 		bullet.setup(bullet_config)
 		bullet.global_position = player.global_position + random_offset
 		get_tree().current_scene.call_deferred("add_child", bullet)
+
+func _fire_aura(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
+	"""近战AURA武器 - 在玩家周围创建扇形判定区域"""
+	# 获取武器数据
+	var weapon_data = weapons.get(weapon_id, {})
+
+	# 获取伤害倍数
+	var level_bonuses = weapon_data.get("level_bonuses", {})
+	var damage_mult = level_bonuses.get("damage_mult", 1.0)
+	var upgrade_bonuses = weapon_data.get("upgrade_bonuses", {})
+	damage_mult *= upgrade_bonuses.get("damage_mult", 1.0)
+
+	# 计算最终伤害
+	var final_damage = config.base_damage * stats.might * damage_mult
+
+	# 获取瞄准方向
+	var direction: Vector2
+	if aim_system:
+		direction = aim_system.get_aim_direction()
+	else:
+		var target = get_nearest_enemy()
+		if target:
+			direction = (target.global_position - player.global_position).normalized()
+		else:
+			direction = Vector2(cos(player.rotation), sin(player.rotation))
+
+	# 创建近战判定区域
+	var aura_area = Area2D.new()
+	aura_area.name = "AuraSlash"
+	aura_area.global_position = player.global_position
+
+	# 创建扇形碰撞形状（使用多个圆形近似）
+	var sweep_angle = config.projectile_spread  # 扇形角度
+	var sweep_range = config.explosion_radius  # 扇形范围
+	var segments = 5  # 扇形分段数
+
+	for i in range(segments):
+		var angle_offset = -sweep_angle / 2.0 + (sweep_angle * i / (segments - 1))
+		var seg_direction = direction.rotated(angle_offset)
+
+		var collision = CollisionShape2D.new()
+		var shape = CircleShape2D.new()
+		shape.radius = sweep_range / segments
+		collision.shape = shape
+		collision.position = seg_direction * (sweep_range * 0.7)  # 偏移到扇形中部
+		aura_area.add_child(collision)
+
+	# 添加视觉效果（扇形）
+	var fan = Polygon2D.new()
+	var points = PackedVector2Array()
+	points.append(Vector2.ZERO)  # 扇形中心点
+
+	# 生成扇形边缘的点
+	var segments_visual = 16
+	for i in range(segments_visual + 1):
+		var angle_offset = -sweep_angle / 2.0 + (sweep_angle * i / segments_visual)
+		var point_direction = direction.rotated(angle_offset)
+		points.append(point_direction * sweep_range)
+
+	fan.polygon = points
+	fan.color = Color(1.0, 0.5, 0.0, 0.4)  # 橙红色半透明
+	aura_area.add_child(fan)
+
+	# 设置碰撞层
+	aura_area.collision_layer = 0
+	aura_area.collision_mask = 4  # 检测敌人
+
+	# 添加到场景
+	get_tree().current_scene.add_child(aura_area)
+
+	# 立即检测并伤害范围内的敌人
+	await get_tree().process_frame  # 等待一帧让碰撞生效
+
+	var hit_enemies = aura_area.get_overlapping_bodies()
+	for body in hit_enemies:
+		if body.is_in_group("enemy") and body.has_method("take_damage"):
+			# 造成伤害
+			body.take_damage(final_damage)
+
+			# 击退
+			if body.has_method("apply_knockback"):
+				var knockback_dir = (body.global_position - player.global_position).normalized()
+				body.apply_knockback(knockback_dir, config.knockback)
+
+			# 燃烧效果
+			if config.on_hit_effect == "burn" and body.has_method("apply_burn"):
+				var burn_dmg = weapon_data.get("burn_damage", 5.0)
+				var burn_dur = weapon_data.get("burn_duration", 2.0)
+				body.apply_burn(burn_dmg, burn_dur)
+
+	# 持续一段时间后消失
+	await get_tree().create_timer(config.projectile_lifetime).timeout
+	if is_instance_valid(aura_area):
+		aura_area.queue_free()
+
+
+func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
+	"""近战攻击 - 点击触发的火焰踢，带火焰粒子拖尾"""
+	var weapon_data = weapons.get(weapon_id, {})
+
+	# 获取伤害倍数
+	var level_bonuses = weapon_data.get("level_bonuses", {})
+	var damage_mult = level_bonuses.get("damage_mult", 1.0)
+	var upgrade_bonuses = weapon_data.get("upgrade_bonuses", {})
+	damage_mult *= upgrade_bonuses.get("damage_mult", 1.0)
+
+	# 计算最终伤害
+	var final_damage = config.base_damage * stats.might * damage_mult
+
+	# 获取攻击方向（朝向鼠标）
+	var mouse_pos = get_global_mouse_position()
+	var direction = (mouse_pos - player.global_position).normalized()
+
+	# 攻击参数
+	var sweep_angle = config.projectile_spread  # 扇形角度
+	var sweep_range = config.explosion_radius   # 攻击范围
+
+	# === 创建攻击动画 ===
+	# 隐藏原来的角色sprite
+	var player_sprite = player.get_node_or_null("Sprite2D")
+	if player_sprite:
+		player_sprite.visible = false
+
+	var attack_sprite = Sprite2D.new()
+	attack_sprite.texture = load("res://assets/attack.png")
+	attack_sprite.hframes = 2  # 2帧横向排列
+	attack_sprite.frame = melee_attack_frame  # 交替显示
+	melee_attack_frame = (melee_attack_frame + 1) % 2  # 下次显示另一帧
+	attack_sprite.scale = Vector2(0.1, 0.1)  # 缩放匹配角色大小
+	attack_sprite.global_position = player.global_position  # 显示在角色位置
+	# 根据方向翻转
+	if direction.x < 0:
+		attack_sprite.flip_h = true
+	get_tree().current_scene.add_child(attack_sprite)
+
+	# 0.2秒后清理动画，恢复角色显示
+	get_tree().create_timer(0.2).timeout.connect(func():
+		if is_instance_valid(attack_sprite):
+			attack_sprite.queue_free()
+		if is_instance_valid(player_sprite):
+			player_sprite.visible = true
+	)
+
+	# === 创建攻击判定区域 ===
+	var attack_area = Area2D.new()
+	attack_area.name = "MeleeAttack"
+	attack_area.global_position = player.global_position
+
+	# 扇形碰撞（多个圆形近似）
+	var segments = 5
+	for i in range(segments):
+		var angle_offset = -sweep_angle / 2.0 + (sweep_angle * i / (segments - 1))
+		var seg_dir = direction.rotated(angle_offset)
+
+		var collision = CollisionShape2D.new()
+		var shape = CircleShape2D.new()
+		shape.radius = sweep_range / segments
+		collision.shape = shape
+		collision.position = seg_dir * (sweep_range * 0.6)
+		attack_area.add_child(collision)
+
+	attack_area.collision_layer = 0
+	attack_area.collision_mask = 4  # 敌人层
+
+	get_tree().current_scene.add_child(attack_area)
+
+	# === 创建火焰粒子效果 (GPUParticles2D) ===
+	var particles = GPUParticles2D.new()
+	particles.name = "FlameParticles"
+	particles.global_position = player.global_position + direction * (sweep_range * 0.5)
+	particles.rotation = direction.angle()
+	particles.emitting = true
+	particles.one_shot = true
+	particles.explosiveness = 0.8  # 粒子同时爆发
+	particles.amount = 20
+	particles.lifetime = 0.6
+
+	# 粒子材质
+	var mat = ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	mat.emission_sphere_radius = 20.0
+
+	# 方向：主要朝攻击方向，稍微向上飘
+	mat.direction = Vector3(1, -0.5, 0)  # 向前+向上
+	mat.spread = 30.0  # 30度散布
+
+	# 速度
+	mat.initial_velocity_min = 50.0
+	mat.initial_velocity_max = 100.0
+
+	# 重力：向上飘
+	mat.gravity = Vector3(0, -80, 0)
+
+	# 缩放：从小开始，然后缩小到0（火焰熄灭效果）
+	mat.scale_min = 0.05
+	mat.scale_max = 0.12
+	var scale_curve = Curve.new()
+	scale_curve.add_point(Vector2(0, 1.0))
+	scale_curve.add_point(Vector2(1, 0.0))
+	var scale_curve_tex = CurveTexture.new()
+	scale_curve_tex.curve = scale_curve
+	mat.scale_curve = scale_curve_tex
+
+	# 颜色：橙红渐变到透明
+	var color_ramp = Gradient.new()
+	color_ramp.set_color(0, Color(1.0, 0.6, 0.1, 1.0))  # 橙黄
+	color_ramp.set_color(1, Color(1.0, 0.2, 0.0, 0.0))  # 红色透明
+	var color_tex = GradientTexture1D.new()
+	color_tex.gradient = color_ramp
+	mat.color_ramp = color_tex
+
+	particles.process_material = mat
+
+	# 加载火焰纹理
+	var flame_texture = load("res://assets/map/flame.png")
+	if flame_texture:
+		particles.texture = flame_texture
+
+	# 加法混合模式：黑色背景变透明，火焰发光
+	var canvas_mat = CanvasItemMaterial.new()
+	canvas_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	particles.material = canvas_mat
+
+	get_tree().current_scene.add_child(particles)
+
+	# === 伤害检测 ===
+	await get_tree().process_frame
+
+	var hit_enemies = attack_area.get_overlapping_bodies()
+	for body in hit_enemies:
+		if body.is_in_group("enemy") and body.has_method("take_damage"):
+			body.take_damage(final_damage)
+
+			# 击退
+			if body.has_method("apply_knockback"):
+				var knockback_dir = (body.global_position - player.global_position).normalized()
+				body.apply_knockback(knockback_dir, config.knockback)
+
+			# 燃烧
+			if body.has_method("apply_burn"):
+				body.apply_burn(8.0, 3.0)  # 8 DPS，持续3秒
+
+	# === 清理 ===
+	await get_tree().create_timer(config.projectile_lifetime).timeout
+	if is_instance_valid(attack_area):
+		attack_area.queue_free()
+
+	# 粒子播放完后清理
+	await get_tree().create_timer(0.8).timeout
+	if is_instance_valid(particles):
+		particles.queue_free()
+
 
 func get_nearest_enemy() -> Node2D:
 	var enemies = get_tree().get_nodes_in_group("enemy")

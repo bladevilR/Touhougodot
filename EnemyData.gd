@@ -21,6 +21,8 @@ class EnemyConfig:
 	var shoot_interval: float = 2.0
 	var can_jump: bool = false
 	var jump_interval: float = 1.0
+	var drops_chest: bool = false  # 是否掉落宝箱（精英怪专属）
+	var is_elite: bool = false     # 是否是精英怪
 
 	func _init(t: int, n: String, h: float, d: float, s: float, e: int, c: Color, r: float, m: float = 10.0, sc: float = 0.025):
 		enemy_type = t
@@ -138,6 +140,24 @@ static func initialize():
 	elf.can_shoot = true
 	elf.shoot_interval = 2.0
 	ENEMIES[GameConstants.EnemyType.ELF] = elf
+
+	# 精英怪 - 大体积、慢速、高血量
+	var elite = EnemyConfig.new(
+		GameConstants.EnemyType.ELITE,
+		"精英怪",
+		500.0,   # HP - 普通怪的5-10倍
+		30.0,    # 伤害 - 较高
+		0.8,     # 速度 - 慢速
+		50,      # 经验 - 大量经验
+		Color("#ff6600"),  # 橙色（醒目）
+		25.0,    # 半径 - 大体积（约普通怪3倍）
+		50.0,    # 质量 - 很重，难以击退
+		0.06     # 缩放 - 视觉上更大
+	)
+	elite.can_jump = false  # 精英怪不跳跃，稳重
+	elite.drops_chest = true   # 精英怪掉落宝箱
+	elite.is_elite = true      # 标记为精英怪
+	ENEMIES[GameConstants.EnemyType.ELITE] = elite
 
 	# ==================== Boss ====================
 

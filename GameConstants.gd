@@ -27,6 +27,7 @@ enum EnemyType {
 	GHOST,    # 幽灵
 	KEDAMA,   # 毛玉（跳跃）
 	ELF,      # 精灵（远程射击）
+	ELITE,    # 精英怪（大体积、高血量、掉宝箱）
 	BOSS      # Boss
 }
 
@@ -55,5 +56,6 @@ enum WeaponType {
 	LASER,      # 激光
 	DASH,       # 冲刺
 	SPECIAL,    # 特殊
-	PASSIVE     # 被动
+	PASSIVE,    # 被动
+	MELEE       # 近战（点击触发）
 }

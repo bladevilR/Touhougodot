@@ -126,7 +126,7 @@ func _get_wave_for_time(time: float) -> int:
 		return 9  # 最终Boss
 
 func _announce_wave(wave_number: int):
-	"""显示波次公告"""
+	"""显示波次公告 - 仅控制台输出"""
 	var wave_info = WAVE_DEFINITIONS.get(wave_number, {"name": "波次 " + str(wave_number), "description": ""})
 
 	var wave_name = wave_info.name
@@ -141,21 +141,23 @@ func _announce_wave(wave_number: int):
 
 	wave_started.emit(wave_number, wave_name)
 
-	# 显示公告UI
-	if wave_announcement_label:
-		wave_announcement_label.text = wave_name + "\n" + description
-		wave_announcement_label.modulate = Color.WHITE
-		wave_announcement_label.visible = true
+	# 禁用UI显示，只在控制台打印
+	# if wave_announcement_label:
+	# 	wave_announcement_label.text = wave_name + "\n" + description
+	# 	wave_announcement_label.modulate = Color.WHITE
+	# 	wave_announcement_label.visible = true
 
-		# 动画效果
-		var tween = create_tween()
-		tween.tween_property(wave_announcement_label, "modulate:a", 1.0, 0.3)
-		tween.tween_interval(2.0)
-		tween.tween_property(wave_announcement_label, "modulate:a", 0.0, 0.5)
-		tween.tween_callback(func(): wave_announcement_label.visible = false)
+	# 	# 动画效果
+	# 	var tween = create_tween()
+	# 	tween.tween_property(wave_announcement_label, "modulate:a", 1.0, 0.3)
+	# 	tween.tween_interval(2.0)
+	# 	tween.tween_property(wave_announcement_label, "modulate:a", 0.0, 0.5)
+	# 	tween.tween_callback(func(): wave_announcement_label.visible = false)
 
-	print("=== ", wave_name, " ===")
-	print(description)
+	# 精简的控制台输出
+	if is_boss:
+		print("⚔️ ", description)
+	# 不再打印普通波次信息
 
 func _on_enemy_killed(xp_amount: int, pos: Vector2):
 	"""敌人被击杀"""

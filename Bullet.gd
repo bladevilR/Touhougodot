@@ -166,13 +166,15 @@ func _setup_bullet_visual():
 			base_radius = 240.0
 			should_rotate = true
 		"phoenix_wings":
-			# 为光环创建圆形纹理（更柔和的渐变）
-			var circle_texture = _create_circle_texture(120.0, Color(1.0, 0.6, 0.2, 0.5))  # 橙黄色，半透明
-			sprite.texture = circle_texture
+			# 为光环创建高级感半透明纹理（火焰能量场效果）
+			var aura_texture = _create_premium_aura_texture(120.0, Color(1.0, 0.5, 0.1, 0.6))
+			sprite.texture = aura_texture
 			sprite.scale = Vector2(1.0, 1.0)
-			sprite.material = CanvasItemMaterial.new()
-			sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			# 不使用ADD混合模式，避免闪烁
+			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)  # 固定不变
 			should_rotate = false
+			# 设置z_index让光环在玩家下层，不影响玩家颜色
+			z_index = -5
 			# 增大碰撞半径形成光环区域
 			if collision_shape and collision_shape.shape:
 				collision_shape.shape.radius = 120.0  # 光环伤害范围
@@ -259,7 +261,7 @@ func _setup_bullet_visual():
 		
 		# 特殊处理
 		if weapon_id == "yin_yang_orb":
-			sprite.scale = Vector2(0.8, 0.8) # 阴阳玉适中尺寸
+			sprite.scale = Vector2(0.4, 0.4) # 阴阳玉缩小，从0.8降到0.4
 		else:
 			sprite.scale = Vector2(target_scale * 1.8, target_scale * 1.8) # 全局缩放从2.5降到1.8
 
@@ -310,6 +312,92 @@ func _create_circle_texture(radius: float, color: Color) -> ImageTexture:
 
 			var pixel_color = Color(color.r * brightness, color.g * brightness, color.b * brightness, alpha)
 			image.set_pixel(x, y, pixel_color)
+
+	return ImageTexture.create_from_image(image)
+
+func _create_solid_circle_texture(radius: float, color: Color) -> ImageTexture:
+	"""创建固定颜色的圆形纹理（无渐变，防止闪烁）"""
+	var size = int(radius * 2)
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+
+	var center = Vector2(radius, radius)
+
+	for x in range(size):
+		for y in range(size):
+			var pos = Vector2(x, y)
+			var dist = pos.distance_to(center)
+			var normalized_dist = dist / radius
+
+			if normalized_dist < 1.0:
+				# 简单的圆形，边缘稍微柔和
+				var alpha = color.a
+				if normalized_dist > 0.85:
+					# 边缘柔和过渡
+					alpha = color.a * (1.0 - (normalized_dist - 0.85) / 0.15)
+				image.set_pixel(x, y, Color(color.r, color.g, color.b, alpha))
+			else:
+				image.set_pixel(x, y, Color(0, 0, 0, 0))
+
+	return ImageTexture.create_from_image(image)
+
+func _create_premium_aura_texture(radius: float, color: Color) -> ImageTexture:
+	"""创建高级感的能量场光环纹理 - 多层渐变+光晕环+能量纹理"""
+	var size = int(radius * 2)
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+
+	var center = Vector2(radius, radius)
+
+	for x in range(size):
+		for y in range(size):
+			var pos = Vector2(x, y)
+			var dist = pos.distance_to(center)
+			var normalized_dist = dist / radius
+
+			if normalized_dist >= 1.0:
+				image.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+
+			# 基础alpha - 从中心向外渐变
+			var base_alpha = 0.0
+
+			# 层1: 内核光晕（中心微亮）
+			if normalized_dist < 0.25:
+				base_alpha = 0.15 + (0.25 - normalized_dist) * 0.3
+
+			# 层2: 中间能量层（主要可见区域）
+			elif normalized_dist < 0.6:
+				var t = (normalized_dist - 0.25) / 0.35
+				base_alpha = 0.2 + sin(t * PI) * 0.25
+
+			# 层3: 外围光晕环
+			elif normalized_dist < 0.85:
+				var t = (normalized_dist - 0.6) / 0.25
+				base_alpha = 0.35 - t * 0.15
+
+			# 层4: 边缘柔和衰减
+			else:
+				var t = (normalized_dist - 0.85) / 0.15
+				base_alpha = 0.2 * (1.0 - t * t)
+
+			# 添加环形纹理（同心圆波纹效果）
+			var ring_factor = sin(normalized_dist * 12.0) * 0.5 + 0.5
+			var ring_intensity = ring_factor * 0.08
+
+			# 添加径向纹理（射线效果）
+			var angle = atan2(pos.y - center.y, pos.x - center.x)
+			var ray_factor = sin(angle * 8.0) * 0.5 + 0.5
+			var ray_intensity = ray_factor * 0.05 * (1.0 - normalized_dist)
+
+			# 合并所有效果
+			var final_alpha = (base_alpha + ring_intensity + ray_intensity) * color.a
+
+			# 颜色渐变：中心偏黄，外围偏橙红
+			var color_blend = normalized_dist * 0.4
+			var r = lerp(1.0, color.r, color_blend)
+			var g = lerp(0.8, color.g, color_blend + 0.2)
+			var b = lerp(0.3, color.b, color_blend)
+
+			image.set_pixel(x, y, Color(r, g, b, clamp(final_alpha, 0.0, 0.7)))
 
 	return ImageTexture.create_from_image(image)
 
@@ -423,20 +511,9 @@ func _update_orbital_movement(delta: float):
 
 	# Rotate sprite to face outward
 	if sprite:
-		# 光环特殊效果：缓慢旋转 + 柔和脉冲
+		# 光环特殊效果：完全静止，不旋转，不改变任何视觉属性
 		if weapon_id == "phoenix_wings":
-			sprite.rotation += delta * 0.5  # 缓慢旋转模拟火焰流动
-
-			# 柔和脉冲效果，模拟火焰呼吸
-			var pulse = sin(lifetime_timer * 1.5) * 0.15
-			var base_alpha = 0.4
-			sprite.modulate.a = base_alpha + pulse
-
-			# 颜色在橙色和黄色之间柔和变化
-			var color_shift = sin(lifetime_timer * 0.8) * 0.2
-			sprite.modulate.r = 1.0
-			sprite.modulate.g = 0.5 + color_shift
-			sprite.modulate.b = 0.1
+			pass  # 不做任何操作，保持纹理完全静止
 		else:
 			sprite.rotation = orbit_angle
 
@@ -476,7 +553,7 @@ func _update_barrier_field(delta: float):
 
 func _apply_barrier_damage(enemy):
 	if enemy.has_method("take_damage"):
-		enemy.take_damage(damage)
+		enemy.take_damage(damage, weapon_id)
 
 	# Apply slow effect
 	if slow_effect < 1.0 and enemy.has_method("apply_slow"):
@@ -513,6 +590,10 @@ func _on_area_entered(area):
 func _on_body_entered(body):
 	if body.is_in_group("enemy"):
 		_hit_enemy(body)
+	else:
+		# 碰到墙壁/竹子等环境物体时反弹
+		if bounce_count > 0 or wall_bounces > 0:
+			_bounce_off_body(body)
 
 # ==================== HIT DETECTION & DAMAGE ====================
 func _hit_enemy(enemy):
@@ -525,7 +606,7 @@ func _hit_enemy(enemy):
 
 	# Apply damage
 	if enemy.has_method("take_damage"):
-		enemy.take_damage(damage)
+		enemy.take_damage(damage, weapon_id)
 
 	# Apply knockback
 	if knockback > 0:
@@ -669,7 +750,7 @@ func _trigger_element_reaction(enemy, reaction):
 		"freeze_shatter":
 			# 碎冰：对冻结敌人暴击
 			if enemy.has_method("take_damage"):
-				enemy.take_damage(damage * reaction.damage_multiplier)
+				enemy.take_damage(damage * reaction.damage_multiplier, weapon_id)
 			# 清除冻结状态
 			if enemy.has_method("clear_freeze"):
 				enemy.clear_freeze()
@@ -698,7 +779,7 @@ func _create_reaction_explosion(pos: Vector2, radius: float, dmg: float):
 		var distance = pos.distance_to(enemy.global_position)
 		if distance <= radius:
 			if enemy.has_method("take_damage"):
-				enemy.take_damage(dmg)
+				enemy.take_damage(dmg, weapon_id)
 
 func _create_thunder_field(pos: Vector2, radius: float, dmg: float):
 	"""创建雷暴领域（持续电击区域）"""
@@ -708,7 +789,7 @@ func _create_thunder_field(pos: Vector2, radius: float, dmg: float):
 		var distance = pos.distance_to(enemy.global_position)
 		if distance <= radius:
 			if enemy.has_method("take_damage"):
-				enemy.take_damage(dmg)
+				enemy.take_damage(dmg, weapon_id)
 			if enemy.has_method("apply_stun"):
 				enemy.apply_stun(0.5)
 
@@ -749,7 +830,7 @@ func _chain_to_nearby_enemies(source_enemy):
 		if distance <= chain_range:
 			# Chain damage (reduced)
 			if enemy.has_method("take_damage"):
-				enemy.take_damage(damage * 0.7)
+				enemy.take_damage(damage * 0.7, weapon_id)
 
 			chained_enemies.append(eid)
 			chained += 1
@@ -784,6 +865,39 @@ func _split_projectile():
 		split_bullet.element = element
 
 # ==================== WALL BOUNCE ====================
+func _bounce_off_body(body: Node2D):
+	"""碰到墙壁/竹子时反弹"""
+	# 计算反弹方向（基于碰撞点）
+	var collision_normal = (global_position - body.global_position).normalized()
+
+	# 如果无法计算有效法线，使用简单反向
+	if collision_normal.length_squared() < 0.01:
+		collision_normal = -velocity.normalized()
+
+	# 反射速度向量
+	velocity = velocity.bounce(collision_normal)
+	direction = velocity.normalized()
+
+	# 更新视觉旋转
+	if sprite and velocity.length() > 0:
+		sprite.rotation = velocity.angle() + PI/2
+
+	# 减少反弹次数
+	if wall_bounces > 0:
+		wall_bounces -= 1
+	elif bounce_count > 0:
+		bounce_count -= 1
+
+	# 启用导向（如果有）
+	if has_homing_after_bounce and homing_strength == 0.0:
+		homing_strength = 0.1
+
+	# 无反弹次数时触发爆炸
+	if bounce_count <= 0 and wall_bounces <= 0:
+		if has_gravity:
+			_explode()
+		queue_free()
+
 func _check_wall_bounce():
 	var map_bounds = Rect2(0, 0, GameConstants.MAP_WIDTH, GameConstants.MAP_HEIGHT)
 	var bounced = false
@@ -832,7 +946,7 @@ func _explode():
 		if distance <= explosion_radius:
 			if enemy.has_method("take_damage"):
 				var dmg = explosion_damage if explosion_damage > 0 else damage
-				enemy.take_damage(dmg)
+				enemy.take_damage(dmg, weapon_id)
 
 			# Apply knockback from explosion center
 			if knockback > 0:

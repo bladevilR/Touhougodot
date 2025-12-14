@@ -139,21 +139,22 @@ static func initialize():
 	phoenix_wings.element_type = GameConstants.ElementType.FIRE
 	WEAPONS["phoenix_wings"] = phoenix_wings
 
-	# 3.5 火鸟拳 (妹红基础攻击) - 近战横扫
+	# 3.5 火鸟拳 (妹红基础攻击) - 点击触发的近战火焰踢
 	var phoenix_claws = WeaponConfig.new(
 		"phoenix_claws",
 		"火鸟拳",
-		"向前方挥出火焰拳脚，横向一字横扫。",
-		15, 0.7, 40.0, GameConstants.WeaponType.PROJECTILE
+		"点击鼠标向前方踢出火焰，产生燃烧拖尾。",
+		20, 0.3, 50.0, GameConstants.WeaponType.MELEE  # MELEE类型，点击触发
 	)
 	phoenix_claws.exclusive_to = GameConstants.CharacterId.MOKOU
-	phoenix_claws.projectile_count = 5  # 5发排成一排
-	phoenix_claws.projectile_speed = 5.0  # 极慢，几乎不动
-	phoenix_claws.projectile_lifetime = 0.35  # 0.35秒存在
+	phoenix_claws.projectile_count = 1
+	phoenix_claws.projectile_speed = 0.0  # 近战不移动
+	phoenix_claws.projectile_lifetime = 0.25  # 攻击判定时间
 	phoenix_claws.penetration = 999  # 无限穿透
 	phoenix_claws.element_type = GameConstants.ElementType.FIRE
-	phoenix_claws.knockback = 50.0  # 高击退
-	phoenix_claws.projectile_spread = 0.02  # 极小角度，几乎一条线
+	phoenix_claws.knockback = 80.0  # 高击退
+	phoenix_claws.projectile_spread = 0.8  # 扇形角度（弧度），约45度
+	phoenix_claws.explosion_radius = 100.0  # 踢腿范围
 	WEAPONS["phoenix_claws"] = phoenix_claws
 
 	# 4. 银制飞刀 (咲夜专属)

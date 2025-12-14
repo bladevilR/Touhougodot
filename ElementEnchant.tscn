@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3 uid="uid://element_enchant_001"]
+
+[ext_resource type="Script" path="res://ElementEnchant.gd" id="1"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 20.0
+
+[node name="ElementEnchant" type="Area2D" groups=["pickup", "element_enchant"]]
+collision_layer = 32
+collision_mask = 1
+script = ExtResource("1")
+element_type = 0
+enchant_duration = 30.0
+attract_radius = 150.0
+attract_speed = 300.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")

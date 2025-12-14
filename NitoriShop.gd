@@ -37,6 +37,7 @@ class ShopItem:
 var ALL_ITEMS: Dictionary = {}
 
 func _ready():
+	add_to_group("nitori_shop")
 	# 初始化商品列表
 	_init_shop_items()
 

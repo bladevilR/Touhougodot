@@ -30,6 +30,8 @@ var fire_kick_duration: float = 0.5
 var fire_kick_distance: float = 400.0
 var fire_kick_start_pos: Vector2 = Vector2.ZERO
 var fire_trail_timer: float = 0.0
+var fire_walls: Array = []  # 追踪所有火墙
+const MAX_FIRE_WALLS = 30  # 最大火墙数量
 
 # 魔理沙 - 扫把冲锋
 var is_broom_dashing: bool = false
@@ -199,6 +201,9 @@ func mark_gap_position():
 	gap_mark_sprite.visible = true
 	gap_mark_sprite.global_position = gap_mark_position
 
+	# 标记位置时进入冷却
+	start_cooldown(GameConstants.CharacterId.REIMU)
+
 	print("亚空穴标记已设置: ", gap_mark_position)
 	skill_activated.emit("亚空穴标记")
 
@@ -267,7 +272,7 @@ func _activate_mokou_skill():
 	skill_activated.emit("不死鸟")
 
 func _process_fire_kick(delta):
-	"""处理火焰飞踢移动"""
+	"""处理火焰飞踢移动 - 带火焰拖尾特效"""
 	if not is_fire_kicking:
 		return
 
@@ -277,7 +282,10 @@ func _process_fire_kick(delta):
 	var target_pos = fire_kick_start_pos + fire_kick_direction * fire_kick_distance
 	player.global_position = fire_kick_start_pos.lerp(target_pos, fire_kick_progress)
 
-	# 留下火焰轨迹
+	# 生成火焰拖尾粒子（更频繁）
+	_spawn_flame_trail_particles(player.global_position)
+
+	# 留下火焰轨迹（火墙）
 	fire_trail_timer += delta
 	if fire_trail_timer >= 0.05:  # 每0.05秒生成一个火焰区域
 		spawn_fire_trail(player.global_position)
@@ -288,13 +296,24 @@ func _process_fire_kick(delta):
 
 	# 结束飞踢
 	if fire_kick_progress >= 1.0:
+		# 落地AOE爆炸
+		spawn_landing_explosion(player.global_position)
+
 		is_fire_kicking = false
 		start_cooldown(GameConstants.CharacterId.MOKOU)
-		print("火焰飞踢结束！")
+		print("火焰飞踢结束！落地爆炸！")
 
 func spawn_fire_trail(pos: Vector2):
-	"""生成火墙（持续8秒）"""
+	"""生成火墙（持续8秒）- 带数量限制 + 火焰粒子效果"""
 	var config = SKILL_CONFIGS[GameConstants.CharacterId.MOKOU]
+
+	# 检查火墙数量限制
+	if fire_walls.size() >= MAX_FIRE_WALLS:
+		# 移除最老的火墙
+		var oldest = fire_walls.pop_front()
+		if is_instance_valid(oldest):
+			oldest.queue_free()
+
 	var fire_area = Area2D.new()
 	fire_area.global_position = pos
 	fire_area.name = "FireWall"
@@ -302,36 +321,62 @@ func spawn_fire_trail(pos: Vector2):
 	# 添加碰撞形状
 	var collision = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
-	shape.radius = 40
+	shape.radius = 40  # 统一使用40作为判定半径
 	collision.shape = shape
 	fire_area.add_child(collision)
 
-	# 添加视觉效果（红色圆圈）
-	var sprite = ColorRect.new()
-	sprite.size = Vector2(80, 80)
-	sprite.position = Vector2(-40, -40)
-	sprite.color = Color(1.0, 0.3, 0.0, 0.5)
-	fire_area.add_child(sprite)
+	# 添加视觉效果（圆形底部光晕）
+	var circle = Polygon2D.new()
+	var points = PackedVector2Array()
+	var segments = 32
+	var radius = 40.0
+	for i in range(segments):
+		var angle = 2.0 * PI * i / segments
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	circle.polygon = points
+	circle.color = Color(1.0, 0.5, 0.0, 0.4)  # 橙红色半透明（底部光晕）
+	fire_area.add_child(circle)
+
+	# 添加火焰粒子效果
+	var particles = _create_fire_particles(35.0, 0.8)
+	fire_area.add_child(particles)
 
 	# 设置碰撞层
 	fire_area.collision_layer = 0
 	fire_area.collision_mask = 4  # 检测敌人（第3层）
 
-	# 添加到场景
-	fire_trail_container.add_child(fire_area)
+	# 添加到场景根节点（世界坐标系，不跟随玩家）
+	get_tree().current_scene.add_child(fire_area)
+	fire_walls.append(fire_area)
 
 	# 按策划稿：火墙持续8秒
 	var timer = get_tree().create_timer(config.fire_wall_duration)
 	timer.timeout.connect(func():
 		if is_instance_valid(fire_area):
+			fire_walls.erase(fire_area)
 			fire_area.queue_free()
 	)
 
-	# 持续伤害
-	_apply_fire_trail_damage(fire_area, config.fire_wall_damage)
+	# 使用Area2D信号进行持续伤害
+	_setup_fire_trail_damage(fire_area, config.fire_wall_damage)
 
-func _apply_fire_trail_damage(fire_area: Area2D, damage: float):
-	"""火墙持续伤害"""
+func _setup_fire_trail_damage(fire_area: Area2D, damage: float):
+	"""使用Area2D信号优化火墙持续伤害"""
+	var enemies_in_fire = {}  # 记录火墙中的敌人和计时器
+
+	# 敌人进入火墙
+	fire_area.body_entered.connect(func(body):
+		if body.is_in_group("enemy") and body.has_method("take_damage"):
+			enemies_in_fire[body] = 0.0  # 记录敌人，初始计时器为0
+	)
+
+	# 敌人离开火墙
+	fire_area.body_exited.connect(func(body):
+		if body in enemies_in_fire:
+			enemies_in_fire.erase(body)
+	)
+
+	# 创建伤害计时器
 	var damage_timer = Timer.new()
 	damage_timer.wait_time = 0.2  # 每0.2秒伤害一次
 	damage_timer.autostart = true
@@ -341,26 +386,169 @@ func _apply_fire_trail_damage(fire_area: Area2D, damage: float):
 		if not is_instance_valid(fire_area):
 			return
 
-		# 获取范围内的敌人
-		var enemies = get_tree().get_nodes_in_group("enemy")
-		for enemy in enemies:
-			if enemy.has_method("take_damage"):
-				var dist = fire_area.global_position.distance_to(enemy.global_position)
-				if dist < 50:
-					enemy.take_damage(damage)
+		# 只对火墙中的敌人造成伤害
+		for enemy in enemies_in_fire.keys():
+			if is_instance_valid(enemy) and enemy.has_method("take_damage"):
+				enemy.take_damage(damage)
+
+				# 施加燃烧效果（每秒一次，不是每0.2秒）
+				enemies_in_fire[enemy] += 0.2
+				if enemies_in_fire[enemy] >= 1.0:
+					if enemy.has_method("apply_burn"):
+						enemy.apply_burn(5.0, 2.0)
+					enemies_in_fire[enemy] = 0.0
+			else:
+				# 敌人已死亡，从列表移除
+				enemies_in_fire.erase(enemy)
 	)
 
+func _spawn_flame_trail_particles(pos: Vector2):
+	"""在飞踢路径上生成火焰拖尾粒子"""
+	# 创建临时粒子节点
+	var trail_particles = CPUParticles2D.new()
+	trail_particles.name = "FlameTrailParticles"
+	trail_particles.global_position = pos
+	trail_particles.emitting = true
+	trail_particles.one_shot = true  # 一次性粒子
+	trail_particles.amount = 15  # 增加粒子数量
+	trail_particles.lifetime = 0.8  # 增加持续时间
+	trail_particles.preprocess = 0.0
+
+	# 发射形状 - 小范围
+	trail_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	trail_particles.emission_sphere_radius = 20.0  # 增大发射半径
+
+	# 向后飘散的方向（与移动方向相反）
+	var back_direction = -fire_kick_direction
+	trail_particles.direction = back_direction
+	trail_particles.spread = 60.0  # 增大扩散角度
+
+	# 速度
+	trail_particles.initial_velocity_min = 60.0
+	trail_particles.initial_velocity_max = 120.0
+
+	# 重力（略微向上）
+	trail_particles.gravity = Vector2(0, -40)
+
+	# 缩放 - 增大粒子
+	trail_particles.scale_amount_min = 1.5
+	trail_particles.scale_amount_max = 3.0
+
+	# 颜色渐变 - 从亮橙到红到透明（更亮）
+	var gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 0.9, 0.3, 1.0))  # 非常亮的橙黄色
+	gradient.add_point(0.3, Color(1.0, 0.5, 0.0, 0.9))  # 明亮橙红色
+	gradient.add_point(0.6, Color(1.0, 0.2, 0.0, 0.6))  # 红色
+	gradient.add_point(1.0, Color(0.8, 0.0, 0.0, 0.0))  # 透明
+
+	trail_particles.color_ramp = gradient
+
+	# Z-index确保在玩家前方可见
+	trail_particles.z_index = 5
+
+	# 添加到场景
+	get_tree().current_scene.add_child(trail_particles)
+
+	# 粒子生命周期结束后自动删除
+	await get_tree().create_timer(1.2).timeout
+	if is_instance_valid(trail_particles):
+		trail_particles.queue_free()
+
 func damage_enemies_in_kick_path():
-	"""对飞踢路径上的敌人造成伤害"""
+	"""对飞踢路径上的敌人造成伤害和击飞"""
 	var config = SKILL_CONFIGS[GameConstants.CharacterId.MOKOU]
 	var damage = config.kick_damage
+	var knockback_force = 200.0  # 击飞力度
 
 	var enemies = get_tree().get_nodes_in_group("enemy")
 	for enemy in enemies:
 		if enemy.has_method("take_damage"):
 			var dist = player.global_position.distance_to(enemy.global_position)
 			if dist < 60:  # 飞踢判定范围
+				# 造成伤害
 				enemy.take_damage(damage)
+
+				# 施加击飞效果
+				if enemy.has_method("apply_knockback"):
+					var knockback_direction = fire_kick_direction
+					enemy.apply_knockback(knockback_direction, knockback_force)
+
+				# 施加燃烧效果
+				if enemy.has_method("apply_burn"):
+					enemy.apply_burn(10.0, 3.0)  # 10点/秒，持续3秒
+
+func spawn_landing_explosion(pos: Vector2):
+	"""飞踢落地时的AOE爆炸 - 带火焰粒子效果"""
+	var config = SKILL_CONFIGS[GameConstants.CharacterId.MOKOU]
+
+	# 创建爆炸区域
+	var explosion = Area2D.new()
+	explosion.global_position = pos
+	explosion.name = "LandingExplosion"
+
+	# 添加碰撞形状
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = 150.0  # 爆炸范围150像素
+	collision.shape = shape
+	explosion.add_child(collision)
+
+	# 添加视觉效果（圆形底部光晕）
+	var circle = Polygon2D.new()
+	var points = PackedVector2Array()
+	var segments = 32
+	var radius = 75.0  # 初始半径75像素
+	for i in range(segments):
+		var angle = 2.0 * PI * i / segments
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	circle.polygon = points
+	circle.color = Color(1.0, 0.3, 0.0, 0.5)  # 橙红色
+	explosion.add_child(circle)
+
+	# 添加爆炸火焰粒子效果（一次性爆发）
+	var particles = _create_explosion_particles(100.0)
+	explosion.add_child(particles)
+
+	# 设置碰撞层
+	explosion.collision_layer = 0
+	explosion.collision_mask = 4  # 检测敌人
+
+	# 添加到场景根节点（世界坐标系，不跟随玩家）
+	get_tree().current_scene.add_child(explosion)
+
+	# 立即伤害范围内的敌人
+	await get_tree().process_frame
+
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for enemy in enemies:
+		if enemy.has_method("take_damage"):
+			var dist = explosion.global_position.distance_to(enemy.global_position)
+			if dist < 150.0:
+				# 造成100点伤害
+				enemy.take_damage(100.0)
+
+				# 击飞
+				if enemy.has_method("apply_knockback"):
+					var knockback_dir = (enemy.global_position - explosion.global_position).normalized()
+					enemy.apply_knockback(knockback_dir, 300.0)
+
+				# 燃烧
+				if enemy.has_method("apply_burn"):
+					enemy.apply_burn(15.0, 4.0)
+
+	# 屏幕震动和粒子效果
+	SignalBus.screen_shake.emit(0.3, 15.0)
+	SignalBus.spawn_death_particles.emit(pos, Color("#ff4500"), 30)
+
+	# 视觉效果：爆炸扩散动画（0.3秒）- 圆形扩大并淡出
+	var tween = get_tree().create_tween()
+	tween.tween_property(circle, "scale", Vector2(2.0, 2.0), 0.3)  # 扩大2倍
+	tween.parallel().tween_property(circle, "color:a", 0.0, 0.3)  # 淡出
+
+	await get_tree().create_timer(0.3).timeout
+	if is_instance_valid(explosion):
+		explosion.queue_free()
+
 
 # ============================================
 # 魔理沙 - 扫把冲锋 (Broom Charge)
@@ -761,3 +949,121 @@ func get_cooldown_percent() -> float:
 	if max_cooldown <= 0:
 		return 0.0
 	return skill_cooldown / max_cooldown
+
+# ============================================
+# 火焰粒子效果辅助函数
+# ============================================
+func _create_fire_particles(emit_radius: float, intensity: float) -> GPUParticles2D:
+	"""创建持续燃烧的火焰粒子效果"""
+	var particles = GPUParticles2D.new()
+	particles.emitting = true
+	particles.amount = int(15 * intensity)
+	particles.lifetime = 0.8
+	particles.preprocess = 0.2
+
+	# 粒子材质
+	var mat = ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	mat.emission_sphere_radius = emit_radius
+
+	# 方向：主要向上飘
+	mat.direction = Vector3(0, -1, 0)
+	mat.spread = 20.0
+
+	# 速度
+	mat.initial_velocity_min = 30.0
+	mat.initial_velocity_max = 60.0
+
+	# 重力：向上飘
+	mat.gravity = Vector3(0, -50, 0)
+
+	# 缩放
+	mat.scale_min = 0.03
+	mat.scale_max = 0.08
+	var scale_curve = Curve.new()
+	scale_curve.add_point(Vector2(0, 0.5))
+	scale_curve.add_point(Vector2(0.3, 1.0))
+	scale_curve.add_point(Vector2(1, 0.0))
+	var scale_curve_tex = CurveTexture.new()
+	scale_curve_tex.curve = scale_curve
+	mat.scale_curve = scale_curve_tex
+
+	# 颜色：橙红渐变到透明
+	var color_ramp = Gradient.new()
+	color_ramp.set_color(0, Color(1.0, 0.7, 0.2, 0.9))  # 橙黄
+	color_ramp.set_color(1, Color(1.0, 0.2, 0.0, 0.0))  # 红色透明
+	var color_tex = GradientTexture1D.new()
+	color_tex.gradient = color_ramp
+	mat.color_ramp = color_tex
+
+	particles.process_material = mat
+
+	# 加载火焰纹理（如果存在）
+	var flame_texture = load("res://assets/map/flame.png")
+	if flame_texture:
+		particles.texture = flame_texture
+
+	# 加法混合模式
+	var canvas_mat = CanvasItemMaterial.new()
+	canvas_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	particles.material = canvas_mat
+
+	return particles
+
+func _create_explosion_particles(radius: float) -> GPUParticles2D:
+	"""创建一次性爆炸火焰粒子效果"""
+	var particles = GPUParticles2D.new()
+	particles.emitting = true
+	particles.one_shot = true
+	particles.explosiveness = 0.9
+	particles.amount = 30
+	particles.lifetime = 0.6
+
+	# 粒子材质
+	var mat = ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	mat.emission_sphere_radius = radius * 0.3
+
+	# 方向：向外爆发
+	mat.direction = Vector3(0, 0, 0)
+	mat.spread = 180.0
+
+	# 速度
+	mat.initial_velocity_min = 80.0
+	mat.initial_velocity_max = 150.0
+
+	# 重力：轻微向上
+	mat.gravity = Vector3(0, -30, 0)
+
+	# 缩放
+	mat.scale_min = 0.05
+	mat.scale_max = 0.12
+	var scale_curve = Curve.new()
+	scale_curve.add_point(Vector2(0, 1.0))
+	scale_curve.add_point(Vector2(1, 0.0))
+	var scale_curve_tex = CurveTexture.new()
+	scale_curve_tex.curve = scale_curve
+	mat.scale_curve = scale_curve_tex
+
+	# 颜色：亮黄到红色透明
+	var color_ramp = Gradient.new()
+	color_ramp.set_color(0, Color(1.0, 0.9, 0.3, 1.0))  # 亮黄
+	color_ramp.add_point(0.3, Color(1.0, 0.5, 0.1, 0.9))  # 橙
+	color_ramp.set_color(1, Color(0.8, 0.1, 0.0, 0.0))  # 红色透明
+	var color_tex = GradientTexture1D.new()
+	color_tex.gradient = color_ramp
+	mat.color_ramp = color_tex
+
+	particles.process_material = mat
+
+	# 加载火焰纹理
+	var flame_texture = load("res://assets/map/flame.png")
+	if flame_texture:
+		particles.texture = flame_texture
+
+	# 加法混合模式
+	var canvas_mat = CanvasItemMaterial.new()
+	canvas_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	particles.material = canvas_mat
+
+	return particles

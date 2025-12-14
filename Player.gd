@@ -76,6 +76,10 @@ func _ready():
 	character_skills = get_node_or_null("CharacterSkills")
 	bond_system = get_node_or_null("BondSystem")
 
+	# 先隐藏精灵，等加载完角色数据后再显示
+	if sprite:
+		sprite.visible = false
+
 	# 初始化角色数据
 	CharacterData.initialize()
 
@@ -99,9 +103,18 @@ func _ready():
 	# 监听升级事件
 	SignalBus.level_up.connect(on_level_up)
 
+	# 添加阴影（下午斜阳的长影子）
+	_create_player_shadow()
+
+	# 创建圆形粒子屏障效果
+	# _create_particle_barrier()  # 暂时关闭粒子屏障
+
+	# 显示精灵（角色数据已加载）
+	if sprite:
+		sprite.visible = true
+
 func _on_character_selected(selected_id: int):
 	"""角色选择信号回调"""
-	print("收到角色选择信号: ", selected_id)
 	character_id = selected_id
 	# 重新加载角色数据（如果在游戏运行时）
 	# _load_character_data(character_id)
@@ -136,11 +149,7 @@ func _load_character_data(char_id: int):
 				var s = character_data.scale
 				sprite.scale = Vector2(s, s)
 			else:
-				sprite.scale = Vector2(0.08, 0.08) # Default if not found
-
-		print("玩家角色: ", character_data.char_name)
-		print("初始武器: ", character_data.starting_weapon_id)
-		print("物理属性 - 质量: ", mass, ", 摩擦力: ", friction, ", 判定倍率: ", hitbox_scale)
+				sprite.scale = Vector2(0.08, 0.08)
 
 		# 加载妹红动画（如果是妹红）
 		if char_id == GameConstants.CharacterId.MOKOU:
@@ -326,6 +335,9 @@ func take_damage(amount: float):
 	if health_comp:
 		health_comp.damage(amount)
 
+		# 发送受伤屏幕震动
+		SignalBus.screen_shake.emit(0.15, 6.0)  # 0.15秒，6像素
+
 		# 播放受击效果
 		if sprite:
 			sprite.modulate = Color.RED
@@ -422,7 +434,6 @@ func on_level_up(new_level):
 	if health_comp:
 		health_comp.current_hp = health_comp.max_hp
 		SignalBus.player_health_changed.emit(health_comp.current_hp, health_comp.max_hp)
-		print("玩家升级到 Lv.", new_level, "，生命值已回复！")
 
 # ==================== DASH METHODS ====================
 
@@ -446,11 +457,10 @@ func start_dash():
 
 	# Optional: Visual effect
 	if sprite:
-		sprite.modulate.a = 0.5 # Ghost effect transparency
+		sprite.modulate.a = 0.5
 
 	# Optional: Invulnerability during dash
 	set_invulnerable(DASH_DURATION)
-	print("Dash started! Direction: ", dash_direction)
 
 func _update_dash_timers(delta: float):
 	if is_dashing:
@@ -469,7 +479,6 @@ func _update_dash_timers(delta: float):
 		dash_cooldown_timer -= delta
 		if dash_cooldown_timer <= 0:
 			can_dash = true
-			print("Dash ready!")
 
 # ==================== SKILL SUPPORT METHODS ====================
 
@@ -477,7 +486,40 @@ func set_invulnerable(duration: float):
 	"""设置玩家无敌状态"""
 	invulnerable_timer = duration
 	is_invulnerable = true
-	print("无敌时间: %.2f秒" % duration)
+
+func _create_player_shadow():
+	"""创建玩家阴影 - 椭圆形，模拟下午斜阳"""
+	var shadow = Sprite2D.new()
+	shadow.name = "Shadow"
+
+	# 创建椭圆形阴影纹理
+	var width = 45
+	var height = 12
+	var image = Image.create(width, height, false, Image.FORMAT_RGBA8)
+	var center_x = width / 2.0
+	var center_y = height / 2.0
+
+	for x in range(width):
+		for y in range(height):
+			var dx = (x - center_x) / (width / 2.0)
+			var dy = (y - center_y) / (height / 2.0)
+			var dist_sq = dx * dx + dy * dy
+
+			if dist_sq <= 1.0:
+				var dist = sqrt(dist_sq)
+				var alpha = (1.0 - dist) * 0.35
+				alpha = pow(alpha, 1.5)
+				image.set_pixel(x, y, Color(0, 0, 0, alpha))
+			else:
+				image.set_pixel(x, y, Color(0, 0, 0, 0))
+
+	shadow.texture = ImageTexture.create_from_image(image)
+	shadow.position = Vector2(12, 8)  # 下午阳光向右下偏移
+	shadow.rotation = 0.35  # 约20度角
+	shadow.z_index = -10
+	shadow.centered = true
+
+	add_child(shadow)
 
 func _spawn_dash_landing_effect():
 	"""生成飞踢落地视觉效果（火焰爆炸） + 范围伤害"""
@@ -510,8 +552,6 @@ func _spawn_dash_landing_effect():
 			if enemy.has_method("apply_burn"):
 				enemy.apply_burn(5.0, 3.0)  # 5伤害/秒，持续3秒
 
-	print("飞踢落地！范围伤害: %.0f" % landing_damage)
-
 # ==================== MOKOU ANIMATION SYSTEM ====================
 
 func _load_mokou_textures():
@@ -527,7 +567,6 @@ func _load_mokou_textures():
 			atlas.atlas = sprite_texture
 			atlas.region = Rect2(i * frame_width, 0, frame_width, frame_height)
 			mokou_textures.sprite.append(atlas)
-		print("妹红水平动画加载完成：8帧")
 
 	# up.png - 4帧向上移动动画（水平排列）
 	var up_texture = load("res://assets/up.png")
@@ -540,7 +579,6 @@ func _load_mokou_textures():
 			atlas.atlas = up_texture
 			atlas.region = Rect2(i * frame_width, 0, frame_width, frame_height)
 			mokou_textures.up.append(atlas)
-		print("妹红向上动画加载完成：4帧")
 
 	# down.png - 17帧向下移动动画（检测垂直/水平排列）
 	var down_texture = load("res://assets/down.png")
@@ -557,7 +595,6 @@ func _load_mokou_textures():
 				atlas.atlas = down_texture
 				atlas.region = Rect2(0, i * frame_height, frame_width, frame_height)
 				mokou_textures.down.append(atlas)
-			print("妹红向下动画加载完成：17帧（垂直排列）")
 		else:
 			# 水平排列（左右排列）
 			var frame_width = down_texture.get_width() / 17
@@ -567,17 +604,12 @@ func _load_mokou_textures():
 				atlas.atlas = down_texture
 				atlas.region = Rect2(i * frame_width, 0, frame_width, frame_height)
 				mokou_textures.down.append(atlas)
-			print("妹红向下动画加载完成：17帧（水平排列）")
 
 	# stand.png - 站立
 	mokou_textures.stand = load("res://assets/stand.png")
-	if mokou_textures.stand:
-		print("妹红站立纹理加载完成")
 
 	# mokuokick.png - 飞踢
 	mokou_textures.kick = load("res://assets/mokuokick.png")
-	if mokou_textures.kick:
-		print("妹红飞踢纹理加载完成")
 
 func _update_mokou_animation(delta: float, input_dir: Vector2):
 	"""更新妹红的动画帧"""
@@ -590,8 +622,9 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 	# 优先处理冲刺动画（飞踢）
 	if is_dashing and mokou_textures.kick:
 		sprite.texture = mokou_textures.kick
-		# mokuokick.png: 2496x1696，计算缩放 = 100/1696 = 0.059
-		sprite.scale = Vector2(TARGET_HEIGHT / 1696.0, TARGET_HEIGHT / 1696.0)
+		# mokuokick.png: 2496x1696，保持与其他动画一致的高度
+		var kick_height = 100.0  # 恢复到100
+		sprite.scale = Vector2(kick_height / 1696.0, kick_height / 1696.0)
 		# 根据dash方向翻转（如果图片默认朝左，向右时需要翻转）
 		sprite.flip_h = dash_direction.x > 0
 		return  # 冲刺时不处理其他动画
@@ -638,3 +671,92 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 			sprite.texture = mokou_textures.stand
 			# stand.png: 2048x2048，计算缩放 = 100/2048 = 0.049
 			sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
+
+# ==================== 粒子屏障系统 ====================
+func _create_particle_barrier():
+	"""创建圆形粒子屏障 - 发光球形护盾效果"""
+	var particles = GPUParticles2D.new()
+	particles.name = "ParticleBarrier"
+	particles.position = Vector2.ZERO  # 确保粒子在玩家中心
+	particles.amount = 16  # 粒子数量减少，从48降到16，稀疏一些
+	particles.lifetime = 3.0  # 粒子生命周期增加，让粒子运动更舒缓
+	particles.preprocess = 0.5  # 预处理时间
+	particles.speed_scale = 0.8  # 速度减慢
+	particles.emitting = true
+	particles.local_coords = true  # 使用本地坐标，跟随父节点
+	particles.process_material = _create_barrier_particle_material()
+	particles.texture = _create_particle_texture()
+	particles.z_index = 10  # 在玩家上方显示
+
+	# 使用加法混合创造发光效果
+	var material = CanvasItemMaterial.new()
+	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	particles.material = material
+
+	add_child(particles)
+
+func _create_barrier_particle_material() -> ParticleProcessMaterial:
+	"""创建粒子屏障的材质 - 圆形轨道（外圈光环）"""
+	var mat = ParticleProcessMaterial.new()
+
+	# 发射形状：圆环（扩大半径到外圈）
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
+	mat.emission_ring_axis = Vector3(0, 0, 1)  # Z轴（2D平面）
+	mat.emission_ring_height = 1.0
+	mat.emission_ring_radius = 70.0  # 外圈半径，从35增大到70
+	mat.emission_ring_inner_radius = 68.0  # 内半径，保持2像素厚度
+
+	# 粒子初始速度（轨道运动）
+	mat.angle_min = 0.0
+	mat.angle_max = 360.0
+	mat.angular_velocity_min = 20.0  # 粒子更慢旋转
+	mat.angular_velocity_max = 30.0
+
+	# 轨道速度（绕圆周运动）
+	mat.orbit_velocity_min = 0.2  # 更慢的轨道运动
+	mat.orbit_velocity_max = 0.3
+
+	# 粒子不向外扩散，保持在圆环上
+	mat.initial_velocity_min = 0.0
+	mat.initial_velocity_max = 0.0
+
+	# 重力设为0，粒子不下坠
+	mat.gravity = Vector3(0, 0, 0)
+
+	# 粒子大小 - 更大一些让稀疏光环更明显
+	mat.scale_min = 0.8
+	mat.scale_max = 1.2
+
+	# 粒子颜色 - 淡蓝色发光
+	var gradient = Gradient.new()
+	gradient.add_point(0.0, Color(0.6, 0.8, 1.0, 0.8))  # 起始：亮蓝色，较亮
+	gradient.add_point(0.5, Color(0.7, 0.9, 1.0, 1.0))  # 中间：最亮
+	gradient.add_point(1.0, Color(0.5, 0.7, 0.9, 0.0))  # 结束：淡出
+
+	var gradient_tex = GradientTexture1D.new()
+	gradient_tex.gradient = gradient
+	mat.color_ramp = gradient_tex
+
+	# 启用衰减，粒子逐渐淡出
+	mat.damping_min = 0.1
+	mat.damping_max = 0.2
+
+	return mat
+
+func _create_particle_texture() -> ImageTexture:
+	"""创建粒子纹理 - 柔和的圆形光点"""
+	var size = 16
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var center = Vector2(size / 2.0, size / 2.0)
+	var max_dist = size / 2.0
+	
+	for x in range(size):
+		for y in range(size):
+			var dist = Vector2(x, y).distance_to(center)
+			var t = clamp(dist / max_dist, 0.0, 1.0)
+			# 柔和的径向渐变
+			var brightness = 1.0 - pow(t, 1.8)
+			# 白色粒子，亮度由alpha控制
+			image.set_pixel(x, y, Color(1, 1, 1, brightness))
+	
+	return ImageTexture.create_from_image(image)

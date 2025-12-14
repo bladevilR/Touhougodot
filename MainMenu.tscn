@@ -10,7 +10,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
-metadata/_edit_use_anchors_ = true
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -19,7 +18,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.1, 0.1, 0.15, 1)
+color = Color(0.04, 0.035, 0.08, 1)
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -28,39 +27,113 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 40
+theme_override_constants/margin_left = 60
 theme_override_constants/margin_top = 40
-theme_override_constants/margin_right = 40
+theme_override_constants/margin_right = 60
 theme_override_constants/margin_bottom = 40
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 25
 
-[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="HeaderContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
-size_flags_vertical = 0
-custom_minimum_size = Vector2(0, 80)
-text = "东方幻灵乱舞
-Touhou Phantom Spirit Dance"
-horizontal_alignment = 1
-vertical_alignment = 1
-theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1)
-theme_override_font_sizes/font_size = 36
+theme_override_constants/separation = 8
 
-[node name="CharacterGrid" type="GridContainer" parent="MarginContainer/VBoxContainer"]
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 1, 1)
+theme_override_colors/font_shadow_color = Color(0.4, 0.2, 0.6, 0.5)
+theme_override_constants/shadow_offset_x = 3
+theme_override_constants/shadow_offset_y = 3
+theme_override_font_sizes/font_size = 42
+text = "选择角色"
+horizontal_alignment = 1
+
+[node name="SubtitleLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.6, 0.75, 1)
+theme_override_font_sizes/font_size = 18
+text = "Choose Your Character"
+horizontal_alignment = 1
+
+[node name="DecoLine" type="ColorRect" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+custom_minimum_size = Vector2(150, 2)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.6, 0.4, 0.8, 0.5)
+
+[node name="ContentContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/h_separation = 30
-theme_override_constants/v_separation = 30
+theme_override_constants/separation = 40
+
+[node name="CharacterGrid" type="GridContainer" parent="MarginContainer/VBoxContainer/ContentContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 20
 columns = 3
+
+[node name="CharacterInfoPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/ContentContainer"]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentContainer/CharacterInfoPanel"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="NameLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentContainer/CharacterInfoPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 28
+text = "角色名称"
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentContainer/CharacterInfoPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.55, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+text = "角色称号"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer/ContentContainer/CharacterInfoPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="DescLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentContainer/CharacterInfoPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 15
+text = "角色描述..."
+autowrap_mode = 2
+
+[node name="StatsLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentContainer/CharacterInfoPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.65, 0.8, 1)
+theme_override_font_sizes/font_size = 16
+text = "属性"
+
+[node name="StatsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentContainer/CharacterInfoPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
 
 [node name="BottomPanel" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
+theme_override_constants/separation = 20
 
-[node name="StartButton" type="Button" parent="MarginContainer/VBoxContainer/BottomPanel"]
+[node name="ButtonContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/BottomPanel"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/BottomPanel/ButtonContainer"]
+custom_minimum_size = Vector2(140, 55)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "返回"
+
+[node name="StartButton" type="Button" parent="MarginContainer/VBoxContainer/BottomPanel/ButtonContainer"]
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
+theme_override_font_sizes/font_size = 22
 text = "开始游戏"
-theme_override_font_sizes/font_size = 24

@@ -20,7 +20,7 @@ script = ExtResource("1")
 speed = 200.0
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-texture = ExtResource("4")
+visible = false
 scale = Vector2(0.08, 0.08)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
