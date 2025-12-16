@@ -127,14 +127,19 @@ func _spawn_room_enemy():
 	var spawn_pos = _get_random_spawn_position()
 	var enemy = enemy_scene.instantiate()
 
-	# 随机选择敌人类型
-	var enemy_types = [
-		GameConstants.EnemyType.KEDAMA,
-		GameConstants.EnemyType.FAIRY,
-		GameConstants.EnemyType.ELF,
-		GameConstants.EnemyType.GHOST
-	]
-	var enemy_type = enemy_types[randi() % enemy_types.size()]
+	# 加权随机选择敌人类型
+	# 向日葵妖精(ELF)是稀有高级怪物，生成概率只有5%
+	var roll = randf()
+	var enemy_type: int
+
+	if roll < 0.05:  # 5% 概率
+		enemy_type = GameConstants.EnemyType.ELF  # 向日葵妖精 - 稀有高级怪物
+	elif roll < 0.40:  # 35% 概率
+		enemy_type = GameConstants.EnemyType.KEDAMA  # 毛玉
+	elif roll < 0.75:  # 35% 概率
+		enemy_type = GameConstants.EnemyType.FAIRY  # 妖精
+	else:  # 25% 概率
+		enemy_type = GameConstants.EnemyType.GHOST  # 幽灵
 
 	# 设置敌人
 	if enemy.has_method("setup"):

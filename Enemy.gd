@@ -21,8 +21,11 @@ var base_speed: float = 100.0
 
 # Knockback state
 var knockback_velocity: Vector2 = Vector2.ZERO
+var knockback_target_velocity: Vector2 = Vector2.ZERO  # 目标击退速度
+var knockback_progress: float = 0.0  # 击退加速进度 0-1
 var knockback_immunity: bool = false
-const KNOCKBACK_DECAY: float = 5.0  # How fast knockback decays
+const KNOCKBACK_DECAY: float = 0.8  # 降低衰减速度，让击飞持续更久
+const KNOCKBACK_ACCELERATION_TIME: float = 0.15  # 加速到最大速度的时间（秒）
 
 # Collision avoidance
 const ENEMY_SEPARATION_RADIUS: float = 80.0  # 增加检测范围
@@ -45,6 +48,14 @@ const JUMP_DURATION: float = 0.5  # 跳跃持续时间（秒）
 
 # ==================== VISUAL EFFECTS ====================
 var shadow_sprite: Sprite2D = null  # 地面影子
+
+# 螺旋线特效系统
+var spiral_trail: Line2D = null  # 螺旋线
+var spiral_trail_active: bool = false  # 螺旋线是否激活
+var spiral_trail_duration: float = 0.0  # 螺旋线持续时间
+var spiral_trail_timer: float = 0.0  # 螺旋线计时器
+var spiral_trail_points: Array = []  # 记录轨迹点
+const SPIRAL_TRAIL_MAX_POINTS: int = 30  # 最大轨迹点数
 
 # ==================== STATUS EFFECT SYSTEM ====================
 # Status effect tracking structures
@@ -144,6 +155,53 @@ func _setup_collision_layers():
 	collision_layer = 4  # 敌人在第3层
 	collision_mask = 1 + 2 + 4 + 8  # 检测玩家(Layer 1) + 墙壁(Layer 2) + 其他敌人(Layer 3) + 玩家子弹(Layer 4)
 
+func setup_as_boss(boss_config):
+	"""设置为Boss"""
+	print("[Enemy] 设置为Boss: ", boss_config.enemy_name)
+
+	# 0. 先获取节点引用（防止在add_child之前调用导致组件为空）
+	if not health_comp:
+		health_comp = get_node_or_null("HealthComponent")
+	if not sprite:
+		sprite = get_node_or_null("Sprite2D")
+	if not collision_shape:
+		collision_shape = get_node_or_null("CollisionShape2D")
+
+	# 保存boss配置
+	enemy_data = boss_config
+	enemy_type = GameConstants.EnemyType.BOSS
+
+	# 设置Boss属性
+	var current_hp = boss_config.hp
+	var max_hp = boss_config.hp
+
+	if health_comp:
+		health_comp.max_hp = boss_config.hp
+		health_comp.current_hp = boss_config.hp
+	else:
+		push_error("[Enemy] Boss missing HealthComponent!")
+
+	speed = boss_config.speed * 100.0
+	base_speed = boss_config.speed * 100.0
+	xp_value = boss_config.exp
+	mass = 30.0  # Boss质量更大，抗击退
+
+	# 设置sprite颜色（如果有）
+	if sprite:
+		sprite.modulate = boss_config.color
+
+	# 设置缩放（Boss更大）
+	var boss_scale = 3.0  # Boss是普通敌人的3倍大
+	if sprite:
+		sprite.scale = Vector2(boss_scale, boss_scale)
+	if collision_shape and collision_shape.shape:
+		collision_shape.scale = Vector2(boss_scale, boss_scale)
+
+	# 发送Boss生成信号
+	SignalBus.boss_spawned.emit(boss_config.enemy_name, current_hp, max_hp)
+
+	print("[Enemy] Boss设置完成: ", boss_config.enemy_name, " HP=", max_hp)
+
 func _physics_process(delta):
 	# ==================== STATUS EFFECT UPDATES ====================
 	_update_status_effects(delta)
@@ -152,7 +210,8 @@ func _physics_process(delta):
 	# Check if enemy can move (not frozen or stunned)
 	if _is_movement_disabled():
 		# Still apply knockback decay even when disabled
-		knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, KNOCKBACK_DECAY * delta)
+		if knockback_target_velocity.length() == 0:
+			knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, KNOCKBACK_DECAY * delta)
 		return
 
 	# Calculate current movement speed with status modifiers
@@ -195,11 +254,29 @@ func _physics_process(delta):
 
 	desired_velocity += _separation_force_cache
 
+	# ==================== KNOCKBACK ACCELERATION SYSTEM ====================
+	# 击退加速：前半段慢，后半段快（慢镜头效果）
+	if knockback_target_velocity.length() > 0:
+		# 更新加速进度
+		knockback_progress += delta / KNOCKBACK_ACCELERATION_TIME
+		knockback_progress = clamp(knockback_progress, 0.0, 1.0)
+
+		# 使用缓入曲线（ease-in quad）：慢→快
+		var ease_factor = knockback_progress * knockback_progress
+
+		# 根据进度插值到目标速度
+		knockback_velocity = knockback_target_velocity * ease_factor
+
+		# 加速完成后，清空目标速度，开始衰减
+		if knockback_progress >= 1.0:
+			knockback_target_velocity = Vector2.ZERO
+
 	# Combine desired velocity with knockback
 	velocity = desired_velocity + knockback_velocity
 
-	# Apply knockback decay
-	knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, KNOCKBACK_DECAY * delta)
+	# Apply knockback decay (仅在无目标速度时衰减)
+	if knockback_target_velocity.length() == 0:
+		knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, KNOCKBACK_DECAY * delta)
 
 	# Move with collision
 	move_and_slide()
@@ -208,6 +285,36 @@ func _physics_process(delta):
 	# ColorRect不支持flip_h，暂时跳过
 	# if velocity.x != 0:
 	# 	sprite.flip_h = velocity.x < 0
+
+	# ==================== SPIRAL TRAIL UPDATE ====================
+	# 更新螺旋线特效
+	if spiral_trail_active:
+		spiral_trail_timer += delta
+
+		# 每帧记录sprite的全局位置，形成螺旋轨迹
+		if sprite and spiral_trail:
+			var trail_point = sprite.global_position
+			spiral_trail_points.append(trail_point)
+
+			# 限制轨迹点数量，避免性能问题
+			if spiral_trail_points.size() > SPIRAL_TRAIL_MAX_POINTS:
+				spiral_trail_points.pop_front()
+
+			# 更新Line2D的点
+			spiral_trail.clear_points()
+			for point in spiral_trail_points:
+				# 转换为相对于Line2D的局部坐标
+				var local_point = spiral_trail.to_local(point)
+				spiral_trail.add_point(local_point)
+
+		# 淡出效果
+		if spiral_trail and spiral_trail_duration > 0:
+			var fade_progress = spiral_trail_timer / spiral_trail_duration
+			spiral_trail.modulate.a = 1.0 - fade_progress
+
+		# 时间到，停止特效
+		if spiral_trail_timer >= spiral_trail_duration:
+			_stop_spiral_trail()
 
 # ==================== PHYSICS METHODS ====================
 
@@ -258,13 +365,69 @@ func apply_knockback(direction: Vector2, force: float):
 	var knockback_resistance = mass / 10.0
 	var actual_force = force / knockback_resistance
 
-	# Apply knockback velocity
-	knockback_velocity += direction.normalized() * actual_force * 100.0
+	# 设置目标击退速度（将在_physics_process中逐渐加速）
+	knockback_target_velocity = direction.normalized() * actual_force
 
-	# Cap maximum knockback velocity to prevent extreme speeds
-	var max_knockback = 500.0
-	if knockback_velocity.length() > max_knockback:
-		knockback_velocity = knockback_velocity.normalized() * max_knockback
+	# 重置加速进度，开始慢镜头加速
+	knockback_progress = 0.0
+
+	# 初始速度设为很小（慢镜头开始）
+	knockback_velocity = knockback_target_velocity * 0.1  # 从10%速度开始
+
+	print("[Enemy] 击飞! 方向:", direction, " 力度:", force, " 目标速度:", knockback_target_velocity.length())
+
+	# Cap maximum knockback velocity - 大幅提高上限以允许超级击飞
+	var max_knockback = 20000.0  # 从15000提高到20000
+	if knockback_target_velocity.length() > max_knockback:
+		knockback_target_velocity = knockback_target_velocity.normalized() * max_knockback
+
+# ==================== SPIRAL TRAIL EFFECT ====================
+# 启动螺旋线特效
+func start_spiral_trail(duration: float):
+	"""启动螺旋线轨迹特效 - 透明破空效果"""
+	if not sprite:
+		return
+
+	# 创建Line2D节点来绘制螺旋线
+	if not spiral_trail:
+		spiral_trail = Line2D.new()
+		spiral_trail.name = "SpiralTrail"
+		spiral_trail.width_curve = Curve.new()
+		# 设置宽度曲线：头部宽尾部窄（破空感）
+		spiral_trail.width_curve.add_point(Vector2(0.0, 5.0))  # 起点宽5px
+		spiral_trail.width_curve.add_point(Vector2(1.0, 0.0))  # 终点消失
+		spiral_trail.default_color = Color(0.9, 0.9, 1.0, 0.3)  # 浅蓝白色半透明
+		spiral_trail.z_index = -1  # 在敌人下方绘制
+		spiral_trail.top_level = true  # 使用全局坐标
+
+		# 添加渐变透明效果
+		var gradient = Gradient.new()
+		gradient.set_color(0, Color(1.0, 1.0, 1.0, 0.6))  # 起点半透明白
+		gradient.set_color(1, Color(0.9, 0.9, 1.0, 0.0))  # 终点完全透明
+		spiral_trail.gradient = gradient
+
+		add_child(spiral_trail)
+
+	# 初始化螺旋线状态
+	spiral_trail_active = true
+	spiral_trail_duration = duration
+	spiral_trail_timer = 0.0
+	spiral_trail_points.clear()
+	spiral_trail.modulate.a = 1.0
+
+	print("[Enemy] 螺旋破空特效已启动, 持续时间:", duration, "秒")
+
+# 停止螺旋线特效
+func _stop_spiral_trail():
+	"""停止并清理螺旋线特效"""
+	spiral_trail_active = false
+	spiral_trail_points.clear()
+
+	if spiral_trail:
+		spiral_trail.queue_free()
+		spiral_trail = null
+
+	print("[Enemy] 螺旋线特效已停止")
 
 # ==================== VISUAL EFFECTS ====================
 # 子弹打中敌人时，调用这个函数
@@ -478,14 +641,33 @@ func setup(type: int, wave: int = 1):
 		health_comp.max_hp = enemy_data.hp * difficulty_multiplier
 		health_comp.current_hp = health_comp.max_hp
 		speed = enemy_data.speed * 100.0
+		base_speed = enemy_data.speed * 100.0  # 也要设置base_speed
 		xp_value = int(enemy_data.exp * difficulty_multiplier)
 		mass = enemy_data.mass  # 应用质量
 
+		# 应用特殊行为属性
+		can_jump = enemy_data.can_jump
+		if can_jump:
+			jump_interval = enemy_data.jump_interval
+
+		# TODO: 应用射击属性（需要实现射击系统）
+		# can_shoot = enemy_data.can_shoot
+		# shoot_interval = enemy_data.shoot_interval
+
 		if sprite:
 			sprite.modulate = enemy_data.color
+			# 敌人的sprite由Enemy.tscn控制，不在这里设置scale
+
+		# 更新碰撞形状
+		if collision_shape and collision_shape.shape:
+			var enemy_radius = enemy_data.radius if "radius" in enemy_data else 10.0
+			if collision_shape.shape is CircleShape2D:
+				collision_shape.shape.radius = enemy_radius
 
 		# 更新血量条
 		_update_health_bar()
+
+		print("[Enemy] 设置完成: ", enemy_data.enemy_name, " (类型:", type, ", 跳跃:", can_jump, ")")
 
 # ==================== STATUS EFFECT APPLICATION METHODS ====================
 # These methods are called by Bullet.gd when status effects are applied

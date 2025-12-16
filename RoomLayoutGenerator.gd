@@ -71,7 +71,7 @@ static func _get_layout_style_for_room(room_type: int, room_index: int) -> Layou
 	return styles[room_index % styles.size()]
 
 static func _generate_sparse_layout(map_system) -> Array:
-	"""稀疏布局 - 少量竹丛点缀"""
+	"""稀疏布局 - 外围竹林，需要更有密度"""
 	var bamboos = []
 	var map_width = 2400
 	var map_height = 1800
@@ -80,19 +80,19 @@ static func _generate_sparse_layout(map_system) -> Array:
 		map_width = map_system.MAP_WIDTH
 		map_height = map_system.MAP_HEIGHT
 
-	# 生成8-12个小竹丛 (增加密度)
-	var cluster_count = randi_range(8, 12)
+	# 生成35-45个竹丛 (外围密度提升)
+	var cluster_count = randi_range(35, 45)
 	for i in range(cluster_count):
 		var pos = Vector2(
-			randf_range(400, map_width - 400),
-			randf_range(400, map_height - 400)
+			randf_range(200, map_width - 200),
+			randf_range(200, map_height - 200)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(3, 5)})
+		bamboos.append({"pos": pos, "size": randi_range(4, 7)})
 
 	return bamboos
 
 static func _generate_dense_layout(map_system) -> Array:
-	"""密集布局 - 大量竹林"""
+	"""密集布局 - 竹海，但控制性能和通道"""
 	var bamboos = []
 	var map_width = 2400
 	var map_height = 1800
@@ -101,19 +101,19 @@ static func _generate_dense_layout(map_system) -> Array:
 		map_width = map_system.MAP_WIDTH
 		map_height = map_system.MAP_HEIGHT
 
-	# 生成15-20个竹丛
-	var cluster_count = randi_range(15, 20)
+	# 生成30-40个大竹丛 (减少数量以优化性能，防止过满)
+	var cluster_count = randi_range(30, 40)
 	for i in range(cluster_count):
 		var pos = Vector2(
-			randf_range(300, map_width - 300),
-			randf_range(300, map_height - 300)
+			randf_range(200, map_width - 200),
+			randf_range(200, map_height - 200)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(4, 8)})
+		bamboos.append({"pos": pos, "size": randi_range(6, 10)}) # 单个竹丛更大
 
 	return bamboos
 
 static func _generate_corridor_layout(map_system) -> Array:
-	"""走廊布局 - 中间通道两侧竹林"""
+	"""走廊布局 - 中间通道两侧密集竹林"""
 	var bamboos = []
 	var map_width = 2400
 	var map_height = 1800
@@ -125,21 +125,21 @@ static func _generate_corridor_layout(map_system) -> Array:
 	var center_x = map_width / 2
 	var corridor_width = 400
 
-	# 左侧竹林
-	for i in range(8):
+	# 左侧密集竹林
+	for i in range(25):
 		var pos = Vector2(
-			randf_range(300, center_x - corridor_width / 2 - 50),
-			randf_range(400, map_height - 400)
+			randf_range(200, center_x - corridor_width / 2 - 50),
+			randf_range(200, map_height - 200)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(4, 7)})
+		bamboos.append({"pos": pos, "size": randi_range(5, 8)})
 
-	# 右侧竹林
-	for i in range(8):
+	# 右侧密集竹林
+	for i in range(25):
 		var pos = Vector2(
-			randf_range(center_x + corridor_width / 2 + 50, map_width - 300),
-			randf_range(400, map_height - 400)
+			randf_range(center_x + corridor_width / 2 + 50, map_width - 200),
+			randf_range(200, map_height - 200)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(4, 7)})
+		bamboos.append({"pos": pos, "size": randi_range(5, 8)})
 
 	return bamboos
 
@@ -290,11 +290,11 @@ static func _generate_decorations(style: LayoutStyle, map_system) -> Array:
 	var cluster_count = 0
 	match style:
 		LayoutStyle.SPARSE, LayoutStyle.ARENA:
-			cluster_count = randi_range(12, 18) # 翻倍
+			cluster_count = randi_range(30, 45) # 翻倍增加
 		LayoutStyle.DENSE, LayoutStyle.MAZE:
-			cluster_count = randi_range(20, 30) # 大幅增加
+			cluster_count = randi_range(50, 70) # 极大丰富
 		_:
-			cluster_count = randi_range(15, 25) # 增加
+			cluster_count = randi_range(40, 60) # 丰富
 
 	for i in range(cluster_count):
 		var center_pos = Vector2(
@@ -305,24 +305,24 @@ static func _generate_decorations(style: LayoutStyle, map_system) -> Array:
 		# 随机选择一种装饰类型进行簇生成
 		var type_roll = randf()
 		
-		if type_roll < 0.5: # 50% 概率是花簇
-			var count = randi_range(3, 6)
+		if type_roll < 0.6: # 60% 概率是花簇 (增加)
+			var count = randi_range(4, 8)
 			for j in range(count):
 				var angle = randf() * TAU
-				var dist = randf_range(10, 40)
+				var dist = randf_range(10, 50)
 				var pos = center_pos + Vector2(cos(angle), sin(angle)) * dist
 				decorations.append({"pos": pos, "type": "flower"})
 				
-		elif type_roll < 0.8: # 30% 概率是石头组
-			var count = randi_range(1, 3)
+		elif type_roll < 0.75: # 15% 概率是石头组 (减少，原30%)
+			var count = randi_range(1, 2) # 减少每组数量
 			for j in range(count):
 				var offset = Vector2(randf_range(-30, 30), randf_range(-20, 20))
 				decorations.append({"pos": center_pos + offset, "type": "rock"})
 				
-		else: # 20% 概率是竹笋区域
-			var count = randi_range(2, 4)
+		else: # 25% 概率是竹笋区域 (增加)
+			var count = randi_range(3, 5)
 			for j in range(count):
-				var offset = Vector2(randf_range(-40, 40), randf_range(-40, 40))
+				var offset = Vector2(randf_range(-50, 50), randf_range(-50, 50))
 				decorations.append({"pos": center_pos + offset, "type": "shoot"})
 
 	return decorations

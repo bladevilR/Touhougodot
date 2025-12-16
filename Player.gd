@@ -333,7 +333,11 @@ func apply_knockback(direction: Vector2, force: float):
 
 	current_velocity += direction.normalized() * actual_force
 
-func take_damage(amount: float):
+func take_damage(amount: float, should_shake: bool = true):
+	"""造成伤害
+	amount: 伤害值
+	should_shake: 是否播放震动效果（直接伤害=true, 火烧/中毒等DOT=false）
+	"""
 	# 无敌时不受伤害
 	if is_invulnerable:
 		return
@@ -341,8 +345,10 @@ func take_damage(amount: float):
 	if health_comp:
 		health_comp.damage(amount)
 
-		# 发送受伤屏幕震动 (增强力度)
-		SignalBus.screen_shake.emit(0.25, 10.0)
+		# 只有直接伤害才震动和后退（火烧/烫血等持续伤害不震动）
+		if should_shake:
+			# 发送受伤屏幕震动 (增强力度 - 更明显的受击反馈)
+			SignalBus.screen_shake.emit(0.4, 20.0)  # 提高震动强度和持续时间
 
 		# 播放受击效果
 		if sprite:

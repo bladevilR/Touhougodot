@@ -50,7 +50,7 @@ vec3 blur_sample(sampler2D tex, vec2 uv, vec2 pixel_size) {
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
             vec2 offset = vec2(float(x), float(y)) * pixel_size * glow_blur_size;
-            float weight = 1.0 - length(vec2(x, y)) * 0.3;
+            float weight = 1.0 - length(vec2(float(x), float(y))) * 0.3;
             color += texture(tex, uv + offset).rgb * weight;
             total_weight += weight;
         }

@@ -43,9 +43,9 @@ func _create_nitori_portrait():
 		var texture = load(portrait_path)
 		nitori_portrait.texture = texture
 
-		# 计算缩放：目标宽度300像素 (放大)
+		# 计算缩放：目标宽度500像素 (放大)
 		var original_size = texture.get_size()
-		var target_width = 300.0
+		var target_width = 500.0
 		var scale_factor = target_width / original_size.x
 		nitori_portrait.scale = Vector2(scale_factor, scale_factor)
 

@@ -124,8 +124,22 @@ func _ready():
 	# 初始化暂停菜单
 	_create_pause_menu()
 
+	# 初始化角色状态面板 (TAB键)
+	_create_status_panel()
+
 	# 延迟应用设置，确保GameSettings已经加载
 	call_deferred("_apply_settings")
+
+func _create_status_panel():
+	"""创建角色状态面板"""
+	var StatusPanelScript = load("res://CharacterStatusPanel.gd")
+	if StatusPanelScript:
+		var status_panel = StatusPanelScript.new()
+		status_panel.name = "CharacterStatusPanel"
+		add_child(status_panel)
+		print("[GameUI] 角色状态面板已创建")
+	else:
+		print("[GameUI] 错误: 无法加载 CharacterStatusPanel.gd")
 
 func _process(delta):
 	# 更新元素附魔计时器显示
@@ -176,8 +190,8 @@ func on_game_over():
 	var portrait_path = "res://assets/characters/1.png"
 	if ResourceLoader.exists(portrait_path):
 		mokou_portrait.texture = load(portrait_path)
-		mokou_portrait.position = Vector2(50, 150)  # 更靠左，更小
-		mokou_portrait.size = Vector2(300, 450)     # 再次缩小
+		mokou_portrait.position = Vector2(50, 250)  # 调整位置
+		mokou_portrait.size = Vector2(100, 150)     # 缩小尺寸
 		mokou_portrait.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
 		mokou_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		mokou_portrait.modulate = Color(0.8, 0.8, 0.9, 1.0)

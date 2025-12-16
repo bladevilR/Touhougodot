@@ -139,6 +139,8 @@ func _open_shop():
 	# 创建商店UI
 	shop_ui = Control.new()
 	shop_ui.name = "EnchantShopUI"
+	shop_ui.process_mode = Node.PROCESS_MODE_ALWAYS  # 暂停时也能响应输入
+	shop_ui.set_anchors_preset(Control.PRESET_FULL_RECT) # 确保覆盖全屏以便居中
 
 	# 获取画布层
 	var canvas_layer = get_tree().get_first_node_in_group("ui")
@@ -154,10 +156,17 @@ func _open_shop():
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shop_ui.add_child(overlay)
 
-	# 商店面板
+	# 商店面板 - 居中显示
 	var panel = Control.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(-400, -300)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -400  # 宽度的一半
+	panel.offset_top = -300   # 高度的一半
+	panel.offset_right = 400
+	panel.offset_bottom = 300
 	panel.size = Vector2(800, 600)
 	shop_ui.add_child(panel)
 

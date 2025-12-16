@@ -26,57 +26,59 @@ func _draw():
 		_draw_room(room, grid_pos, grid_layout, room_manager)
 
 func _convert_to_grid_layout(room_map: Array) -> Dictionary:
-	"""将房间网络转换为网格坐标"""
+	"""将房间网络转换为网格坐标（根据实际position计算方向）"""
 	var layout = {}
 	var visited = {}
 
 	# 使用BFS遍历，从起始房间开始
 	var queue = []
-	queue.append({"id": 0, "x": 3, "y": 3})  # 起始房间在中心
-	layout[0] = Vector2(3, 3)
+	queue.append(0)  # 起始房间ID
+	layout[0] = Vector2(3, 3)  # 起始房间在中心
 	visited[0] = true
 
-	# 方向偏移：上、右、下、左
-	var directions = [
-		Vector2(0, -1),  # 上
-		Vector2(1, 0),   # 右
-		Vector2(0, 1),   # 下
-		Vector2(-1, 0)   # 左
-	]
-
 	while queue.size() > 0:
-		var current = queue.pop_front()
-		var room = room_map[current.id]
-		var current_pos = Vector2(current.x, current.y)
+		var current_id = queue.pop_front()
+		var current_room = room_map[current_id]
+		var current_grid_pos = layout[current_id]
 
 		# 为每个连接的房间分配位置
-		var dir_index = 0
-		for connected_id in room.connected_rooms:
+		for connected_id in current_room.connected_rooms:
 			if visited.has(connected_id):
 				continue
 
-			# 尝试在当前房间的上下左右放置连接的房间
-			var placed = false
-			for attempt in range(4):
-				var try_dir = (dir_index + attempt) % 4
-				var new_pos = current_pos + directions[try_dir]
+			var connected_room = room_map[connected_id]
 
-				# 检查这个位置是否已被占用
-				var occupied = false
-				for existing_id in layout.keys():
-					if layout[existing_id] == new_pos:
-						occupied = true
-						break
+			# 根据实际的position差异判断方向
+			var dir_vec = connected_room.position - current_room.position
+			var grid_offset = Vector2.ZERO
 
-				if not occupied:
-					layout[connected_id] = new_pos
-					visited[connected_id] = true
-					queue.append({"id": connected_id, "x": int(new_pos.x), "y": int(new_pos.y)})
-					placed = true
+			# 判断主要方向
+			if abs(dir_vec.x) > abs(dir_vec.y):
+				# 东西向
+				if dir_vec.x > 0:
+					grid_offset = Vector2(1, 0)  # 东→右
+				else:
+					grid_offset = Vector2(-1, 0)  # 西→左
+			else:
+				# 南北向
+				if dir_vec.y > 0:
+					grid_offset = Vector2(0, 1)  # 南→下
+				else:
+					grid_offset = Vector2(0, -1)  # 北→上
+
+			var new_grid_pos = current_grid_pos + grid_offset
+
+			# 检查位置是否被占用，如果被占用则尝试其他方向
+			var occupied = false
+			for existing_id in layout.keys():
+				if layout[existing_id] == new_grid_pos:
+					occupied = true
 					break
 
-			if placed:
-				dir_index += 1
+			if not occupied:
+				layout[connected_id] = new_grid_pos
+				visited[connected_id] = true
+				queue.append(connected_id)
 
 	return layout
 

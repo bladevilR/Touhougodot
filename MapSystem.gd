@@ -393,10 +393,13 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 	else:
 		suitable_types = ["medium", "small", "single", "broken"]  # 内侧混合
 
+	# 直接根据类型筛选竹子
 	var suitable_indices = []
 	for i in range(bamboo_configs.size()):
 		if bamboo_configs[i].type in suitable_types:
 			suitable_indices.append(i)
+
+	# 如果筛选为空（防底），回退到全部
 	if suitable_indices.is_empty():
 		suitable_indices = range(bamboo_configs.size())
 
@@ -405,34 +408,36 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 	if not texture:
 		return 0
 
-	# 根据竹子类型和深度决定高度 - cluster类型缩小，single类型放大
-	var height_base = lerp(BAMBOO_TALL_HEIGHT, BAMBOO_SHORT_HEIGHT, depth_ratio)
-	if force_tall:
-		height_base = BAMBOO_TALL_HEIGHT * 1.3
-
-	# 应用深度缩放因子 (越深越高)
-	height_base *= depth_height_scale
-
-	# 根据类型调整缩放系数 - cluster类型缩小以避免过粗
-	var type_scale_mult: float
+	# 根据竹子类型确定合理的游戏内目标高度
+	# 素材原图很大（400-1200px），需要大幅缩小到游戏合适的尺寸
+	var target_height: float
 	match config.type:
 		"xlarge":
-			type_scale_mult = randf_range(0.35, 0.5)  # 减小，避免过粗
+			target_height = randf_range(200, 250)  # xlarge素材（原图1000-1200）→ 游戏内200-250
 		"large":
-			type_scale_mult = randf_range(0.32, 0.45)  # 减小，避免过粗
+			target_height = randf_range(150, 200)  # large素材（原图750-850）→ 游戏内150-200
 		"medium":
-			type_scale_mult = randf_range(0.4, 0.55)  # 减小
+			target_height = randf_range(120, 150)  # medium素材（原图580-650）→ 游戏内120-150
 		"small":
-			type_scale_mult = randf_range(0.45, 0.6)  # 减小
-		"single":
-			type_scale_mult = randf_range(0.8, 1.1)  # 减小，避免过大
-		"broken":
-			type_scale_mult = randf_range(0.4, 0.6)  # 大幅减小，断竹太大
-		_:
-			type_scale_mult = 0.5
+			target_height = randf_range(100, 120)  # small素材（原图500-520）→ 游戏内100-120
+		_:  # single, broken
+			target_height = randf_range(80, 100)   # 细竹子（原图380-460）→ 游戏内80-100
 
-	var target_height = height_base * type_scale_mult
-	var scale = target_height / texture.get_height()
+	# 计算基础缩放 - 根据原图高度缩放到目标高度
+	var base_scale = target_height / config.height
+	
+	# 使用近乎均匀的缩放，保持竹子原本的比例美感
+	# 稍微随机一点点差异(±5%)，但不要压扁或拉长
+	var scale_x = base_scale * randf_range(0.9, 1.05)
+	var scale_y = base_scale * randf_range(0.95, 1.1)
+	
+	# 对于某些特定类型微调
+	if config.type == "xlarge":
+		# xlarge 本身很宽，稍微收一点点 X
+		scale_x *= 0.9
+	elif config.type == "single":
+		# single 比较细，保持原样或微调
+		pass
 
 	# 透明度 - 边界竹子不需要透明，全部不透明
 	var alpha = 1.0
@@ -447,33 +452,30 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 		body.collision_layer = 2
 		body.collision_mask = 1  # 检测玩家碰撞
 
-		# 添加阴影（在sprite之前，让阴影在下层）
-		# 竹子的影子是细长的条状，下午斜阳效果
-		var bamboo_base_width = texture.get_width() * scale
-		# 下午的长影子：长度是竹子高度的1.2倍，模拟斜阳拉长效果
-		var bamboo_height = texture.get_height() * scale
-		var shadow_length = bamboo_height * 1.2  # 加长影子
+		# 添加简单的椭圆阴影
+		var bamboo_base_width = texture.get_width() * scale_x
+		var bamboo_height = texture.get_height() * scale_y
+		var shadow_length = bamboo_height * 1.5
 		var shadow_width = bamboo_base_width * 0.5
 		var shadow_size = Vector2(shadow_length, shadow_width)
-		# 直接创建阴影精灵
-		create_shadow_for_entity(body, shadow_size, Vector2(0, 0), 2.0) # 高度因子2.0，长影子
+		create_shadow_for_entity(body, shadow_size, Vector2(0, 0), 2.0)
 
 		var sprite = Sprite2D.new()
 		sprite.name = "Sprite"
 		sprite.texture = texture
-		sprite.scale = Vector2(scale, scale)
+		sprite.scale = Vector2(scale_x, scale_y)
 		sprite.centered = false
 		sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
 		sprite.modulate = Color(color_var, color_var + green_boost, color_var - 0.05, alpha)
 
-		# 应用竹子摇曳 Shader（传入缩放值）
-		_apply_bamboo_sway_shader(sprite, scale)
+		# 应用竹子摇曳 Shader（传入Y轴缩放值作为强度参考）
+		_apply_bamboo_sway_shader(sprite, scale_y)
 
 		body.add_child(sprite)
 
 		var collision = CollisionShape2D.new()
 		var shape = RectangleShape2D.new()
-		shape.size = Vector2(texture.get_width() * scale * 0.25, 20)
+		shape.size = Vector2(texture.get_width() * scale_x * 0.25, 20)
 		collision.shape = shape
 		collision.position = Vector2(0, -10)
 		body.add_child(collision)
@@ -485,7 +487,7 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 		area.collision_mask = 1  # 检测玩家
 		var area_collision = CollisionShape2D.new()
 		var area_shape = RectangleShape2D.new()
-		area_shape.size = Vector2(texture.get_width() * scale * 0.4, 30)
+		area_shape.size = Vector2(texture.get_width() * scale_x * 0.4, 30)
 		area_collision.shape = area_shape
 		area_collision.position = Vector2(0, -15)
 		area.add_child(area_collision)
@@ -496,33 +498,31 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 		border_bamboos.append(body)
 		wall_bodies.append(body) # Keep compatible
 	else:
-		# 无碰撞竹子 - 需要容器来放置sprite和shadow
+		# 无碰撞竹子
 		var container = Node2D.new()
 		container.position = pos
 
 		# 添加阴影
-		var bamboo_base_width = texture.get_width() * scale
-		var bamboo_height = texture.get_height() * scale
+		var bamboo_base_width = texture.get_width() * scale_x
+		var bamboo_height = texture.get_height() * scale_y
 		var shadow_length = bamboo_height * 1.2
 		var shadow_width = bamboo_base_width * 0.5
 		var shadow_size = Vector2(shadow_length, shadow_width)
-		create_shadow_for_entity(container, shadow_size, Vector2(0, 0), 2.0) # 高度因子2.0
+		create_shadow_for_entity(container, shadow_size, Vector2(0, 0), 2.0)
 
 		var sprite = Sprite2D.new()
 		sprite.texture = texture
-		sprite.scale = Vector2(scale, scale)
+		sprite.scale = Vector2(scale_x, scale_y)
 		sprite.centered = false
 		sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
 		sprite.position = pos
 		sprite.modulate = Color(color_var, color_var + green_boost, color_var - 0.05, alpha)
 
-		# 应用竹子摇曳 Shader（传入缩放值）
-		_apply_bamboo_sway_shader(sprite, scale)
+		# 应用竹子摇曳 Shader
+		_apply_bamboo_sway_shader(sprite, scale_y)
 
 		container.add_child(sprite)
 
-		# 所有竹子都添加到World以参与Y-sorting，不再区分远近
-		# 远景效果通过透明度和颜色变化实现
 		game_objects_parent.call_deferred("add_child", container)
 
 	return 1
@@ -613,27 +613,29 @@ func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	if not texture:
 		return 0
 
-	# 根据类型决定高度范围 - cluster类型缩小，single类型放大，让视觉更均匀
+	# 根据竹子类型确定合理的游戏内目标高度（与边界竹子一致）
 	var target_height: float
 	match config.type:
 		"xlarge":
-			# 竹丛很宽，进一步缩小高度让它不那么粗大
-			target_height = randf_range(BAMBOO_TALL_HEIGHT * 0.4, BAMBOO_TALL_HEIGHT * 0.6)
+			target_height = randf_range(200, 250)
 		"large":
-			target_height = randf_range(BAMBOO_TALL_HEIGHT * 0.35, BAMBOO_TALL_HEIGHT * 0.55)
+			target_height = randf_range(150, 200)
 		"medium":
-			target_height = randf_range(BAMBOO_MEDIUM_HEIGHT * 0.5, BAMBOO_MEDIUM_HEIGHT * 0.7)
+			target_height = randf_range(120, 150)
 		"small":
-			target_height = randf_range(BAMBOO_MEDIUM_HEIGHT * 0.45, BAMBOO_MEDIUM_HEIGHT * 0.6)
-		"single":
-			# 单棵竹子比较细，但不要太大
-			target_height = randf_range(BAMBOO_MEDIUM_HEIGHT * 0.7, BAMBOO_MEDIUM_HEIGHT * 0.95)
-		"broken":
-			target_height = randf_range(BAMBOO_SHORT_HEIGHT * 0.4, BAMBOO_SHORT_HEIGHT * 0.7)  # 大幅减小，断竹太大
+			target_height = randf_range(100, 120)
 		_:
-			target_height = BAMBOO_MEDIUM_HEIGHT * 0.5
+			target_height = randf_range(80, 100)
 
-	var scale = target_height / texture.get_height()
+	# 计算缩放 - 根据原图高度
+	var scale = target_height / config.height
+	
+	# 使用自然缩放，保持比例
+	var scale_x = scale * randf_range(0.9, 1.05)
+	var scale_y = scale * randf_range(0.95, 1.1)
+	
+	if config.type == "xlarge":
+		scale_x *= 0.9 # 微调
 
 	# 创建 StaticBody2D
 	var body = StaticBody2D.new()
@@ -643,18 +645,18 @@ func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	body.collision_mask = 1  # 检测玩家碰撞
 
 	# 添加阴影 - 细长条状
-	var bamboo_base_width = texture.get_width() * scale
-	var bamboo_height = texture.get_height() * scale
-	var shadow_length = bamboo_height * 1.2
-	var shadow_width = bamboo_base_width * 0.5
+	var bamboo_base_width = texture.get_width() * scale_x
+	var bamboo_height = texture.get_height() * scale_y
+	var shadow_length = bamboo_height * 1.5
+	var shadow_width = bamboo_base_width * 0.6
 	var shadow_size = Vector2(shadow_length, shadow_width)
-	create_shadow_for_entity(body, shadow_size, Vector2(0, 0), 2.0) # 高度因子2.0
+	create_shadow_for_entity(body, shadow_size, Vector2(0, 0), 2.5)
 
 	# 精灵（底部锚点）+ 随机颜色变化
 	var sprite = Sprite2D.new()
 	sprite.name = "Sprite"
 	sprite.texture = texture
-	sprite.scale = Vector2(scale, scale)
+	sprite.scale = Vector2(scale_x, scale_y)
 	sprite.centered = false
 	sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
 
@@ -663,14 +665,14 @@ func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	sprite.modulate = Color(color_var, color_var + green_boost, color_var - 0.03, 1.0)
 
 	# 应用竹子摇曳 Shader（传入缩放值）
-	_apply_bamboo_sway_shader(sprite, scale)
+	_apply_bamboo_sway_shader(sprite, scale_y)
 
 	body.add_child(sprite)
 
 	# 底部碰撞
 	var collision = CollisionShape2D.new()
 	var shape = RectangleShape2D.new()
-	var collision_width = texture.get_width() * scale * 0.3
+	var collision_width = texture.get_width() * scale_x * 0.3
 	var collision_height = 25
 	shape.size = Vector2(collision_width, collision_height)
 	collision.shape = shape
@@ -684,7 +686,7 @@ func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	area.collision_mask = 1  # 检测玩家
 	var area_collision = CollisionShape2D.new()
 	var area_shape = RectangleShape2D.new()
-	area_shape.size = Vector2(collision_width * 1.5, 35)
+	area_shape.size = Vector2(texture.get_width() * scale_x * 0.5, 35)
 	area_collision.shape = area_shape
 	area_collision.position = Vector2(0, -17)
 	area.add_child(area_collision)
@@ -884,16 +886,20 @@ var flicker_timer: float = 0.0
 func create_lighting(style: String = "outskirts"):
 	"""光照系统入口"""
 	_clear_lighting()
-	
+
 	if style == "outskirts":
 		_create_lighting_outskirts()
+	elif style == "deep_forest_mist":
+		_create_lighting_deep_forest_mist()
+	elif style == "deep_forest_beam":
+		_create_lighting_deep_forest_beam()
 	else:
-		_create_lighting_deep_forest()
+		_create_lighting_deep_forest_mist()
 
 func update_environment(depth: int):
 	"""根据房间深度更新环境（光照、竹子高度）"""
 	print("MapSystem: Updating environment for depth ", depth)
-	
+
 	# 1. 调整竹子高度：越深越高
 	if depth < 3:
 		# 外围：标准高度
@@ -903,12 +909,54 @@ func update_environment(depth: int):
 		# 深处：更高更密
 		depth_height_scale = 1.5
 		BAMBOO_TALL_HEIGHT = 700.0 # 巨型竹子
-		
+
+		# 深林深处：清除旧竹子并生成更高更密的竹子
+		_clear_interior_bamboos()
+		_spawn_tall_bamboos_for_deep_forest()
+
 	# 2. 切换光照风格
 	if depth < 3:
 		create_lighting("outskirts")
 	else:
-		create_lighting("deep_forest")
+		# 深林中随机选择光照风格（雾气或光柱）
+		var room_manager = get_tree().get_first_node_in_group("room_manager")
+		var current_room_index = 0
+		if room_manager:
+			current_room_index = room_manager.current_room_index
+
+		# 根据房间索引决定光照类型（保证一致性）
+		if current_room_index % 2 == 0:
+			create_lighting("deep_forest_mist")  # 雾气
+		else:
+			create_lighting("deep_forest_beam")  # 光柱
+
+func _clear_interior_bamboos():
+	"""清除房间内部的竹子（不包括边界墙）"""
+	for child in get_children():
+		if child.is_in_group("interior_bamboo"):
+			child.queue_free()
+
+func _spawn_tall_bamboos_for_deep_forest():
+	"""在竹林深处生成高耸的竹子"""
+	print("[MapSystem] 生成竹林深处的高耸竹子...")
+
+	# 生成30-40棵高耸竹子，散布在地图中
+	var tall_bamboo_count = randi_range(30, 40)
+	for i in range(tall_bamboo_count):
+		var pos = Vector2(
+			randf_range(400, MAP_WIDTH - 400),
+			randf_range(400, MAP_HEIGHT - 400)
+		)
+
+		# 使用create_interior_bamboo_varied生成高耸竹子
+		# 只使用xlarge和large类型
+		var bamboo_sprite = create_interior_bamboo_varied(pos, ["xlarge", "large"])
+
+		# 标记为内部竹子，方便之后清理
+		if bamboo_sprite and is_instance_valid(bamboo_sprite):
+			bamboo_sprite.add_to_group("interior_bamboo")
+
+	print("[MapSystem] 竹林深处高耸竹子生成完成")
 
 func _clear_lighting():
 	"""清理旧的光照组件"""
@@ -920,22 +968,21 @@ func _clear_lighting():
 			child.queue_free()
 
 func _create_lighting_outskirts():
-	"""竹林外围风格 - 强烈的树影光照对比 (无光柱，靠环境光和影子)"""
+	"""竹林外围风格 - 强烈的树影光照对比"""
 	print("MapSystem: Creating OUTSKIRTS lighting (High Contrast)...")
-	
-	# CanvasLayer (用于滤镜) - Layer 1 确保覆盖在物体上进行压暗
+
+	# CanvasLayer (用于滤镜) - Layer 1 确保覆盖在物体上
 	var atmosphere_layer = CanvasLayer.new()
 	atmosphere_layer.name = "AtmosphereLayer"
-	atmosphere_layer.layer = 1 
+	atmosphere_layer.layer = 1
 	get_tree().root.add_child(atmosphere_layer)
 
-	# 1. 基础压暗 (Multiply)
-	# 使用 0.6 的亮度，配合高对比度，亮部会亮，暗部会暗
+	# 1. 轻微压暗 (Multiply) - 提高亮度，不要太黑
 	var darkness_overlay = ColorRect.new()
-	darkness_overlay.color = Color(0.6, 0.6, 0.65) 
+	darkness_overlay.color = Color(0.85, 0.85, 0.88)  # 从0.6提高到0.85，保持可见度
 	darkness_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	darkness_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
+
 	var mat_mul = CanvasItemMaterial.new()
 	mat_mul.blend_mode = CanvasItemMaterial.BLEND_MODE_MUL
 	darkness_overlay.material = mat_mul
@@ -945,91 +992,187 @@ func _create_lighting_outskirts():
 	var world_env = WorldEnvironment.new()
 	var env = Environment.new()
 	env.background_mode = Environment.BG_CANVAS
-	
-	env.glow_enabled = true
-	env.glow_intensity = 0.6
-	env.glow_strength = 0.8
-	env.glow_bloom = 0.05
-	
-	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.35 # 高对比度
-	env.adjustment_saturation = 1.1
-	
-	world_env.environment = env
-	get_parent().add_child(world_env)
 
-func _create_lighting_deep_forest():
-	"""竹林深处风格 - 斑斓光影 (高对比度 + 噪声光斑 + 中心聚光)"""
-	print("MapSystem: Creating DEEP FOREST lighting...")
-	
+	env.glow_enabled = true
+	env.glow_intensity = 0.5
+	env.glow_strength = 0.7
+	env.glow_bloom = 0.03
+
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.25  # 保持高对比度
+	env.adjustment_saturation = 1.05
+	env.adjustment_brightness = 1.1  # 增加亮度
+
+	world_env.environment = env
+	get_parent().call_deferred("add_child", world_env)
+
+func _create_lighting_deep_forest_mist():
+	"""竹林深处风格 - 雾气笼罩效果（蓝白色雾气）"""
+	print("MapSystem: Creating DEEP FOREST MIST lighting...")
+
 	# CanvasLayer
 	var atmosphere_layer = CanvasLayer.new()
 	atmosphere_layer.name = "AtmosphereLayer"
-	atmosphere_layer.layer = 1 
+	atmosphere_layer.layer = 1
 	get_tree().root.add_child(atmosphere_layer)
 
-	# 1. 基础压暗 (Multiply)
+	# 1. 中度压暗 (Multiply)
 	var darkness_overlay = ColorRect.new()
-	darkness_overlay.color = Color(0.35, 0.35, 0.45) # 较暗
+	darkness_overlay.color = Color(0.65, 0.65, 0.70)
 	darkness_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	darkness_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
+
 	var mat_mul = CanvasItemMaterial.new()
 	mat_mul.blend_mode = CanvasItemMaterial.BLEND_MODE_MUL
 	darkness_overlay.material = mat_mul
 	atmosphere_layer.add_child(darkness_overlay)
 
-	# 2. 斑驳阳光层 (Add)
-	var sunlight_overlay = TextureRect.new()
-	sunlight_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	sunlight_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sunlight_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	
+	# 2. 雾气层 (Add) - ��白色雾气，不要黄色
+	var mist_overlay = TextureRect.new()
+	mist_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mist_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mist_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+
 	var noise = FastNoiseLite.new()
 	noise.seed = randi()
 	noise.frequency = 0.002
 	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-	
+
 	var noise_tex = NoiseTexture2D.new()
 	noise_tex.noise = noise
 	noise_tex.width = 512
 	noise_tex.height = 512
 	noise_tex.seamless = true
-	
-	sunlight_overlay.texture = noise_tex
-	sunlight_overlay.modulate = Color(0.6, 0.5, 0.3, 0.2)
-	
+
+	mist_overlay.texture = noise_tex
+	mist_overlay.modulate = Color(0.7, 0.75, 0.9, 0.3)  # 蓝白色雾气
+
 	var mat_add = CanvasItemMaterial.new()
 	mat_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	sunlight_overlay.material = mat_add
-	atmosphere_layer.add_child(sunlight_overlay)
-	
-	# 3. 中心上帝光
-	var center_beam = TextureRect.new()
-	center_beam.texture = _create_light_texture(512, 2.5)
-	center_beam.set_anchors_preset(Control.PRESET_CENTER)
-	center_beam.position = Vector2(get_viewport_rect().size.x/2 - 1000, get_viewport_rect().size.y/2 - 1000)
-	center_beam.size = Vector2(2000, 2000)
-	center_beam.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	center_beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	center_beam.modulate = Color(1.0, 0.9, 0.7, 0.3)
-	center_beam.material = mat_add
-	atmosphere_layer.add_child(center_beam)
+	mist_overlay.material = mat_add
+	atmosphere_layer.add_child(mist_overlay)
 
-	# WorldEnvironment
+	# 3. WorldEnvironment
 	var world_env = WorldEnvironment.new()
 	var env = Environment.new()
 	env.background_mode = Environment.BG_CANVAS
+
 	env.glow_enabled = true
-	env.glow_intensity = 1.0
-	env.glow_strength = 0.95
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
-	env.glow_hdr_threshold = 0.8
+	env.glow_intensity = 0.6
+	env.glow_strength = 0.8
+	env.glow_bloom = 0.1
+
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.2
+	env.adjustment_contrast = 1.3
 	env.adjustment_saturation = 1.1
+	env.adjustment_brightness = 1.05
+
 	world_env.environment = env
-	get_parent().add_child(world_env)
+	get_parent().call_deferred("add_child", world_env)
+
+func _create_lighting_deep_forest_beam():
+	"""竹林深处风格 - 纯净光柱效果（斜射上帝光）"""
+	print("MapSystem: Creating DEEP FOREST BEAM lighting (God Rays)...")
+
+	# CanvasLayer
+	var atmosphere_layer = CanvasLayer.new()
+	atmosphere_layer.name = "AtmosphereLayer"
+	atmosphere_layer.layer = 1
+	get_tree().root.add_child(atmosphere_layer)
+
+	# 1. 深度压暗 (Multiply) - 保持黑暗，衬托光柱
+	var darkness_overlay = ColorRect.new()
+	darkness_overlay.color = Color(0.4, 0.45, 0.5)
+	darkness_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	darkness_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var mat_mul = CanvasItemMaterial.new()
+	mat_mul.blend_mode = CanvasItemMaterial.BLEND_MODE_MUL
+	darkness_overlay.material = mat_mul
+	atmosphere_layer.add_child(darkness_overlay)
+
+	# 2. 移除了雾气层，确保空气通透
+
+	# 3. 创建斜射光柱 (God Rays) - 减少数量，增加质感
+	var mat_add = CanvasItemMaterial.new()
+	mat_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+
+	# 减少光柱数量以优化性能，但单个光柱更长更明显
+	var beam_count = 7
+	for i in range(beam_count):
+		# 光柱位置分布在屏幕上方和左侧，向右下投射
+		var beam_pos = Vector2(
+			randf_range(100, MAP_WIDTH - 100),
+			randf_range(100, MAP_HEIGHT - 100)
+		)
+		
+		# 视觉光柱（拉长的纹理）
+		var beam = TextureRect.new()
+		# 关键：创建细长的矩形光柱，而不是正方形
+		beam.texture = _create_light_beam_texture(256)
+		beam.position = beam_pos
+		# 尺寸：宽150-250，长1000-1500 (超级长)
+		beam.size = Vector2(randf_range(150, 250), randf_range(1000, 1500))
+		# 旋转中心在顶部中心
+		beam.pivot_offset = Vector2(beam.size.x / 2, 0)
+		# 统一倾斜角度：约 -30度 (左上往右下)
+		beam.rotation = deg_to_rad(-30 + randf_range(-5, 5))
+		beam.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		
+		# 颜色：暖白/淡金
+		var beam_color = Color(1.0, 0.95, 0.8, 0.35) # 提高不透明度
+		beam.modulate = beam_color
+		
+		beam.material = mat_add
+		atmosphere_layer.add_child(beam)
+
+		# 实际光源 (PointLight2D) - 照亮地面物体
+		# 只在光柱落点附近添加光源，而不是整个光柱
+		var light = PointLight2D.new()
+		light.texture = _create_light_beam_texture(512)
+		light.texture_scale = 2.0
+		light.energy = 2.0
+		light.color = beam_color
+		light.blend_mode = Light2D.BLEND_MODE_ADD
+		light.position = beam_pos + Vector2(200, 400) 
+		light.z_index = -10
+		add_child(light)
+
+	# 4. WorldEnvironment - 增强辉光
+	var world_env = WorldEnvironment.new()
+	var env = Environment.new()
+	env.background_mode = Environment.BG_CANVAS
+
+	env.glow_enabled = true
+	env.glow_intensity = 0.6
+	env.glow_strength = 1.0
+	env.glow_bloom = 0.15
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.4 # 高对比度
+	env.adjustment_saturation = 0.95
+	env.adjustment_brightness = 1.0
+
+	world_env.environment = env
+	get_parent().call_deferred("add_child", world_env)
+
+func _create_light_beam_texture(size: int) -> ImageTexture:
+	"""创建光柱纹理 - 中心亮边缘衰减"""
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var center = Vector2(size / 2.0, size / 2.0)
+	var max_dist = size / 2.0
+
+	for x in range(size):
+		for y in range(size):
+			var dist = Vector2(x, y).distance_to(center)
+			var t = clamp(dist / max_dist, 0.0, 1.0)
+			# 使用指数衰减曲线
+			var brightness = pow(1.0 - t, 3.0)
+			image.set_pixel(x, y, Color(brightness, brightness, brightness, 1.0))
+
+	return ImageTexture.create_from_image(image)
 
 func _create_light_texture(size: int, falloff: float) -> ImageTexture:
 	"""创建用于加法混合的光斑纹理 - 中心亮边缘快速衰减"""

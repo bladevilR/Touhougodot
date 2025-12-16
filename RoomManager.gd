@@ -60,8 +60,11 @@ func _ready():
 	# 生成房间地图网络
 	_generate_room_map()
 
-	# 延迟启动第一个房间（等待场景加载完成）
-	call_deferred("_start_room", 0)
+	# 等待所有管理器初始化完成（确保 RoomLayoutManager 已准备好）
+	await get_tree().create_timer(0.1).timeout
+
+	# 启动第一个房间
+	_start_room(0)
 
 func _on_game_started():
 	"""游戏开始时记录时间"""
@@ -80,6 +83,7 @@ func _generate_room_map():
 	start_room.position = Vector2(0, 0) # 原点
 	start_room.depth = 0
 	start_room.is_cleared = false # 起始房间也要战斗！
+	start_room.is_visited = false  # 确保未访问
 	room_map.append(start_room)
 	room_id += 1
 
@@ -92,6 +96,7 @@ func _generate_room_map():
 		room.type = RoomType.NORMAL
 		room.position = start_room.position + depth1_offsets[i]
 		room.depth = 1
+		room.is_cleared = false  # 确保需要战斗
 		start_room.connected_rooms.append(room.id)
 		room.connected_rooms.append(start_room.id)
 		depth1_rooms.append(room)
@@ -105,6 +110,7 @@ func _generate_room_map():
 		var room = RoomNode.new()
 		room.id = room_id
 		room.type = RoomType.NORMAL
+		room.is_cleared = false  # 确保需要战斗
 		# 往西和往北延伸
 		var offset = Vector2(-400, 0) if i == 0 else Vector2(0, -400)
 		room.position = depth1_rooms[0].position + offset
@@ -114,12 +120,13 @@ func _generate_room_map():
 		depth2_rooms.append(room)
 		room_map.append(room)
 		room_id += 1
-	
+
 	# 从右(东)房间延伸出2个
 	for i in range(2):
 		var room = RoomNode.new()
 		room.id = room_id
 		room.type = RoomType.NORMAL
+		room.is_cleared = false  # 确保需要战斗
 		# 往东和往北延伸
 		var offset = Vector2(400, 0) if i == 0 else Vector2(0, -400)
 		room.position = depth1_rooms[2].position + offset
@@ -137,15 +144,16 @@ func _generate_room_map():
 		var room = RoomNode.new()
 		room.id = room_id
 		room.type = special_types[i]
+		room.is_cleared = false  # 特殊房间也标记为未清理（会在进入时自动开门）
 		# 简单堆叠在远处，坐标不再重要，只要保持不重叠即可，因为之前的连接已经决定了拓扑
-		room.position = Vector2(0, -800 - i * 400) 
+		room.position = Vector2(0, -800 - i * 400)
 		room.depth = 3
-		
+
 		# 连接到深度2的房间 (这里简化连接逻辑，随便连一个没连满的)
 		var parent_room = depth2_rooms[i % depth2_rooms.size()]
 		parent_room.connected_rooms.append(room.id)
 		room.connected_rooms.append(parent_room.id)
-		
+
 		depth3_rooms.append(room)
 		room_map.append(room)
 		room_id += 1
@@ -161,13 +169,14 @@ func _generate_room_map():
 			var room = RoomNode.new()
 			room.id = room_id
 			room.type = RoomType.NORMAL
+			room.is_cleared = false  # 确保需要战斗
 			room.position = Vector2(-400 + i * 800, -1600 - d * 400)
 			room.depth = 4 + d
-			
+
 			var parent = last_rooms[i % last_rooms.size()]
 			parent.connected_rooms.append(room.id)
 			room.connected_rooms.append(parent.id)
-			
+
 			new_rooms.append(room)
 			room_map.append(room)
 			room_id += 1
@@ -177,6 +186,7 @@ func _generate_room_map():
 	var boss_room = RoomNode.new()
 	boss_room.id = room_id
 	boss_room.type = RoomType.BOSS
+	boss_room.is_cleared = false  # Boss房间需要战斗
 	boss_room.position = Vector2(0, -2400)
 	boss_room.depth = 6
 	for r in last_rooms:
@@ -218,11 +228,13 @@ func _start_room(room_index: int):
 	# 发送UI更新信号
 	SignalBus.room_info_updated.emit(_get_room_type_name(current_room_type), room_index)
 
+	# === 测试模式：立即生成所有门，保持打开 ===
+	_spawn_exit_doors()
+	door_opened.emit()
+
 	# 如果房间已清理，直接开门，跳过生成敌人
 	if is_room_cleared:
 		print("房间已清理，跳过战斗")
-		_spawn_exit_doors()
-		door_opened.emit()
 		return
 
 	# 根据房间类型执行不同逻辑
@@ -278,13 +290,13 @@ func _on_room_cleared():
 
 	is_room_cleared = true
 	room_map[current_room_index].is_cleared = true # 标记为已清理
-	
-	room_cleared.emit()
-	print("房间清理完成! 门已打开")
 
-	# 打开出口门（根据连接的房间数量生成多个门）
-	_spawn_exit_doors()
-	door_opened.emit()
+	room_cleared.emit()
+	print("房间清理完成!")
+
+	# === 测试模式：门已在_start_room中生成，这里不再重复生成 ===
+	# _spawn_exit_doors()
+	# door_opened.emit()
 
 func _spawn_exit_doors():
 	"""生成出口门/传送门 - 根据连接房间的相对位置 (修复拓扑)"""
@@ -346,7 +358,7 @@ func _spawn_exit_doors():
 		door.call_deferred("set_door_direction", door_data.dir)
 		
 		# 连接信号
-		door.door_entered.connect(_on_door_entered.bind(target_id, door_data.dir))
+		door.door_entered.connect(_on_door_entered.bind(target_id))
 		
 		exit_doors.append(door)
 		get_parent().add_child(door)
@@ -356,7 +368,7 @@ func _spawn_exit_doors():
 
 	print("生成了 ", exit_doors.size(), " 个定向出口门")
 
-func _on_door_entered(from_direction: int, target_room_id: int, _enter_dir: int):
+func _on_door_entered(from_direction: int, target_room_id: int):
 	"""玩家进入传送门"""
 	print("从方向 ", from_direction, " 进入传送门，前往房间 ", target_room_id)
 

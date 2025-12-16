@@ -1,7 +1,7 @@
 extends Node
 
 # CameraShake - 屏幕震动效果
-# 原项目实现：GameCanvas.tsx line 648-660
+# 简单有效的震动方案
 
 var camera: Camera2D = null
 
@@ -43,7 +43,6 @@ func _on_screen_shake(duration: float, intensity: float):
 	duration: 震动持续时间（秒）
 	intensity: 震动强度（像素）
 	"""
-	# 原项目：screenShakeRef.current.duration = Math.max(screenShakeRef.current.duration, duration)
 	# 如果新的震动更长，延长持续时间；如果强度更大，使用更大的强度
 	shake_duration = max(shake_duration, duration)
 	shake_intensity = max(shake_intensity, intensity)

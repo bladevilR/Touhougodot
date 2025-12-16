@@ -1299,36 +1299,51 @@ func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dict
 
 	# 伤害检测
 	await get_tree().process_frame
-	
+
 	var hit_enemies = attack_area.get_overlapping_bodies()
 	var first_hit = true
-	
+
 	if hit_enemies.size() > 0:
 		# === 4. 打击感核心：定帧 (Hit Stop) ===
 		Engine.time_scale = 0.05
 		get_tree().create_timer(0.1, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
-		
+
 		# 屏幕大震动
 		SignalBus.screen_shake.emit(0.4, 20.0)
-		
+
+		# === 5. 只击飞最近的一只敌人 ===
+		# 找到最近的敌人
+		var nearest_enemy = null
+		var min_distance = INF
 		for body in hit_enemies:
-			if body.is_in_group("enemy"):
-				if body.has_method("apply_knockback"):
-					var knockback_dir = (body.global_position - player.global_position).normalized()
-					var force = 5000.0 # 暴力击飞
-					
-					# === 5. 第一个敌人特效：旋转 + 超级击飞 ===
-					if first_hit:
-						force = 10000.0 # 超级暴力击飞
-						# 旋转动画
-						if body.get_node_or_null("Sprite2D"):
-							var tween = create_tween()
-							# 0.5秒内转5圈
-							tween.tween_property(body.get_node("Sprite2D"), "rotation", PI * 10, 0.5).as_relative()
-						first_hit = false
-					
-					body.apply_knockback(knockback_dir, force)
-				
+			if is_instance_valid(body) and body.is_in_group("enemy"):
+				var distance = player.global_position.distance_to(body.global_position)
+				if distance < min_distance:
+					min_distance = distance
+					nearest_enemy = body
+
+		# 只对最近的敌人应用超级击飞 + 旋转 + 螺旋线特效
+		if nearest_enemy and nearest_enemy.has_method("apply_knockback"):
+			var knockback_dir = (nearest_enemy.global_position - player.global_position).normalized()
+			var force = 10000.0 # 超级暴力击飞
+
+			# 旋转动画 + 螺旋线特效
+			if "sprite" in nearest_enemy and nearest_enemy.sprite:
+				var tween = get_tree().create_tween()
+				# 0.5秒内转5圈
+				tween.tween_property(nearest_enemy.sprite, "rotation", PI * 10, 0.5).as_relative()
+
+				# 启动螺旋线特效
+				if nearest_enemy.has_method("start_spiral_trail"):
+					nearest_enemy.start_spiral_trail(0.5)  # 持续0.5秒（与旋转同步）
+
+			nearest_enemy.apply_knockback(knockback_dir, force)
+
+		# === 6. 延迟0.3秒后再造成伤害，让玩家看到击飞效果 ===
+		await get_tree().create_timer(0.3).timeout
+
+		for body in hit_enemies:
+			if is_instance_valid(body) and body.is_in_group("enemy"):
 				if body.has_method("take_damage"):
 					body.take_damage(final_damage)
 

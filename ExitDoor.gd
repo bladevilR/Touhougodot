@@ -279,6 +279,9 @@ func open_door():
 
 func close_door():
 	"""关闭门（重新封印）"""
+	# 测试模式：禁用门关闭，保持所有门打开
+	return
+
 	if not is_active or is_closing:
 		return
 
