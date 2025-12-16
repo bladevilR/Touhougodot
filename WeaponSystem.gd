@@ -242,7 +242,7 @@ func _apply_upgrade_effect(weapon_id: String, weapon_data: Dictionary, upgrade_i
 	if not weapon_data.has("upgrade_bonuses"):
 		weapon_data["upgrade_bonuses"] = {}
 
-	# 根据升��ID应用效果
+	# 根据升ID应用效果
 	match upgrade_id:
 		# === Homing Amulet (博丽符纸) ===
 		"amulet_count":
@@ -911,7 +911,7 @@ func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 
 		var bullet_config = {
 			"weapon_id": weapon_id,
-			"bullet_color": Color(1.0, 0.5, 0.1),  # 橙黄色
+			"bullet_color": Color(0.8, 0.4, 0.1, 0.3),  # 变暗，降低透明度 (低调点)
 			"damage": config.base_damage * stats.might,
 			"speed": 0.0,
 			"lifetime": 999999.0,  # 超长生命周期，基本不会消失
@@ -976,7 +976,7 @@ func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Di
 				"weapon_id": weapon_id,
 				"bullet_color": _get_weapon_color(weapon_id, config),
 				"damage": config.base_damage * stats.might * damage_mult,
-				"speed": 0.0,  # 环绕弹幕不需要速度，位��跟随玩家
+				"speed": 0.0,  # 环绕弹幕不需要速度，位跟随玩家
 				"lifetime": config.cooldown_max,  # 生命周期等于冷却时间，保持连续
 				"direction": Vector2.ZERO,
 				"penetration": config.penetration,
@@ -1220,160 +1220,119 @@ func _fire_aura(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dicti
 
 
 func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
-	"""近战攻击 - 点击触发的火焰踢，带火焰粒子拖尾"""
-	var weapon_data = weapons.get(weapon_id, {})
+	"""近战攻击 - 强力踢击 (定帧 + 击飞 + 旋转 + 火焰)"""
+	
+	# 强制设置3秒冷却
+	melee_cooldowns[weapon_id] = 3.0
 
-	# 获取伤害倍数
-	var level_bonuses = weapon_data.get("level_bonuses", {})
-	var damage_mult = level_bonuses.get("damage_mult", 1.0)
-	var upgrade_bonuses = weapon_data.get("upgrade_bonuses", {})
-	damage_mult *= upgrade_bonuses.get("damage_mult", 1.0)
+	# 伤害计算
+	var final_damage = config.base_damage * stats.might * 8.0 
 
-	# 计算最终伤害
-	var final_damage = config.base_damage * stats.might * damage_mult
-
-	# 获取攻击方向（朝向鼠标）
+	# 获取攻击方向
 	var mouse_pos = get_global_mouse_position()
 	var direction = (mouse_pos - player.global_position).normalized()
 
-	# 攻击参数
-	var sweep_angle = config.projectile_spread  # 扇形角度
-	var sweep_range = config.explosion_radius   # 攻击范围
-
-	# === 创建攻击动画 ===
-	# 隐藏原来的角色sprite
+	# === 1. 攻击动画 ===
 	var player_sprite = player.get_node_or_null("Sprite2D")
-	if player_sprite:
-		player_sprite.visible = false
-
+	if player_sprite: player_sprite.visible = false
+	
 	var attack_sprite = Sprite2D.new()
 	attack_sprite.texture = load("res://assets/attack.png")
-	attack_sprite.hframes = 2  # 2帧横向排列
-	attack_sprite.frame = melee_attack_frame  # 交替显示
-	melee_attack_frame = (melee_attack_frame + 1) % 2  # 下次显示另一帧
-	attack_sprite.scale = Vector2(0.1, 0.1)  # 缩放匹配角色大小
-	attack_sprite.global_position = player.global_position  # 显示在角色位置
-	# 根据方向翻转
-	if direction.x < 0:
-		attack_sprite.flip_h = true
+	attack_sprite.hframes = 2
+	attack_sprite.frame = melee_attack_frame
+	melee_attack_frame = (melee_attack_frame + 1) % 2
+	attack_sprite.scale = Vector2(0.1, 0.1)
+	attack_sprite.global_position = player.global_position
+	if direction.x < 0: attack_sprite.flip_h = true
 	get_tree().current_scene.add_child(attack_sprite)
-
-	# 0.2秒后清理动画，恢复角色显示
-	get_tree().create_timer(0.2).timeout.connect(func():
-		if is_instance_valid(attack_sprite):
-			attack_sprite.queue_free()
-		if is_instance_valid(player_sprite):
-			player_sprite.visible = true
+	
+	get_tree().create_timer(0.3).timeout.connect(func():
+		if is_instance_valid(attack_sprite): attack_sprite.queue_free()
+		if is_instance_valid(player_sprite): player_sprite.visible = true
 	)
 
-	# === 创建攻击判定区域 ===
-	var attack_area = Area2D.new()
-	attack_area.name = "MeleeAttack"
-	attack_area.global_position = player.global_position
-
-	# 扇形碰撞（多个圆形近似）
-	var segments = 5
-	for i in range(segments):
-		var angle_offset = -sweep_angle / 2.0 + (sweep_angle * i / (segments - 1))
-		var seg_dir = direction.rotated(angle_offset)
-
-		var collision = CollisionShape2D.new()
-		var shape = CircleShape2D.new()
-		shape.radius = sweep_range / segments
-		collision.shape = shape
-		collision.position = seg_dir * (sweep_range * 0.6)
-		attack_area.add_child(collision)
-
-	attack_area.collision_layer = 0
-	attack_area.collision_mask = 4  # 敌人层
-
-	get_tree().current_scene.add_child(attack_area)
-
-	# === 创建火焰粒子效果 (GPUParticles2D) ===
+	# === 2. 火焰特效 ===
 	var particles = GPUParticles2D.new()
-	particles.name = "FlameParticles"
-	particles.global_position = player.global_position + direction * (sweep_range * 0.5)
-	particles.rotation = direction.angle()
-	particles.emitting = true
-	particles.one_shot = true
-	particles.explosiveness = 0.8  # 粒子同时爆发
-	particles.amount = 20
-	particles.lifetime = 0.6
-
-	# 粒子材质
 	var mat = ParticleProcessMaterial.new()
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	mat.emission_sphere_radius = 20.0
-
-	# 方向：主要朝攻击方向，稍微向上飘
-	mat.direction = Vector3(1, -0.5, 0)  # 向前+向上
-	mat.spread = 30.0  # 30度散布
-
-	# 速度
-	mat.initial_velocity_min = 50.0
-	mat.initial_velocity_max = 100.0
-
-	# 重力：向上飘
-	mat.gravity = Vector3(0, -80, 0)
-
-	# 缩放：从小开始，然后缩小到0（火焰熄灭效果）
-	mat.scale_min = 0.05
-	mat.scale_max = 0.12
-	var scale_curve = Curve.new()
-	scale_curve.add_point(Vector2(0, 1.0))
-	scale_curve.add_point(Vector2(1, 0.0))
-	var scale_curve_tex = CurveTexture.new()
-	scale_curve_tex.curve = scale_curve
-	mat.scale_curve = scale_curve_tex
-
-	# 颜色：橙红渐变到透明
-	var color_ramp = Gradient.new()
-	color_ramp.set_color(0, Color(1.0, 0.6, 0.1, 1.0))  # 橙黄
-	color_ramp.set_color(1, Color(1.0, 0.2, 0.0, 0.0))  # 红色透明
-	var color_tex = GradientTexture1D.new()
-	color_tex.gradient = color_ramp
-	mat.color_ramp = color_tex
-
+	mat.direction = Vector3(direction.x, direction.y, 0)
+	mat.spread = 20.0
+	mat.initial_velocity_min = 200.0
+	mat.initial_velocity_max = 300.0
+	mat.gravity = Vector3(0, 0, 0)
+	mat.scale_min = 0.1
+	mat.scale_max = 0.2
+	mat.color = Color(1.0, 0.4, 0.1)
 	particles.process_material = mat
-
-	# 加载火焰纹理
-	var flame_texture = load("res://assets/map/flame.png")
-	if flame_texture:
-		particles.texture = flame_texture
-
-	# 加法混合模式：黑色背景变透明，火焰发光
+	# 使用默认白色方块如果没图
+	var img = Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	particles.texture = ImageTexture.create_from_image(img)
+	
+	particles.emitting = true
+	particles.one_shot = true
+	particles.explosiveness = 0.9
+	particles.amount = 30
+	particles.lifetime = 0.5
+	particles.global_position = player.global_position
+	particles.z_index = 50
+	
 	var canvas_mat = CanvasItemMaterial.new()
 	canvas_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	particles.material = canvas_mat
-
+	
 	get_tree().current_scene.add_child(particles)
+	get_tree().create_timer(1.0).timeout.connect(func(): particles.queue_free())
 
-	# === 伤害检测 ===
+	# === 3. 伤害区域 ===
+	var attack_area = Area2D.new()
+	attack_area.global_position = player.global_position
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = 100.0
+	collision.shape = shape
+	attack_area.add_child(collision)
+	attack_area.collision_layer = 0
+	attack_area.collision_mask = 4 
+	get_tree().current_scene.add_child(attack_area)
+
+	# 伤害检测
 	await get_tree().process_frame
-
+	
 	var hit_enemies = attack_area.get_overlapping_bodies()
-	for body in hit_enemies:
-		if body.is_in_group("enemy") and body.has_method("take_damage"):
-			body.take_damage(final_damage)
+	var first_hit = true
+	
+	if hit_enemies.size() > 0:
+		# === 4. 打击感核心：定帧 (Hit Stop) ===
+		Engine.time_scale = 0.05
+		get_tree().create_timer(0.1, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+		
+		# 屏幕大震动
+		SignalBus.screen_shake.emit(0.4, 20.0)
+		
+		for body in hit_enemies:
+			if body.is_in_group("enemy"):
+				if body.has_method("apply_knockback"):
+					var knockback_dir = (body.global_position - player.global_position).normalized()
+					var force = 5000.0 # 暴力击飞
+					
+					# === 5. 第一个敌人特效：旋转 + 超级击飞 ===
+					if first_hit:
+						force = 10000.0 # 超级暴力击飞
+						# 旋转动画
+						if body.get_node_or_null("Sprite2D"):
+							var tween = create_tween()
+							# 0.5秒内转5圈
+							tween.tween_property(body.get_node("Sprite2D"), "rotation", PI * 10, 0.5).as_relative()
+						first_hit = false
+					
+					body.apply_knockback(knockback_dir, force)
+				
+				if body.has_method("take_damage"):
+					body.take_damage(final_damage)
 
-			# 击退
-			if body.has_method("apply_knockback"):
-				var knockback_dir = (body.global_position - player.global_position).normalized()
-				body.apply_knockback(knockback_dir, config.knockback)
-
-			# 燃烧
-			if body.has_method("apply_burn"):
-				body.apply_burn(8.0, 3.0)  # 8 DPS，持续3秒
-
-	# === 清理 ===
-	await get_tree().create_timer(config.projectile_lifetime).timeout
-	if is_instance_valid(attack_area):
-		attack_area.queue_free()
-
-	# 粒子播放完后清理
-	await get_tree().create_timer(0.8).timeout
-	if is_instance_valid(particles):
-		particles.queue_free()
+	attack_area.queue_free()
 
 
 func get_nearest_enemy() -> Node2D:

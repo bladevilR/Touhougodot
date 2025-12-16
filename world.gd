@@ -12,6 +12,12 @@ func _ready():
 	# 初始化游戏系统
 	initialize_game()
 
+	# 实例化RoomLayoutManager（随机地图系统）
+	var room_layout_manager = preload("res://RoomLayoutManager.gd").new()
+	room_layout_manager.name = "RoomLayoutManager"
+	add_child(room_layout_manager)
+	print("[World] RoomLayoutManager 已实例化")
+
 	# 发送游戏开始信号
 	SignalBus.game_started.emit()
 

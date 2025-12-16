@@ -80,14 +80,14 @@ static func _generate_sparse_layout(map_system) -> Array:
 		map_width = map_system.MAP_WIDTH
 		map_height = map_system.MAP_HEIGHT
 
-	# 生成5-8个小竹丛
-	var cluster_count = randi_range(5, 8)
+	# 生成8-12个小竹丛 (增加密度)
+	var cluster_count = randi_range(8, 12)
 	for i in range(cluster_count):
 		var pos = Vector2(
 			randf_range(400, map_width - 400),
 			randf_range(400, map_height - 400)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(2, 4)})
+		bamboos.append({"pos": pos, "size": randi_range(3, 5)})
 
 	return bamboos
 
@@ -144,7 +144,7 @@ static func _generate_corridor_layout(map_system) -> Array:
 	return bamboos
 
 static func _generate_circular_layout(map_system) -> Array:
-	"""环形布局 - 中心空地周围竹林"""
+	"""环形布局 - 中心空地，四周是圆形墙壁"""
 	var bamboos = []
 	var map_width = 2400
 	var map_height = 1800
@@ -154,20 +154,48 @@ static func _generate_circular_layout(map_system) -> Array:
 		map_height = map_system.MAP_HEIGHT
 
 	var center = Vector2(map_width / 2, map_height / 2)
-	var inner_radius = 300
-	var outer_radius = 600
+	var arena_radius = 700.0  # 战斗区域半径
+	var path_width = 300.0 # 通道宽度
 
-	# 在环形区域生成竹林
-	for i in range(12):
-		var angle = (TAU / 12) * i
-		var radius = randf_range(inner_radius, outer_radius)
+	# 1. 填充四个角落，形成圆形边界
+	var grid_size = 150
+	var cols = int(map_width / grid_size)
+	var rows = int(map_height / grid_size)
+
+	for x in range(cols):
+		for y in range(rows):
+			var pos = Vector2(x * grid_size + grid_size/2, y * grid_size + grid_size/2)
+			var dist = pos.distance_to(center)
+			
+			# 检查是否在通往出口的路径上（十字轴线）
+			var on_path = false
+			if abs(pos.x - center.x) < path_width / 2.0: on_path = true # 南北通道
+			if abs(pos.y - center.y) < path_width / 2.0: on_path = true # 东西通道
+
+			# 如果在圆圈外，且不在通道上，才填充密集竹林
+			if dist > arena_radius and not on_path:
+				# 稍微随机化位置
+				var offset = Vector2(randf_range(-30, 30), randf_range(-30, 30))
+				bamboos.append({"pos": pos + offset, "size": randi_range(6, 10)}) # 大簇竹子
+
+	# 2. 内部少量装饰性障碍
+	for i in range(8):
+		var angle = randf() * TAU
+		var radius = randf_range(200, arena_radius - 150)
 		var pos = center + Vector2(cos(angle), sin(angle)) * radius
-		bamboos.append({"pos": pos, "size": randi_range(5, 8)})
+		
+		# 同样避开通道
+		var on_path = false
+		if abs(pos.x - center.x) < path_width / 2.0: on_path = true
+		if abs(pos.y - center.y) < path_width / 2.0: on_path = true
+		
+		if not on_path:
+			bamboos.append({"pos": pos, "size": randi_range(2, 4)})
 
 	return bamboos
 
 static func _generate_cross_layout(map_system) -> Array:
-	"""十字布局 - 十字通道分割四个区域"""
+	"""十字布局 - 十字通道，四个角落被封死"""
 	var bamboos = []
 	var map_width = 2400
 	var map_height = 1800
@@ -177,23 +205,27 @@ static func _generate_cross_layout(map_system) -> Array:
 		map_height = map_system.MAP_HEIGHT
 
 	var center = Vector2(map_width / 2, map_height / 2)
-	var corridor_width = 300
+	var path_half_width = 250.0  # 通道半宽
 
-	# 四个象限分别放置竹林
-	var quadrants = [
-		Rect2(300, 300, center.x - corridor_width / 2 - 300, center.y - corridor_width / 2 - 300),  # 左上
-		Rect2(center.x + corridor_width / 2, 300, map_width - center.x - corridor_width / 2 - 300, center.y - corridor_width / 2 - 300),  # 右上
-		Rect2(300, center.y + corridor_width / 2, center.x - corridor_width / 2 - 300, map_height - center.y - corridor_width / 2 - 300),  # 左下
-		Rect2(center.x + corridor_width / 2, center.y + corridor_width / 2, map_width - center.x - corridor_width / 2 - 300, map_height - center.y - corridor_width / 2 - 300),  # 右下
+	# 定义四个角落区域（需要填充的区域）
+	var corners = [
+		Rect2(0, 0, center.x - path_half_width, center.y - path_half_width), # 左上
+		Rect2(center.x + path_half_width, 0, center.x - path_half_width, center.y - path_half_width), # 右上
+		Rect2(0, center.y + path_half_width, center.x - path_half_width, center.y - path_half_width), # 左下
+		Rect2(center.x + path_half_width, center.y + path_half_width, center.x - path_half_width, center.y - path_half_width) # 右下
 	]
 
-	for quadrant in quadrants:
-		for i in range(4):
-			var pos = Vector2(
-				quadrant.position.x + randf() * quadrant.size.x,
-				quadrant.position.y + randf() * quadrant.size.y
-			)
-			bamboos.append({"pos": pos, "size": randi_range(3, 6)})
+	# 填充角落
+	var grid_size = 180
+	for rect in corners:
+		var c_cols = int(rect.size.x / grid_size)
+		var c_rows = int(rect.size.y / grid_size)
+		
+		for x in range(c_cols):
+			for y in range(c_rows):
+				var pos = rect.position + Vector2(x * grid_size + grid_size/2, y * grid_size + grid_size/2)
+				var offset = Vector2(randf_range(-40, 40), randf_range(-40, 40))
+				bamboos.append({"pos": pos + offset, "size": randi_range(6, 9)})
 
 	return bamboos
 
@@ -245,7 +277,7 @@ static func _generate_arena_layout(map_system) -> Array:
 	return bamboos
 
 static func _generate_decorations(style: LayoutStyle, map_system) -> Array:
-	"""根据布局风格生成装饰物"""
+	"""根据布局风格生成装饰物 - 增强版：生成簇群"""
 	var decorations = []
 	var map_width = 2400
 	var map_height = 1800
@@ -254,23 +286,43 @@ static func _generate_decorations(style: LayoutStyle, map_system) -> Array:
 		map_width = map_system.MAP_WIDTH
 		map_height = map_system.MAP_HEIGHT
 
-	# 根据风格决定装饰物数量
-	var decoration_count = 0
+	# 根据风格决定装饰物簇的数量（大幅增加以填补空旷）
+	var cluster_count = 0
 	match style:
 		LayoutStyle.SPARSE, LayoutStyle.ARENA:
-			decoration_count = randi_range(8, 12)
+			cluster_count = randi_range(12, 18) # 翻倍
 		LayoutStyle.DENSE, LayoutStyle.MAZE:
-			decoration_count = randi_range(15, 20)
+			cluster_count = randi_range(20, 30) # 大幅增加
 		_:
-			decoration_count = randi_range(10, 15)
+			cluster_count = randi_range(15, 25) # 增加
 
-	# 生成随机位置的装饰物（花朵、石头、竹笋）
-	for i in range(decoration_count):
-		var pos = Vector2(
-			randf_range(400, map_width - 400),
-			randf_range(400, map_height - 400)
+	for i in range(cluster_count):
+		var center_pos = Vector2(
+			randf_range(200, map_width - 200),
+			randf_range(200, map_height - 200)
 		)
-		var type = ["flower", "rock", "shoot"][randi() % 3]
-		decorations.append({"pos": pos, "type": type})
+		
+		# 随机选择一种装饰类型进行簇生成
+		var type_roll = randf()
+		
+		if type_roll < 0.5: # 50% 概率是花簇
+			var count = randi_range(3, 6)
+			for j in range(count):
+				var angle = randf() * TAU
+				var dist = randf_range(10, 40)
+				var pos = center_pos + Vector2(cos(angle), sin(angle)) * dist
+				decorations.append({"pos": pos, "type": "flower"})
+				
+		elif type_roll < 0.8: # 30% 概率是石头组
+			var count = randi_range(1, 3)
+			for j in range(count):
+				var offset = Vector2(randf_range(-30, 30), randf_range(-20, 20))
+				decorations.append({"pos": center_pos + offset, "type": "rock"})
+				
+		else: # 20% 概率是竹笋区域
+			var count = randi_range(2, 4)
+			for j in range(count):
+				var offset = Vector2(randf_range(-40, 40), randf_range(-40, 40))
+				decorations.append({"pos": center_pos + offset, "type": "shoot"})
 
 	return decorations

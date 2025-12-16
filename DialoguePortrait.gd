@@ -44,6 +44,9 @@ var current_character: CharacterPortrait = CharacterPortrait.MOKOU
 signal dialogue_closed
 
 func _ready():
+	# 确保在暂停时也能运行
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	
 	# 初始隐藏
 	visible = false
 	# 确保在最上层
@@ -91,24 +94,24 @@ func _create_ui():
 	# 文字容器（右侧）- 立绘旁边
 	var text_container = Control.new()
 	text_container.name = "TextContainer"
-	text_container.position = Vector2(220, 50)  # 往右下角移动
-	text_container.size = Vector2(1600, 220)
+	text_container.position = Vector2(300, 40)  # 往右移以避免重叠
+	text_container.size = Vector2(1500, 220)
 	dialogue_container.add_child(text_container)
 
 	# 角色名称
 	name_label = Label.new()
 	name_label.text = "角色名"
 	name_label.position = Vector2(0, 0)
-	name_label.add_theme_font_size_override("font_size", 24)
+	name_label.add_theme_font_size_override("font_size", 32) # 增大字体
 	name_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
 	text_container.add_child(name_label)
 
 	# 对话内容
 	dialogue_label = Label.new()
 	dialogue_label.text = "对话内容"
-	dialogue_label.position = Vector2(0, 40)
+	dialogue_label.position = Vector2(0, 50)
 	dialogue_label.size = Vector2(1400, 150)
-	dialogue_label.add_theme_font_size_override("font_size", 20)
+	dialogue_label.add_theme_font_size_override("font_size", 28) # 增大字体
 	dialogue_label.add_theme_color_override("font_color", Color.WHITE)
 	dialogue_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_container.add_child(dialogue_label)
@@ -147,6 +150,9 @@ func show_dialogue(character: CharacterPortrait, dialogue_text: String):
 	# 显示对话框
 	visible = true
 	is_showing = true
+	
+	# 暂停游戏
+	get_tree().paused = true
 
 	print("[DialoguePortrait] 对话框已显示, visible=", visible)
 
@@ -175,6 +181,10 @@ func close_dialogue():
 
 	visible = false
 	is_showing = false
+	
+	# 恢复游戏
+	get_tree().paused = false
+	
 	dialogue_closed.emit()
 
 func is_dialogue_showing() -> bool:

@@ -393,7 +393,7 @@ func _on_start_button_pressed():
 		# 过渡动画
 		var tween = create_tween()
 		tween.tween_property(self, "modulate:a", 0.0, 0.25)
-		tween.tween_callback(func(): get_tree().change_scene_to_file("res://world.tscn"))
+		tween.tween_callback(func(): get_tree().change_scene_to_file("res://LoadingScreen.tscn"))
 
 func _on_back_button_pressed():
 	var tween = create_tween()

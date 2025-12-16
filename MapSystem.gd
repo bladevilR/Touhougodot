@@ -9,10 +9,13 @@ const PLAYER_SPAWN_Y = 1500
 
 # 玩家高度参考（用于计算竹子缩放）
 const PLAYER_HEIGHT = 100.0
-# 竹子目标高度（高大竹子是矮竹子的3倍）
-const BAMBOO_SHORT_HEIGHT = 100.0   # 矮竹子 - 约1倍玩家高度
-const BAMBOO_MEDIUM_HEIGHT = 180.0  # 中等竹子 - 约1.8倍玩家高度
-const BAMBOO_TALL_HEIGHT = 300.0    # 高大竹子 - 矮竹子的3倍
+# 竹子目标高度（大幅增加以体现遮天蔽日感）
+var BAMBOO_SHORT_HEIGHT = 100.0   # 改为var以便动态调整
+var BAMBOO_MEDIUM_HEIGHT = 180.0
+var BAMBOO_TALL_HEIGHT = 300.0
+
+# 深度缩放因子
+var depth_height_scale: float = 1.0
 
 # 边界墙厚度（竹海深度）
 const WALL_THICKNESS = 200
@@ -20,67 +23,67 @@ const WALL_THICKNESS = 200
 # Bamboo texture paths with metadata
 # Format: {path, original_height (approx), type}
 var bamboo_configs = [
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_xlarge_1.png", "height": 1200, "type": "xlarge"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_xlarge_2.png", "height": 1000, "type": "xlarge"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_1.png", "height": 800, "type": "large"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_2.png", "height": 750, "type": "large"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_3.png", "height": 850, "type": "large"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_4.png", "height": 780, "type": "large"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_5.png", "height": 760, "type": "large"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_medium_1.png", "height": 600, "type": "medium"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_medium_2.png", "height": 650, "type": "medium"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_medium_3.png", "height": 580, "type": "medium"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_small_1.png", "height": 500, "type": "small"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_small_2.png", "height": 520, "type": "small"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_single_straight_1.png", "height": 450, "type": "single"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_single_straight_2.png", "height": 460, "type": "single"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_single_broken_1.png", "height": 400, "type": "broken"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_single_broken_2.png", "height": 380, "type": "broken"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_single_broken_3.png", "height": 390, "type": "broken"},
-	{"path": "res://assets/SUCAI/images_resized/bamboo/bamboo_single_broken_4.png", "height": 410, "type": "broken"},
+	{"path": "res://bamboo/bamboo_cluster_xlarge_1.png", "height": 1200, "type": "xlarge"},
+	{"path": "res://bamboo/bamboo_cluster_xlarge_2.png", "height": 1000, "type": "xlarge"},
+	{"path": "res://bamboo/bamboo_cluster_large_1.png", "height": 800, "type": "large"},
+	{"path": "res://bamboo/bamboo_cluster_large_2.png", "height": 750, "type": "large"},
+	{"path": "res://bamboo/bamboo_cluster_large_3.png", "height": 850, "type": "large"},
+	{"path": "res://bamboo/bamboo_cluster_large_4.png", "height": 780, "type": "large"},
+	{"path": "res://bamboo/bamboo_cluster_large_5.png", "height": 760, "type": "large"},
+	{"path": "res://bamboo/bamboo_cluster_medium_1.png", "height": 600, "type": "medium"},
+	{"path": "res://bamboo/bamboo_cluster_medium_2.png", "height": 650, "type": "medium"},
+	{"path": "res://bamboo/bamboo_cluster_medium_3.png", "height": 580, "type": "medium"},
+	{"path": "res://bamboo/bamboo_cluster_small_1.png", "height": 500, "type": "small"},
+	{"path": "res://bamboo/bamboo_cluster_small_2.png", "height": 520, "type": "small"},
+	{"path": "res://bamboo/bamboo_single_straight_1.png", "height": 450, "type": "single"},
+	{"path": "res://bamboo/bamboo_single_straight_2.png", "height": 460, "type": "single"},
+	{"path": "res://bamboo/bamboo_single_broken_1.png", "height": 400, "type": "broken"},
+	{"path": "res://bamboo/bamboo_single_broken_2.png", "height": 380, "type": "broken"},
+	{"path": "res://bamboo/bamboo_single_broken_3.png", "height": 390, "type": "broken"},
+	{"path": "res://bamboo/bamboo_single_broken_4.png", "height": 410, "type": "broken"},
 ]
 
 # 保留旧数组以兼容
 var bamboo_textures = [
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_1.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_2.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_3.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_4.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_large_5.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_medium_1.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_medium_2.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_medium_3.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_small_1.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_small_2.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_xlarge_1.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_xlarge_2.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_single_broken_1.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_single_broken_2.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_single_broken_3.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_single_broken_4.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_single_straight_1.png",
-	"res://assets/SUCAI/images_resized/bamboo/bamboo_single_straight_2.png"
+	"res://bamboo/bamboo_cluster_large_1.png",
+	"res://bamboo/bamboo_cluster_large_2.png",
+	"res://bamboo/bamboo_cluster_large_3.png",
+	"res://bamboo/bamboo_cluster_large_4.png",
+	"res://bamboo/bamboo_cluster_large_5.png",
+	"res://bamboo/bamboo_cluster_medium_1.png",
+	"res://bamboo/bamboo_cluster_medium_2.png",
+	"res://bamboo/bamboo_cluster_medium_3.png",
+	"res://bamboo/bamboo_cluster_small_1.png",
+	"res://bamboo/bamboo_cluster_small_2.png",
+	"res://bamboo/bamboo_cluster_xlarge_1.png",
+	"res://bamboo/bamboo_cluster_xlarge_2.png",
+	"res://bamboo/bamboo_single_broken_1.png",
+	"res://bamboo/bamboo_single_broken_2.png",
+	"res://bamboo/bamboo_single_broken_3.png",
+	"res://bamboo/bamboo_single_broken_4.png",
+	"res://bamboo/bamboo_single_straight_1.png",
+	"res://bamboo/bamboo_single_straight_2.png"
 ]
 
 # 装饰物纹理路径
 var decoration_textures = {
 	"flowers": [
-		"res://assets/SUCAI/images_resized/flower_white_daisy_single.png",
-		"res://assets/SUCAI/images_resized/flower_blue_single_1.png",
-		"res://assets/SUCAI/images_resized/flower_red_cluster_1.png",
-		"res://assets/SUCAI/images_resized/flower_yellow_cluster_1.png",
-		"res://assets/SUCAI/images_resized/flower_white_cluster_1.png",
+		"res://flower_white_daisy_single.png",
+		"res://flower_blue_single_1.png",
+		"res://flower_red_cluster_1.png",
+		"res://flower_yellow_cluster_1.png",
+		"res://flower_white_cluster_1.png",
 	],
 	"shoots": [
-		"res://assets/SUCAI/images_resized/shoot_small_1.png",
-		"res://assets/SUCAI/images_resized/shoot_small_2.png",
-		"res://assets/SUCAI/images_resized/shoot_medium_1.png",
-		"res://assets/SUCAI/images_resized/shoot_medium_2.png",
+		"res://shoot_small_1.png",
+		"res://shoot_small_2.png",
+		"res://shoot_medium_1.png",
+		"res://shoot_medium_2.png",
 	],
 	"rocks": [
-		"res://assets/SUCAI/images_resized/rock_medium_grey.png",
-		"res://assets/SUCAI/images_resized/rock_large_moss_1.png",
-		"res://assets/SUCAI/images_resized/rock_medium_scattered.png",
+		"res://rock_medium_grey.png",
+		"res://rock_large_moss_1.png",
+		"res://rock_medium_scattered.png",
 	]
 }
 
@@ -160,6 +163,9 @@ var bamboo_collision_layer: Node2D  # 竹子碰撞层（Y-sorted，有碰撞）
 var lighting_layer: Node2D  # 光照层
 var post_process_layer: CanvasLayer  # 后处理层
 var wall_bodies: Array = []
+var border_bamboos: Array = []
+var interior_bamboos: Array = []
+var interior_decorations: Array = []
 
 # CanvasGroup 引用（用于阴影系统）
 var game_objects_parent: Node = null
@@ -171,9 +177,16 @@ var post_process_rect: ColorRect = null
 var post_process_enabled: bool = false  # 默认禁用后处理
 
 func _ready():
+	print("DEBUG: MapSystem _ready started")
 	# 加载 Shader
 	bamboo_sway_shader = load("res://shaders/bamboo_sway.gdshader")
+	if not bamboo_sway_shader:
+		print("警告: 无法加载 bamboo_sway.gdshader")
+
 	post_process_shader = load("res://shaders/post_process.gdshader")
+	if not post_process_shader:
+		print("警告: 无法加载 post_process.gdshader")
+
 	add_to_group("map_system")
 
 	# 获取游戏对象父节点（用于阴影系统）
@@ -184,15 +197,25 @@ func _ready():
 		game_objects_parent = get_parent()
 
 	setup_layers()
+	print("DEBUG: setup_layers done")
 	create_background()
+	print("DEBUG: create_background done")
 	create_bamboo_sea_walls()
-	create_interior_bamboo()
-	create_decorations_designed()
+	print("DEBUG: create_bamboo_sea_walls done")
+	# create_interior_bamboo() # Removed: Handled by RoomLayoutManager
+	# create_decorations_designed() # Removed: Handled by RoomLayoutManager
 	create_lighting()
+	print("DEBUG: create_lighting done")
 	setup_camera_limits()
 	spawn_nitori_npc()
+	print("DEBUG: MapSystem _ready finished")
 
 func _process(delta):
+	# 强制移除残留的玩家光环（应玩家要求）
+	if player_light and is_instance_valid(player_light):
+		player_light.queue_free()
+		player_light = null
+
 	# 更新动态光照（玩家跟随光源）
 	_update_dynamic_lighting(delta)
 
@@ -255,10 +278,14 @@ func create_background():
 				sprite.scale = Vector2(scale_factor, scale_factor)
 				sprite.position = Vector2(x * GRASS_TILE_SIZE, y * GRASS_TILE_SIZE)
 				sprite.centered = false
+				
+				# 恢复正常颜色，交由CanvasModulate统一控制
+				# sprite.modulate = Color(0.3, 0.35, 0.45)
+				
 				background_layer.add_child(sprite)
 	else:
 		var color_rect = ColorRect.new()
-		color_rect.color = Color(0.2, 0.6, 0.2)
+		color_rect.color = Color(0.2, 0.6, 0.2) # 恢复绿色
 		color_rect.size = Vector2(MAP_WIDTH, MAP_HEIGHT)
 		background_layer.add_child(color_rect)
 
@@ -383,6 +410,9 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 	if force_tall:
 		height_base = BAMBOO_TALL_HEIGHT * 1.3
 
+	# 应用深度缩放因子 (越深越高)
+	height_base *= depth_height_scale
+
 	# 根据类型调整缩放系数 - cluster类型缩小以避免过粗
 	var type_scale_mult: float
 	match config.type:
@@ -426,7 +456,7 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 		var shadow_width = bamboo_base_width * 0.5
 		var shadow_size = Vector2(shadow_length, shadow_width)
 		# 直接创建阴影精灵
-		create_shadow_for_entity(body, shadow_size, Vector2(0, 0))
+		create_shadow_for_entity(body, shadow_size, Vector2(0, 0), 2.0) # 高度因子2.0，长影子
 
 		var sprite = Sprite2D.new()
 		sprite.name = "Sprite"
@@ -463,7 +493,8 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 		body.add_child(area)
 
 		game_objects_parent.call_deferred("add_child", body)
-		wall_bodies.append(body)
+		border_bamboos.append(body)
+		wall_bodies.append(body) # Keep compatible
 	else:
 		# 无碰撞竹子 - 需要容器来放置sprite和shadow
 		var container = Node2D.new()
@@ -475,13 +506,14 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 		var shadow_length = bamboo_height * 1.2
 		var shadow_width = bamboo_base_width * 0.5
 		var shadow_size = Vector2(shadow_length, shadow_width)
-		create_shadow_for_entity(container, shadow_size, Vector2(0, 0))
+		create_shadow_for_entity(container, shadow_size, Vector2(0, 0), 2.0) # 高度因子2.0
 
 		var sprite = Sprite2D.new()
 		sprite.texture = texture
 		sprite.scale = Vector2(scale, scale)
 		sprite.centered = false
 		sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
+		sprite.position = pos
 		sprite.modulate = Color(color_var, color_var + green_boost, color_var - 0.05, alpha)
 
 		# 应用竹子摇曳 Shader（传入缩放值）
@@ -553,14 +585,14 @@ func create_interior_bamboo():
 			if pos.y < WALL_THICKNESS + 50 or pos.y > MAP_HEIGHT - WALL_THICKNESS - 50:
 				continue
 
-			count += _create_interior_bamboo_varied(pos, grove_types)
+			count += create_interior_bamboo_varied(pos, grove_types)
 
 			# 在部分竹子旁边放竹笋（减小尺寸）
 			if randf() < 0.4:
 				var shoot_offset = Vector2(randf_range(-20, 20), randf_range(5, 15))
 				_create_shoot(pos + shoot_offset, randf_range(0.08, 0.12))
 
-func _create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
+func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	"""创建单个内部竹子 - 支持指定类型"""
 	var suitable_indices = []
 	for i in range(bamboo_configs.size()):
@@ -616,7 +648,7 @@ func _create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	var shadow_length = bamboo_height * 1.2
 	var shadow_width = bamboo_base_width * 0.5
 	var shadow_size = Vector2(shadow_length, shadow_width)
-	create_shadow_for_entity(body, shadow_size, Vector2(0, 0))
+	create_shadow_for_entity(body, shadow_size, Vector2(0, 0), 2.0) # 高度因子2.0
 
 	# 精灵（底部锚点）+ 随机颜色变化
 	var sprite = Sprite2D.new()
@@ -626,7 +658,7 @@ func _create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	sprite.centered = false
 	sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
 
-	var color_var = randf_range(0.88, 1.0)
+	var color_var = randf_range(0.88, 1.0) * 0.7 # 乘以0.7压暗
 	var green_boost = randf_range(0.0, 0.06)
 	sprite.modulate = Color(color_var, color_var + green_boost, color_var - 0.03, 1.0)
 
@@ -660,7 +692,7 @@ func _create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	body.add_child(area)
 
 	game_objects_parent.call_deferred("add_child", body)
-	wall_bodies.append(body)
+	interior_bamboos.append(body)
 	return 1
 
 func setup_camera_limits():
@@ -765,7 +797,7 @@ func _create_flower_cluster(center: Vector2, count: int, base_scale: float) -> i
 		var pos = center + offset
 
 		var flower_tex = flower_types[randi() % flower_types.size()]
-		var container = _create_decoration_sprite(flower_tex, pos, base_scale + randf_range(-0.05, 0.05))
+		var container = create_decoration_sprite(flower_tex, pos, base_scale + randf_range(-0.05, 0.05))
 
 		if container:
 			# 获取容器内的精灵并设置透明度
@@ -790,7 +822,7 @@ func _create_rock_group(center: Vector2, count: int, base_scale: float) -> int:
 		var pos = center + Vector2(offset_x, offset_y)
 
 		var rock_tex = rock_types[randi() % rock_types.size()]
-		var container = _create_decoration_sprite(rock_tex, pos, base_scale + randf_range(-0.1, 0.1))
+		var container = create_decoration_sprite(rock_tex, pos, base_scale + randf_range(-0.1, 0.1))
 
 		if container:
 			# 直接添加到CanvasGroup以参与Y-sorting
@@ -803,7 +835,7 @@ func _create_shoot(pos: Vector2, scale: float) -> int:
 	"""创建单个竹笋"""
 	var shoot_types = decoration_textures["shoots"]
 	var shoot_tex = shoot_types[randi() % shoot_types.size()]
-	var container = _create_decoration_sprite(shoot_tex, pos, scale)
+	var container = create_decoration_sprite(shoot_tex, pos, scale)
 
 	if container:
 		# 直接添加到CanvasGroup以参与Y-sorting
@@ -811,7 +843,7 @@ func _create_shoot(pos: Vector2, scale: float) -> int:
 		return 1
 	return 0
 
-func _create_decoration_sprite(texture_path: String, pos: Vector2, scale: float) -> Node2D:
+func create_decoration_sprite(texture_path: String, pos: Vector2, scale: float) -> Node2D:
 	"""创建装饰物精灵 - 底部锚点以正确参与Y-sorting，包含影子"""
 	var texture = load(texture_path)
 	if not texture:
@@ -827,7 +859,7 @@ func _create_decoration_sprite(texture_path: String, pos: Vector2, scale: float)
 	var shadow_length = decoration_height * 1.0
 	var shadow_width = decoration_width * 0.4
 	var shadow_size = Vector2(shadow_length, shadow_width)
-	create_shadow_for_entity(container, shadow_size, Vector2(0, 0))
+	create_shadow_for_entity(container, shadow_size, Vector2(0, 0), 0.2) # 花草影子
 
 	# 创建精灵
 	var sprite = Sprite2D.new()
@@ -838,99 +870,166 @@ func _create_decoration_sprite(texture_path: String, pos: Vector2, scale: float)
 	sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
 	container.add_child(sprite)
 
+	game_objects_parent.call_deferred("add_child", container) # 自动添加到场景
+	interior_decorations.append(container)
 	return container
 
 # ==================== 光照系统 ====================
 
 # 动态光照节点引用
-var player_light: PointLight2D = null
+var player_light: Node2D = null
 var ambient_lights: Array = []
 var flicker_timer: float = 0.0
 
-func create_lighting():
-	"""午后竹林光影效果 - 增强版本，使用Godot原生2D光照"""
-	# 1. 整体色调 - 更暗一些，避免过曝
-	var canvas_modulate = CanvasModulate.new()
-	canvas_modulate.color = Color(0.80, 0.78, 0.75)  # 进一步压暗，避免人物过曝
-	get_parent().add_child(canvas_modulate)
+func create_lighting(style: String = "outskirts"):
+	"""光照系统入口"""
+	_clear_lighting()
+	
+	if style == "outskirts":
+		_create_lighting_outskirts()
+	else:
+		_create_lighting_deep_forest()
 
-	# 2. 创建加法混合材质
-	var additive_material = CanvasItemMaterial.new()
-	additive_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+func update_environment(depth: int):
+	"""根据房间深度更新环境（光照、竹子高度）"""
+	print("MapSystem: Updating environment for depth ", depth)
+	
+	# 1. 调整竹子高度：越深越高
+	if depth < 3:
+		# 外围：标准高度
+		depth_height_scale = 1.0
+		BAMBOO_TALL_HEIGHT = 300.0
+	else:
+		# 深处：更高更密
+		depth_height_scale = 1.5
+		BAMBOO_TALL_HEIGHT = 700.0 # 巨型竹子
+		
+	# 2. 切换光照风格
+	if depth < 3:
+		create_lighting("outskirts")
+	else:
+		create_lighting("deep_forest")
 
-	# 3. 创建光斑纹理（更柔和的衰减）
-	var soft_tex = _create_light_texture(128, 2.2)   # 增加衰减值让光斑更柔和
-	var medium_tex = _create_light_texture(64, 1.8)
-	var sharp_tex = _create_light_texture(32, 1.5)   # 不再使用，但保留兼容
+func _clear_lighting():
+	"""清理旧的光照组件"""
+	for child in get_tree().root.get_children():
+		if child.name == "AtmosphereLayer" and is_instance_valid(child):
+			child.queue_free()
+	for child in get_parent().get_children():
+		if child is WorldEnvironment and is_instance_valid(child):
+			child.queue_free()
 
-	# 4. 大面积柔和光照区域（进一步降低强度，避免晃眼）
-	var ambient_spots = [
-		{"pos": Vector2(1200, 700), "scale": 10.0, "intensity": 0.025},  # 再次减半，从0.05降到0.025
-		{"pos": Vector2(750, 500), "scale": 9.0, "intensity": 0.02},
-		{"pos": Vector2(1650, 550), "scale": 8.0, "intensity": 0.02},
-		{"pos": Vector2(950, 1000), "scale": 8.0, "intensity": 0.018},
-		{"pos": Vector2(1550, 1100), "scale": 8.0, "intensity": 0.018},
-	]
+func _create_lighting_outskirts():
+	"""竹林外围风格 - 强烈的树影光照对比 (无光柱，靠环境光和影子)"""
+	print("MapSystem: Creating OUTSKIRTS lighting (High Contrast)...")
+	
+	# CanvasLayer (用于滤镜) - Layer 1 确保覆盖在物体上进行压暗
+	var atmosphere_layer = CanvasLayer.new()
+	atmosphere_layer.name = "AtmosphereLayer"
+	atmosphere_layer.layer = 1 
+	get_tree().root.add_child(atmosphere_layer)
 
-	for spot in ambient_spots:
-		var sprite = Sprite2D.new()
-		sprite.texture = soft_tex
-		sprite.position = spot.pos
-		sprite.scale = Vector2(spot.scale, spot.scale)
-		sprite.z_index = 50
-		sprite.material = additive_material
-		sprite.modulate = Color(spot.intensity, spot.intensity * 0.95, spot.intensity * 0.8, 1.0)
-		lighting_layer.call_deferred("add_child", sprite)
-		ambient_lights.append({"sprite": sprite, "base_intensity": spot.intensity, "phase": randf() * TAU})
+	# 1. 基础压暗 (Multiply)
+	# 使用 0.6 的亮度，配合高对比度，亮部会亮，暗部会暗
+	var darkness_overlay = ColorRect.new()
+	darkness_overlay.color = Color(0.6, 0.6, 0.65) 
+	darkness_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	darkness_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	var mat_mul = CanvasItemMaterial.new()
+	mat_mul.blend_mode = CanvasItemMaterial.BLEND_MODE_MUL
+	darkness_overlay.material = mat_mul
+	atmosphere_layer.add_child(darkness_overlay)
 
-	# 5. 阳光光柱 - 穿透竹林的光束（大幅降低强度）
-	var light_beams = [
-		{"pos": Vector2(1100, 580), "scale": 5.5, "intensity": 0.023},  # 再次减半
-		{"pos": Vector2(1380, 720), "scale": 5.0, "intensity": 0.02},
-		{"pos": Vector2(680, 520), "scale": 5.0, "intensity": 0.018},
-		{"pos": Vector2(1700, 680), "scale": 5.0, "intensity": 0.018},
-	]
+	# 2. WorldEnvironment (Glow & Contrast)
+	var world_env = WorldEnvironment.new()
+	var env = Environment.new()
+	env.background_mode = Environment.BG_CANVAS
+	
+	env.glow_enabled = true
+	env.glow_intensity = 0.6
+	env.glow_strength = 0.8
+	env.glow_bloom = 0.05
+	
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.35 # 高对比度
+	env.adjustment_saturation = 1.1
+	
+	world_env.environment = env
+	get_parent().add_child(world_env)
 
-	for beam in light_beams:
-		var sprite = Sprite2D.new()
-		sprite.texture = medium_tex
-		sprite.position = beam.pos
-		sprite.scale = Vector2(beam.scale, beam.scale)
-		sprite.z_index = 55
-		sprite.material = additive_material
-		var i = beam.intensity
-		sprite.modulate = Color(i, i * 0.92, i * 0.7, 1.0)
-		lighting_layer.call_deferred("add_child", sprite)
-		ambient_lights.append({"sprite": sprite, "base_intensity": i, "phase": randf() * TAU})
+func _create_lighting_deep_forest():
+	"""竹林深处风格 - 斑斓光影 (高对比度 + 噪声光斑 + 中心聚光)"""
+	print("MapSystem: Creating DEEP FOREST lighting...")
+	
+	# CanvasLayer
+	var atmosphere_layer = CanvasLayer.new()
+	atmosphere_layer.name = "AtmosphereLayer"
+	atmosphere_layer.layer = 1 
+	get_tree().root.add_child(atmosphere_layer)
 
-	# 6. 小光斑 - 树叶间隙漏下的碎光（大幅降低）
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 12345
+	# 1. 基础压暗 (Multiply)
+	var darkness_overlay = ColorRect.new()
+	darkness_overlay.color = Color(0.35, 0.35, 0.45) # 较暗
+	darkness_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	darkness_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	var mat_mul = CanvasItemMaterial.new()
+	mat_mul.blend_mode = CanvasItemMaterial.BLEND_MODE_MUL
+	darkness_overlay.material = mat_mul
+	atmosphere_layer.add_child(darkness_overlay)
 
-	for idx in range(10):  # 减少到10个
-		var x = rng.randf_range(450, MAP_WIDTH - 450)
-		var y = rng.randf_range(450, MAP_HEIGHT - 450)
-		var s = rng.randf_range(2.5, 4.5)
-		var intensity = rng.randf_range(0.01, 0.02)  # 再次大幅降低强度
+	# 2. 斑驳阳光层 (Add)
+	var sunlight_overlay = TextureRect.new()
+	sunlight_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sunlight_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sunlight_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	
+	var noise = FastNoiseLite.new()
+	noise.seed = randi()
+	noise.frequency = 0.002
+	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	
+	var noise_tex = NoiseTexture2D.new()
+	noise_tex.noise = noise
+	noise_tex.width = 512
+	noise_tex.height = 512
+	noise_tex.seamless = true
+	
+	sunlight_overlay.texture = noise_tex
+	sunlight_overlay.modulate = Color(0.6, 0.5, 0.3, 0.2)
+	
+	var mat_add = CanvasItemMaterial.new()
+	mat_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	sunlight_overlay.material = mat_add
+	atmosphere_layer.add_child(sunlight_overlay)
+	
+	# 3. 中心上帝光
+	var center_beam = TextureRect.new()
+	center_beam.texture = _create_light_texture(512, 2.5)
+	center_beam.set_anchors_preset(Control.PRESET_CENTER)
+	center_beam.position = Vector2(get_viewport_rect().size.x/2 - 1000, get_viewport_rect().size.y/2 - 1000)
+	center_beam.size = Vector2(2000, 2000)
+	center_beam.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	center_beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center_beam.modulate = Color(1.0, 0.9, 0.7, 0.3)
+	center_beam.material = mat_add
+	atmosphere_layer.add_child(center_beam)
 
-		var sprite = Sprite2D.new()
-		sprite.texture = soft_tex
-		sprite.position = Vector2(x, y)
-		sprite.scale = Vector2(s, s)
-		sprite.z_index = 60
-		sprite.material = additive_material
-		sprite.modulate = Color(intensity, intensity * 0.95, intensity * 0.8, 0.5)
-		lighting_layer.call_deferred("add_child", sprite)
-		ambient_lights.append({"sprite": sprite, "base_intensity": intensity, "phase": randf() * TAU})
-
-	# 7. 边缘暗角
-	_create_edge_vignette()
-
-	# 8. 玩家跟随光源
-	_create_player_light()
-
-	# 9. 添加Godot原生2D光照
-	_create_native_2d_lights()
+	# WorldEnvironment
+	var world_env = WorldEnvironment.new()
+	var env = Environment.new()
+	env.background_mode = Environment.BG_CANVAS
+	env.glow_enabled = true
+	env.glow_intensity = 1.0
+	env.glow_strength = 0.95
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	env.glow_hdr_threshold = 0.8
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.2
+	env.adjustment_saturation = 1.1
+	world_env.environment = env
+	get_parent().add_child(world_env)
 
 func _create_light_texture(size: int, falloff: float) -> ImageTexture:
 	"""创建用于加法混合的光斑纹理 - 中心亮边缘快速衰减"""
@@ -998,61 +1097,16 @@ func _create_vignette_texture() -> ImageTexture:
 
 func _create_player_light():
 	"""创建跟随玩家的动态光源"""
-	player_light = PointLight2D.new()
-	player_light.texture = _create_light_texture(256, 2.0)
-	player_light.texture_scale = 3.0
-	player_light.energy = 0.4
-	player_light.color = Color(1.0, 0.95, 0.85)  # 暖白色
-	player_light.blend_mode = PointLight2D.BLEND_MODE_ADD
-	player_light.shadow_enabled = false  # 关闭阴影以提高性能
-	player_light.z_index = 80
-
-	# 添加到光照层，稍后在_process中更新位置
-	lighting_layer.call_deferred("add_child", player_light)
+	# 已移除，保持纯净
+	pass
 
 func _create_native_2d_lights():
 	"""创建Godot原生2D光源增强效果"""
-	# 创建几个固定位置的装饰性光源
-	var light_positions = [
-		{"pos": Vector2(600, 400), "color": Color(1.0, 0.9, 0.7), "energy": 0.3, "scale": 2.5},
-		{"pos": Vector2(1800, 450), "color": Color(1.0, 0.95, 0.8), "energy": 0.25, "scale": 2.2},
-		{"pos": Vector2(1200, 600), "color": Color(1.0, 0.92, 0.75), "energy": 0.35, "scale": 3.0},
-		{"pos": Vector2(400, 900), "color": Color(0.95, 0.9, 0.7), "energy": 0.2, "scale": 2.0},
-		{"pos": Vector2(2000, 1000), "color": Color(1.0, 0.88, 0.7), "energy": 0.22, "scale": 2.3},
-		{"pos": Vector2(800, 1300), "color": Color(1.0, 0.95, 0.8), "energy": 0.25, "scale": 2.0},
-		{"pos": Vector2(1600, 1400), "color": Color(0.98, 0.92, 0.75), "energy": 0.28, "scale": 2.5},
-	]
-
-	for light_data in light_positions:
-		var light = PointLight2D.new()
-		light.texture = _create_light_texture(128, 2.2)
-		light.position = light_data.pos
-		light.color = light_data.color
-		light.energy = light_data.energy
-		light.texture_scale = light_data.scale
-		light.blend_mode = PointLight2D.BLEND_MODE_ADD
-		light.shadow_enabled = false
-		light.z_index = 70
-		lighting_layer.call_deferred("add_child", light)
+	pass # 移除所有额外光源
 
 func _update_dynamic_lighting(delta: float):
 	"""更新动态光照效果 - 禁用呼吸效果"""
-	flicker_timer += delta
-
-	# 更新玩家光源位置（但不闪烁）
-	if player_light and is_instance_valid(player_light):
-		var player = get_tree().get_first_node_in_group("player")
-		if player and is_instance_valid(player):
-			player_light.global_position = player.global_position
-			# 固定能量值，不再呼吸
-			player_light.energy = 0.4
-
-	# 环境光源不再呼吸，保持固定亮度
-	# for light_info in ambient_lights:
-	# 	if light_info.has("sprite") and is_instance_valid(light_info.sprite):
-	# 		var sprite = light_info.sprite
-	# 		var base = light_info.base_intensity
-	# 		sprite.modulate = Color(base, base * 0.92, base * 0.7, 1.0)
+	pass
 
 # ==================== 后处理层 ====================
 func _create_post_process_layer():
@@ -1077,10 +1131,6 @@ func _create_post_process_layer():
 	post_process_rect.anchor_top = 0
 	post_process_rect.anchor_right = 1
 	post_process_rect.anchor_bottom = 1
-	post_process_rect.offset_left = 0
-	post_process_rect.offset_top = 0
-	post_process_rect.offset_right = 0
-	post_process_rect.offset_bottom = 0
 
 	# 创建 ShaderMaterial
 	var material = ShaderMaterial.new()
@@ -1199,28 +1249,33 @@ func get_post_process_material() -> ShaderMaterial:
 
 # ==================== 阴影系统 ====================
 # 全局阴影方向（模拟下午2-3点的阳光）
-const SHADOW_DIRECTION = Vector2(12, 8)  # 向右下方倾斜的影子，更贴近实体
-const SHADOW_ANGLE = 0.35  # 约20度角，模拟午后阳光
+const SHADOW_DIRECTION = Vector2(12, 12)  # 更倾斜
+const SHADOW_ANGLE = 0.5  # 角度加大
 
-func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), offset: Vector2 = Vector2(0, 0)) -> Sprite2D:
-	"""为实体创建统一方向的阴影 - 模拟下午斜阳
-	parent: 阴影的父节点（通常是角色/竹子）
-	size: 阴影椭圆大小 (宽, 高)
-	offset: 额外的偏移（基于实体大小）
-	"""
+func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), offset: Vector2 = Vector2(0, 0), height_factor: float = 1.0) -> Sprite2D:
+	"""为实体创建统一方向的阴影 - 斜长浓烈风格"""
 	var shadow = Sprite2D.new()
 	shadow.name = "Shadow"
 	shadow.texture = _create_shadow_texture(int(size.x), int(size.y))
 
-	# 下午阳光投射：影子向右下方延伸
-	var shadow_offset = SHADOW_DIRECTION + offset
+	# 影子偏移 = 基础方向 * 高度因子
+	var shadow_offset = SHADOW_DIRECTION * height_factor * 2.0 + offset # 影子更长
+	
 	shadow.position = shadow_offset
-	shadow.rotation = SHADOW_ANGLE  # 倾斜角度
-	shadow.z_index = -10  # 在实体下方
+	shadow.rotation = SHADOW_ANGLE
+	shadow.scale = Vector2(1.0, 2.5) # 拉长影子，制造斜长感
+	shadow.z_index = -10
 	shadow.centered = true
+	shadow.modulate = Color(0, 0, 0, 0.7) # 浓烈的黑影
 
 	parent.call_deferred("add_child", shadow)
 	return shadow
+
+func add_dynamic_shadow(node: Node2D, scale_mult: float = 1.0):
+	"""为动态角色（玩家/敌人）添加影子"""
+	var size = Vector2(50, 25) * scale_mult
+	# 动态角色通常有碰撞体，影子应该在脚下中心
+	create_shadow_for_entity(node, size, Vector2(0, 5), 0.5)
 
 func _create_shadow_texture(width: int, height: int) -> ImageTexture:
 	"""创建椭圆形阴影纹理，形状根据宽高比调整"""
@@ -1246,10 +1301,11 @@ func _create_shadow_texture(width: int, height: int) -> ImageTexture:
 
 				# 使用柔和的衰减曲线（还原）
 				alpha = pow(alpha, 1.5)  # 还原到1.5
-				alpha = alpha * 0.35  # 还原到0.35
+				alpha = alpha * 0.4  # 稍微加深一点点
 
-				# 设置为半透明黑色
-				image.set_pixel(x, y, Color(0, 0, 0, alpha))
+				# 设置为深蓝紫色半透明（环境阴影色），而不是纯黑
+				# 这样在草地上看起来更自然，像是有天空光漫射
+				image.set_pixel(x, y, Color(0.1, 0.1, 0.25, alpha))
 			else:
 				# 在椭圆外，完全透明
 				image.set_pixel(x, y, Color(0, 0, 0, 0))

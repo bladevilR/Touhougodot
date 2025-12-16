@@ -84,9 +84,9 @@ func _spawn_bamboo_cluster(pos: Vector2, size: int):
 func _create_simple_bamboo(pos: Vector2):
 	"""创建简单的竹子障碍物"""
 	var bamboo_textures = [
-		"res://assets/SUCAI/images_resized/bamboo/bamboo_single_straight_1.png",
-		"res://assets/SUCAI/images_resized/bamboo/bamboo_single_straight_2.png",
-		"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_medium_1.png",
+		"res://bamboo/bamboo_single_straight_1.png",
+		"res://bamboo/bamboo_single_straight_2.png",
+		"res://bamboo/bamboo_cluster_medium_1.png",
 	]
 
 	var texture_path = bamboo_textures[randi() % bamboo_textures.size()]
@@ -130,25 +130,25 @@ func _spawn_decoration(pos: Vector2, type: String):
 	match type:
 		"flower":
 			var flower_textures = [
-				"res://assets/SUCAI/images_resized/flower_white_daisy_single.png",
-				"res://assets/SUCAI/images_resized/flower_blue_single_1.png",
-				"res://assets/SUCAI/images_resized/flower_red_cluster_1.png",
+				"res://flower_white_daisy_single.png",
+				"res://flower_blue_single_1.png",
+				"res://flower_red_cluster_1.png",
 			]
 			if flower_textures.size() > 0:
 				texture_path = flower_textures[randi() % flower_textures.size()]
 			scale = 0.08
 		"rock":
 			var rock_textures = [
-				"res://assets/SUCAI/images_resized/rock_medium_grey.png",
-				"res://assets/SUCAI/images_resized/rock_large_moss_1.png",
+				"res://rock_medium_grey.png",
+				"res://rock_large_moss_1.png",
 			]
 			if rock_textures.size() > 0:
 				texture_path = rock_textures[randi() % rock_textures.size()]
 			scale = 0.15
 		"shoot":
 			var shoot_textures = [
-				"res://assets/SUCAI/images_resized/shoot_small_1.png",
-				"res://assets/SUCAI/images_resized/shoot_medium_1.png",
+				"res://shoot_small_1.png",
+				"res://shoot_medium_1.png",
 			]
 			if shoot_textures.size() > 0:
 				texture_path = shoot_textures[randi() % shoot_textures.size()]

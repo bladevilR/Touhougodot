@@ -11,17 +11,17 @@ signal kill_progress_updated(current_kills: int, target_kills: int)  # 击杀进
 
 # 房间类型
 enum RoomType {
-	NORMAL,      # 普通战斗房
-	SHOP,        # 商店房（河童）
-	BOSS,        # BOSS房
-	ENCHANT,     # 附魔房
-	REST,        # 休息房（回血）
-	TREASURE     # 宝箱房
+	NORMAL = 0,      # 普通战斗房
+	SHOP = 1,        # 商店房（河童）
+	BOSS = 2,        # BOSS房
+	ENCHANT = 3,     # 附魔房
+	REST = 4,        # 休息房（回血）
+	TREASURE = 5     # 宝箱房
 }
 
 # 当前状态
 var current_room_index: int = 0
-var current_room_type: RoomType = RoomType.NORMAL
+var current_room_type = 0 # 默认为 NORMAL (0)
 var is_room_cleared: bool = false
 var current_kills: int = 0  # 当前房间击杀数
 var target_kills: int = 20  # 目标击杀数（默认20）
@@ -30,11 +30,13 @@ var game_start_time: float = 0.0  # 游戏开始时间（用于Boss选择）
 # 房间网络结构
 class RoomNode:
 	var id: int
-	var type: RoomType
+	var type = 0 # 默认为 NORMAL (0)
 	var position: Vector2  # 在地图上的位置
 	var connected_rooms: Array[int] = []  # 连接的房间ID列表
 	var is_visited: bool = false
 	var is_current: bool = false
+	var is_cleared: bool = false # 是否已清理
+	var depth: int = 0 # 房间深度
 
 var room_map: Array[RoomNode] = []  # 房间网络
 var max_depth: int = 0  # 最大深度（Boss房间深度）
@@ -69,112 +71,117 @@ func _generate_room_map():
 	"""生成房间地图网络结构"""
 	room_map.clear()
 
-	# 创建一个类似roguelike的房间网络
-	# 深度0：起始房间
-	# 深度1-2：普通战斗
-	# 深度3：商店/附魔/宝箱
-	# 深度4-5：普通战斗
-	# 深度6：Boss房间
-
 	var room_id = 0
 
 	# 深度0：起始房间
 	var start_room = RoomNode.new()
 	start_room.id = room_id
 	start_room.type = RoomType.NORMAL
-	start_room.position = Vector2(400, 300)
+	start_room.position = Vector2(0, 0) # 原点
+	start_room.depth = 0
+	start_room.is_cleared = false # 起始房间也要战斗！
 	room_map.append(start_room)
 	room_id += 1
 
-	# 深度1：3个房间
+	# 深度1：3个房间 (西、北、东)
+	var depth1_offsets = [Vector2(-400, 0), Vector2(0, -400), Vector2(400, 0)]
 	var depth1_rooms = []
 	for i in range(3):
 		var room = RoomNode.new()
 		room.id = room_id
 		room.type = RoomType.NORMAL
-		room.position = Vector2(200 + i * 200, 150)
+		room.position = start_room.position + depth1_offsets[i]
+		room.depth = 1
 		start_room.connected_rooms.append(room.id)
 		room.connected_rooms.append(start_room.id)
 		depth1_rooms.append(room)
 		room_map.append(room)
 		room_id += 1
 
-	# 深度2：4个房间
+	# 深度2：4个房间 (在深度1的基础上延伸)
 	var depth2_rooms = []
-	for i in range(4):
+	# 从左(西)房间延伸出2个
+	for i in range(2):
 		var room = RoomNode.new()
 		room.id = room_id
 		room.type = RoomType.NORMAL
-		room.position = Vector2(150 + i * 180, 50)
-		# 连接到深度1的相邻房间
-		var connect_to = depth1_rooms[min(i, 2)]
-		room.connected_rooms.append(connect_to.id)
-		connect_to.connected_rooms.append(room.id)
-		if i < 3:
-			var connect_to2 = depth1_rooms[min(i + 1, 2)]
-			room.connected_rooms.append(connect_to2.id)
-			connect_to2.connected_rooms.append(room.id)
+		# 往西和往北延伸
+		var offset = Vector2(-400, 0) if i == 0 else Vector2(0, -400)
+		room.position = depth1_rooms[0].position + offset
+		room.depth = 2
+		depth1_rooms[0].connected_rooms.append(room.id)
+		room.connected_rooms.append(depth1_rooms[0].id)
+		depth2_rooms.append(room)
+		room_map.append(room)
+		room_id += 1
+	
+	# 从右(东)房间延伸出2个
+	for i in range(2):
+		var room = RoomNode.new()
+		room.id = room_id
+		room.type = RoomType.NORMAL
+		# 往东和往北延伸
+		var offset = Vector2(400, 0) if i == 0 else Vector2(0, -400)
+		room.position = depth1_rooms[2].position + offset
+		room.depth = 2
+		depth1_rooms[2].connected_rooms.append(room.id)
+		room.connected_rooms.append(depth1_rooms[2].id)
 		depth2_rooms.append(room)
 		room_map.append(room)
 		room_id += 1
 
-	# 深度3：特殊房间层（商店、附魔、宝箱）
+	# 深度3：特殊房间 (连接深度2的末端)
 	var special_types = [RoomType.SHOP, RoomType.ENCHANT, RoomType.TREASURE]
 	var depth3_rooms = []
 	for i in range(3):
 		var room = RoomNode.new()
 		room.id = room_id
 		room.type = special_types[i]
-		room.position = Vector2(200 + i * 200, -50)
-		# 连接到深度2的房间
-		var connect_idx = i * depth2_rooms.size() / 3
-		var connect_to = depth2_rooms[connect_idx]
-		room.connected_rooms.append(connect_to.id)
-		connect_to.connected_rooms.append(room.id)
+		# 简单堆叠在远处，坐标不再重要，只要保持不重叠即可，因为之前的连接已经决定了拓扑
+		room.position = Vector2(0, -800 - i * 400) 
+		room.depth = 3
+		
+		# 连接到深度2的房间 (这里简化连接逻辑，随便连一个没连满的)
+		var parent_room = depth2_rooms[i % depth2_rooms.size()]
+		parent_room.connected_rooms.append(room.id)
+		room.connected_rooms.append(parent_room.id)
+		
 		depth3_rooms.append(room)
 		room_map.append(room)
 		room_id += 1
 
-	# 深度4：4个房间
-	var depth4_rooms = []
-	for i in range(4):
-		var room = RoomNode.new()
-		room.id = room_id
-		room.type = RoomType.NORMAL
-		room.position = Vector2(150 + i * 180, -150)
-		# 连接到深度3
-		var connect_to = depth3_rooms[min(i, 2)]
-		room.connected_rooms.append(connect_to.id)
-		connect_to.connected_rooms.append(room.id)
-		depth4_rooms.append(room)
-		room_map.append(room)
-		room_id += 1
-
-	# 深度5：2个房间
-	var depth5_rooms = []
-	for i in range(2):
-		var room = RoomNode.new()
-		room.id = room_id
-		room.type = RoomType.NORMAL
-		room.position = Vector2(250 + i * 200, -250)
-		# 连接到深度4的多个房间
-		for j in range(2):
-			var connect_idx = i * 2 + j
-			var connect_to = depth4_rooms[connect_idx]
-			room.connected_rooms.append(connect_to.id)
-			connect_to.connected_rooms.append(room.id)
-		depth5_rooms.append(room)
-		room_map.append(room)
-		room_id += 1
+	# 后续深度简化处理... 
+	# 只要确保 position 不重叠且方向大体正确
+	var last_rooms = depth3_rooms
+	
+	# 深度4-5
+	for d in range(2):
+		var new_rooms = []
+		for i in range(2):
+			var room = RoomNode.new()
+			room.id = room_id
+			room.type = RoomType.NORMAL
+			room.position = Vector2(-400 + i * 800, -1600 - d * 400)
+			room.depth = 4 + d
+			
+			var parent = last_rooms[i % last_rooms.size()]
+			parent.connected_rooms.append(room.id)
+			room.connected_rooms.append(parent.id)
+			
+			new_rooms.append(room)
+			room_map.append(room)
+			room_id += 1
+		last_rooms = new_rooms
 
 	# 深度6：Boss房间
 	var boss_room = RoomNode.new()
 	boss_room.id = room_id
 	boss_room.type = RoomType.BOSS
-	boss_room.position = Vector2(400, -350)
-	for depth5_room in depth5_rooms:
-		boss_room.connected_rooms.append(depth5_room.id)
-		depth5_room.connected_rooms.append(boss_room.id)
+	boss_room.position = Vector2(0, -2400)
+	boss_room.depth = 6
+	for r in last_rooms:
+		r.connected_rooms.append(boss_room.id)
+		boss_room.connected_rooms.append(r.id)
 	room_map.append(boss_room)
 
 	max_depth = 6
@@ -188,21 +195,35 @@ func _start_room(room_index: int):
 		return
 
 	current_room_index = room_index
+	var current_room_node = room_map[room_index]
+	
 	current_kills = 0
-	is_room_cleared = false
+	is_room_cleared = current_room_node.is_cleared
 
 	# 设置当前房间标记
 	for room in room_map:
 		room.is_current = (room.id == room_index)
-	room_map[room_index].is_visited = true
+	current_room_node.is_visited = true
 
-	current_room_type = room_map[room_index].type
+	current_room_type = current_room_node.type
 
-	print("进入房间 ", room_index + 1, " 类型: ", _get_room_type_name(current_room_type))
+	print("进入房间 ", room_index + 1, " 类型: ", _get_room_type_name(current_room_type), " 深度: ", current_room_node.depth)
 	room_entered.emit(_get_room_type_name(current_room_type), room_index)
+
+	# 更新光照环境
+	var map_system = get_tree().get_first_node_in_group("map_system")
+	if map_system and map_system.has_method("update_environment"):
+		map_system.update_environment(current_room_node.depth)
 
 	# 发送UI更新信号
 	SignalBus.room_info_updated.emit(_get_room_type_name(current_room_type), room_index)
+
+	# 如果房间已清理，直接开门，跳过生成敌人
+	if is_room_cleared:
+		print("房间已清理，跳过战斗")
+		_spawn_exit_doors()
+		door_opened.emit()
+		return
 
 	# 根据房间类型执行不同逻辑
 	match current_room_type:
@@ -256,6 +277,8 @@ func _on_room_cleared():
 		return
 
 	is_room_cleared = true
+	room_map[current_room_index].is_cleared = true # 标记为已清理
+	
 	room_cleared.emit()
 	print("房间清理完成! 门已打开")
 
@@ -264,11 +287,11 @@ func _on_room_cleared():
 	door_opened.emit()
 
 func _spawn_exit_doors():
-	"""生成出口门/传送门 - 在地图边缘的自然门口"""
+	"""生成出口门/传送门 - 根据连接房间的相对位置 (修复拓扑)"""
 	# 清理旧门
 	for door in exit_doors:
 		if is_instance_valid(door):
-			door.queue_free()
+			door.call_deferred("queue_free")
 	exit_doors.clear()
 
 	var door_scene = load("res://ExitDoor.tscn")
@@ -277,66 +300,61 @@ func _spawn_exit_doors():
 		return
 
 	var current_room = room_map[current_room_index]
-	var connected_count = current_room.connected_rooms.size()
-
-	if connected_count == 0:
-		print("当前房间没有连接的房间")
-		return
-
+	
 	# 获取地图尺寸
-	var map_system = get_tree().get_first_node_in_group("map_system")
 	var map_width = 2400
 	var map_height = 1800
-
-	if map_system:
+	var map_system = get_tree().get_first_node_in_group("map_system")
+	if map_system and "MAP_WIDTH" in map_system:
 		map_width = map_system.MAP_WIDTH
 		map_height = map_system.MAP_HEIGHT
 
-	# 定义四个方向的门位置（在地图边缘的自然豁口处）
-	var door_positions_map = {
-		"north": {"pos": Vector2(map_width / 2, 150), "dir": 0},  # NORTH
-		"south": {"pos": Vector2(map_width / 2, map_height - 150), "dir": 1},  # SOUTH
-		"east": {"pos": Vector2(map_width - 150, map_height / 2), "dir": 2},  # EAST
-		"west": {"pos": Vector2(150, map_height / 2), "dir": 3},  # WEST
+	# 定义门的位置配置
+	var door_positions = {
+		"north": {"pos": Vector2(map_width / 2, 150), "dir": 0},
+		"south": {"pos": Vector2(map_width / 2, map_height - 150), "dir": 1},
+		"east": {"pos": Vector2(map_width - 150, map_height / 2), "dir": 2},
+		"west": {"pos": Vector2(150, map_height / 2), "dir": 3}
 	}
 
-	# 可用方向
-	var available_directions = ["north", "south", "east", "west"]
-
-	# 根据连接房间数量选择门的位置
-	var selected_directions = []
-	match connected_count:
-		1:
-			selected_directions = ["north"]
-		2:
-			selected_directions = ["north", "east"]
-		3:
-			selected_directions = ["north", "east", "south"]
-		_:
-			selected_directions = available_directions
-
-	# 生成门
-	for i in range(min(connected_count, selected_directions.size())):
+	# 遍历连接的房间，根据相对方向生成门
+	for target_id in current_room.connected_rooms:
+		if target_id >= room_map.size(): continue
+		
+		var target_room = room_map[target_id]
+		var direction_vec = target_room.position - current_room.position
+		
+		var door_key = ""
+		
+		# 判断主要方向
+		if abs(direction_vec.x) > abs(direction_vec.y):
+			# 东西向
+			if direction_vec.x > 0: door_key = "east"
+			else: door_key = "west"
+		else:
+			# 南北向
+			if direction_vec.y > 0: door_key = "south"
+			else: door_key = "north"
+			
+		var door_data = door_positions[door_key]
 		var door = door_scene.instantiate()
-		var dir_key = selected_directions[i]
-		var door_data = door_positions_map[dir_key]
-
+		
 		door.position = door_data.pos
-		door.set_meta("target_room_id", current_room.connected_rooms[i])
-
+		door.set_meta("target_room_id", target_id)
+		
 		# 设置门的方向
 		door.call_deferred("set_door_direction", door_data.dir)
-
+		
 		# 连接信号
-		door.door_entered.connect(_on_door_entered.bind(current_room.connected_rooms[i], door_data.dir))
-
+		door.door_entered.connect(_on_door_entered.bind(target_id, door_data.dir))
+		
 		exit_doors.append(door)
 		get_parent().add_child(door)
-
-		# 打开门（移除竹林封印）
+		
+		# 打开门
 		door.call_deferred("open_door")
 
-	print("生成了 ", exit_doors.size(), " 个出口门在地图边缘")
+	print("生成了 ", exit_doors.size(), " 个定向出口门")
 
 func _on_door_entered(from_direction: int, target_room_id: int, _enter_dir: int):
 	"""玩家进入传送门"""
@@ -349,21 +367,22 @@ func _on_door_entered(from_direction: int, target_room_id: int, _enter_dir: int)
 	# 从西门进入 → 出现在东侧
 	var player = get_tree().get_first_node_in_group("player")
 	if player:
+		# 注意：from_direction 是门的朝向 (NORTH=0, SOUTH=1...)
 		match from_direction:
-			0:  # NORTH - 从北门进入，出现在新房间南侧
-				player.global_position = Vector2(1200, 1800)
-			1:  # SOUTH - 从南门进入，出现在新房间北侧
-				player.global_position = Vector2(1200, 600)
-			2:  # EAST - 从东门进入，出现在新房间西侧
-				player.global_position = Vector2(600, 1200)
-			3:  # WEST - 从西门进入，出现在新房间东侧
-				player.global_position = Vector2(1800, 1200)
+			0:  # NORTH
+				player.global_position = Vector2(1200, 1800 - 300) # 南侧
+			1:  # SOUTH
+				player.global_position = Vector2(1200, 300) # 北侧
+			2:  # EAST
+				player.global_position = Vector2(300, 900) # 西侧
+			3:  # WEST
+				player.global_position = Vector2(2100, 900) # 东侧
 		print("玩家位置设置为: ", player.global_position)
 
 	# 清理门
 	for door in exit_doors:
 		if is_instance_valid(door):
-			door.queue_free()
+			door.call_deferred("queue_free")
 	exit_doors.clear()
 
 	# 清理当前房间的敌人（如果有）
@@ -439,7 +458,7 @@ func _start_enchant_room():
 	"""附魔房间"""
 	print("附魔房间 - 使用転流购买元素附魔")
 
-	# 生��附魔商店
+	# 生附魔商店
 	var enchant_shop_scene = load("res://EnchantShop.tscn")
 	if enchant_shop_scene:
 		var shop = enchant_shop_scene.instantiate()
@@ -481,7 +500,7 @@ func _start_rest_room():
 
 # ==================== 工具函数 ====================
 
-func _get_room_type_name(room_type: RoomType) -> String:
+func _get_room_type_name(room_type: int) -> String:
 	match room_type:
 		RoomType.NORMAL: return "普通"
 		RoomType.SHOP: return "商店"

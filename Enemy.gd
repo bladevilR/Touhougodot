@@ -280,6 +280,10 @@ func take_damage(amount, weapon_id: String = ""):
 		health_comp.damage(final_damage)
 		# 发射伤害数字，包含武器ID
 		SignalBus.damage_dealt.emit(final_damage, global_position, false, weapon_id)
+		
+		# 受击震动反馈 (伤害较高时)
+		if final_damage > 20:
+			SignalBus.screen_shake.emit(0.05, 3.0)
 
 		# 更新血量条
 		_update_health_bar()

@@ -455,20 +455,7 @@ static func _initialize_upgrade_trees():
 		WeaponUpgradeChoice.new("wings_explode", "phoenix_wings", 3, "爆裂之翼", "击杀敌人触发爆炸", "💣")
 	]
 	
-	WEAPON_UPGRADE_TREES["phoenix_claws"] = [
-		# Tier 1
-		WeaponUpgradeChoice.new("claw_size", "phoenix_claws", 1, "巨型火拳", "大小 +50%，伤害 +30%", "👊"),
-		WeaponUpgradeChoice.new("claw_speed", "phoenix_claws", 1, "迅捷连打", "冷却时间 -30%", "⚡"),
-		WeaponUpgradeChoice.new("claw_burn", "phoenix_claws", 1, "灼烧之拳", "命中施加燃烧效果", "🔥"),
-		# Tier 2
-		WeaponUpgradeChoice.new("claw_multi", "phoenix_claws", 2, "多重拳脚", "同时发射 3 波拳击", "🔱"),
-		WeaponUpgradeChoice.new("claw_vamp", "phoenix_claws", 2, "浴火重生", "击杀敌人回复 1 HP", "❤️"),
-		WeaponUpgradeChoice.new("claw_pierce", "phoenix_claws", 2, "破甲重击", "穿透 +3", "🗡️"),
-		# Tier 3
-		WeaponUpgradeChoice.new("claw_dash", "phoenix_claws", 3, "火鸟突击", "拳击伴随火鸟冲刺", "🦅"),
-		WeaponUpgradeChoice.new("claw_x", "phoenix_claws", 3, "四方拳劲", "向四个方向同时挥拳", "❌"),
-		WeaponUpgradeChoice.new("claw_inferno", "phoenix_claws", 3, "炼狱火拳", "拳击留下持续燃烧的火焰路径", "🌋")
-	]
+	WEAPON_UPGRADE_TREES["phoenix_claws"] = [] # 移除升级，改为固定技能
 
 	# --- Sakuya (十六夜咲夜) Weapons ---
 	WEAPON_UPGRADE_TREES["knives"] = [

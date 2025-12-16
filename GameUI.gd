@@ -35,6 +35,7 @@ var room_panel: Control = null
 var room_label: Label = null
 var wave_label: Label = null
 var wave_progress_bar: ProgressBar = null
+var zone_name_label: Label = null # 区域名称
 
 # 房间地图UI
 var room_map_panel: Control = null
@@ -175,16 +176,16 @@ func on_game_over():
 	var portrait_path = "res://assets/characters/1.png"
 	if ResourceLoader.exists(portrait_path):
 		mokou_portrait.texture = load(portrait_path)
-		mokou_portrait.position = Vector2(100, 150)
-		mokou_portrait.size = Vector2(400, 500)
-		mokou_portrait.expand_mode = TextureRect.EXPAND_FIT_HEIGHT
+		mokou_portrait.position = Vector2(50, 150)  # 更靠左，更小
+		mokou_portrait.size = Vector2(300, 450)     # 再次缩小
+		mokou_portrait.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
 		mokou_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		mokou_portrait.modulate = Color(0.8, 0.8, 0.9, 1.0)  # 略微暗淡
+		mokou_portrait.modulate = Color(0.8, 0.8, 0.9, 1.0)
 		overlay.add_child(mokou_portrait)
 
 	# Game Over文字容器（右侧）
 	var text_container = Control.new()
-	text_container.position = Vector2(550, 200)
+	text_container.position = Vector2(600, 200) # 避开立绘
 	text_container.size = Vector2(600, 400)
 	overlay.add_child(text_container)
 
@@ -767,6 +768,18 @@ func _create_room_ui():
 	style.bg_color = Color("#66ccff")
 	wave_progress_bar.add_theme_stylebox_override("fill", style)
 	room_panel.add_child(wave_progress_bar)
+	
+	# 创建区域名称显示（屏幕中央上方）
+	zone_name_label = Label.new()
+	zone_name_label.name = "ZoneNameLabel"
+	zone_name_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	zone_name_label.position.y = 80
+	zone_name_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	zone_name_label.add_theme_font_size_override("font_size", 48)
+	zone_name_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.0)) # 初始透明
+	zone_name_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	zone_name_label.add_theme_constant_override("outline_size", 4)
+	add_child(zone_name_label)
 
 func _on_wave_info_updated(current_wave: int, total_waves: int):
 	"""击杀进度信息更新（重用波次信号）"""
@@ -799,6 +812,27 @@ func _on_room_info_updated(room_type: String, room_index: int):
 				color = Color("#66ccff")  # 蓝色
 
 		room_label.add_theme_color_override("font_color", color)
+		
+	# 更新区域名称并播放动画
+	if zone_name_label:
+		# 获取深度信息（需要从RoomManager获取，或者简单根据index推断）
+		# 这里假设 RoomManager 已经通过其他方式传递了 depth，或者我们再次获取
+		var room_manager = get_tree().get_first_node_in_group("room_manager")
+		var depth = 0
+		if room_manager and room_manager.room_map.size() > room_index:
+			depth = room_manager.room_map[room_index].depth
+			
+		var zone_name = "竹林外围"
+		if depth >= 3:
+			zone_name = "竹林深处"
+			
+		zone_name_label.text = "- " + zone_name + " -"
+		
+		# 播放淡入淡出动画
+		var tween = create_tween()
+		tween.tween_property(zone_name_label, "modulate:a", 1.0, 1.0)
+		tween.tween_interval(2.0)
+		tween.tween_property(zone_name_label, "modulate:a", 0.0, 1.0)
 
 	# 更新房间地图
 	if room_map_canvas:
@@ -823,7 +857,7 @@ func _create_room_map_ui():
 
 	# 标题
 	var title = Label.new()
-	title.text = "房间地���"
+	title.text = "房间地图"
 	title.position = Vector2(10, 5)
 	title.add_theme_font_size_override("font_size", 16)
 	title.add_theme_color_override("font_color", Color("#ffcc00"))
@@ -908,4 +942,3 @@ func _on_settings_changed():
 	"""设置改变时响应"""
 	_apply_settings()
 	print("[GameUI] 设置已更新")
-

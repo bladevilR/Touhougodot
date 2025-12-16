@@ -37,15 +37,15 @@ func _create_nitori_portrait():
 	nitori_portrait = TextureRect.new()
 	nitori_portrait.name = "NitoriPortrait"
 
-	# 加载河童立绘 - 使用2C.png（对话版）
-	var portrait_path = "res://assets/characters/2C.png"
+	# 加载河童立绘 - 使用2.png（全身版）
+	var portrait_path = "res://assets/characters/2.png"
 	if ResourceLoader.exists(portrait_path):
 		var texture = load(portrait_path)
 		nitori_portrait.texture = texture
 
-		# 计算缩放：目标宽度120像素
+		# 计算缩放：目标宽度300像素 (放大)
 		var original_size = texture.get_size()
-		var target_width = 120.0
+		var target_width = 300.0
 		var scale_factor = target_width / original_size.x
 		nitori_portrait.scale = Vector2(scale_factor, scale_factor)
 
@@ -55,7 +55,8 @@ func _create_nitori_portrait():
 		return
 
 	# 设置立绘位置（左侧）
-	nitori_portrait.position = Vector2(50, 150)
+	nitori_portrait.position = Vector2(50, 100)
+	nitori_portrait.modulate = Color(1, 1, 1, 0.9) # 稍微半透明一点点
 
 	# 添加到界面
 	add_child(nitori_portrait)
@@ -116,8 +117,8 @@ func _create_item_button(item: NitoriShop.ShopItem):
 	var price_text = "[" + str(item.price) + "金]"
 	button.text = item.item_name + "\n" + price_text + "\n" + item.description
 
-	# 设置字体大小
-	button.add_theme_font_size_override("font_size", 16)
+	# 设置字体大小（增大）
+	button.add_theme_font_size_override("font_size", 20)
 
 	# 根据商品类型设置颜色
 	var style = StyleBoxFlat.new()

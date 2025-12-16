@@ -165,6 +165,12 @@ func _load_character_data(char_id: int):
 	if camera:
 		camera.zoom = Vector2(1.5, 1.5)  # 适中的zoom值，人物清晰可见
 		camera.make_current() # Ensure camera follows player
+		
+		# 动态添加屏幕震动组件
+		var camera_shake = Node.new()
+		camera_shake.name = "CameraShake"
+		camera_shake.set_script(load("res://CameraShake.gd"))
+		camera.add_child(camera_shake)
 
 func _setup_collision_layers():
 	# Layer 1: Player
@@ -335,8 +341,8 @@ func take_damage(amount: float):
 	if health_comp:
 		health_comp.damage(amount)
 
-		# 发送受伤屏幕震动
-		SignalBus.screen_shake.emit(0.15, 6.0)  # 0.15秒，6像素
+		# 发送受伤屏幕震动 (增强力度)
+		SignalBus.screen_shake.emit(0.25, 10.0)
 
 		# 播放受击效果
 		if sprite:
