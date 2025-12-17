@@ -103,8 +103,33 @@ func _ready():
 	# 监听升级事件
 	SignalBus.level_up.connect(on_level_up)
 
-	# 添加阴影（下午斜阳的长影子）
-	_create_player_shadow()
+	# 强制手动创建人物影子 (Hardcoded Fallback - 保持与MapSystem一致)
+	if sprite and sprite.texture:
+		var shadow = Sprite2D.new()
+		shadow.texture = sprite.texture
+		shadow.hframes = sprite.hframes
+		shadow.vframes = sprite.vframes
+		shadow.frame = sprite.frame
+		shadow.flip_h = sprite.flip_h
+		
+		# 影子配置：使用倒影逻辑
+		shadow.centered = false
+		var tex_size = sprite.texture.get_size() / Vector2(sprite.hframes, sprite.vframes)
+		shadow.offset = Vector2(-tex_size.x / 2.0, -tex_size.y) # 锚点在底部中心
+		
+		# 变换：翻转 + 倾斜
+		shadow.scale = Vector2(sprite.scale.x, sprite.scale.y * -0.6)
+		shadow.skew = 0.6
+		
+		# 位置：玩家中心 + 半个高度(脚底) + 微调
+		# Player Sprite 是 Centered，所以脚底是 +h/2
+		var feet_offset = tex_size.y / 2.0 * sprite.scale.y
+		shadow.position = Vector2(0, feet_offset) + Vector2(5, -2)
+		
+		shadow.name = "Shadow"
+		shadow.z_index = -1
+		shadow.modulate = Color(0, 0, 0, 0.5)
+		add_child(shadow)
 
 	# 创建圆形粒子屏障效果
 	# _create_particle_barrier()  # 暂时关闭粒子屏障
@@ -112,6 +137,14 @@ func _ready():
 	# 显示精灵（角色数据已加载）
 	if sprite:
 		sprite.visible = true
+
+func _try_add_shadow():
+	var map_system = get_tree().get_first_node_in_group("map_system")
+	if map_system and map_system.has_method("ensure_entity_shadow"):
+		map_system.ensure_entity_shadow(self)
+	else:
+		# 实在找不到MapSystem，才用旧方法
+		_create_player_shadow()
 
 func _on_character_selected(selected_id: int):
 	"""角色选择信号回调"""
@@ -379,9 +412,9 @@ func _check_enemy_contact_damage():
 			# 设置冷却时间
 			contact_damage_cooldown = CONTACT_DAMAGE_INTERVAL
 
-			# 击退
+			# 击退 (增强力度)
 			var knockback_dir = (global_position - collider.global_position).normalized()
-			apply_knockback(knockback_dir, 300.0)
+			apply_knockback(knockback_dir, 800.0)
 
 			break  # 一次只处理一个敌人碰撞
 
@@ -527,7 +560,8 @@ func _create_player_shadow():
 
 	shadow.texture = ImageTexture.create_from_image(image)
 	shadow.position = Vector2(12, 8)  # 下午阳光向右下偏移
-	shadow.rotation = 0.35  # 约20度角
+	shadow.rotation = 0.8
+	shadow.skew = 0.0
 	shadow.z_index = -10
 	shadow.centered = true
 

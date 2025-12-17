@@ -20,6 +20,9 @@ var weapons_label: Label = null
 var mission_label: Label = null
 
 func _ready():
+	# 关键修复：确保在暂停时也能接收输入，防止卡死
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
 	# 创建UI
 	_create_ui()
 
@@ -60,16 +63,18 @@ func _create_ui():
 	var portrait_path = "res://assets/characters/1.png"
 	if ResourceLoader.exists(portrait_path):
 		portrait.texture = load(portrait_path)
-		portrait.position = Vector2(100, 150)  # 调整位置
-		portrait.size = Vector2(200, 300)      # 缩小立绘尺寸
-		portrait.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+		portrait.position = Vector2(20, 50)
+		portrait.custom_minimum_size = Vector2(675, 1012) 
+		portrait.size = Vector2(675, 1012)      
+		portrait.set_size(Vector2(675, 1012))   
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE 
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		overlay.add_child(portrait)
 
 	# 右侧信息容器（不需要单独背景，因为整体已经是白色）
 	info_container = VBoxContainer.new()
 	info_container.name = "InfoContainer"
-	info_container.position = Vector2(400, 120)  # 调整容器位置适配新立绘
+	info_container.position = Vector2(700, 100)  # 向右移动避开超大立绘
 	info_container.size = Vector2(650, 700)
 	info_container.add_theme_constant_override("separation", 15)
 	overlay.add_child(info_container)
@@ -183,6 +188,14 @@ func _create_ui():
 
 func _update_info():
 	"""更新角色信息显示"""
+	# 强制重置立绘大小（防止布局系统覆盖）
+	if portrait:
+		portrait.custom_minimum_size = Vector2(675, 1012) 
+		portrait.size = Vector2(675, 1012)
+		portrait.position = Vector2(20, 50)
+		portrait.set_size(Vector2(675, 1012))
+		print("DEBUG: Portrait size forced to ", portrait.size)
+
 	var player = get_tree().get_first_node_in_group("player")
 	if not player:
 		return

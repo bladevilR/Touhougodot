@@ -190,12 +190,16 @@ func on_game_over():
 	var portrait_path = "res://assets/characters/1.png"
 	if ResourceLoader.exists(portrait_path):
 		mokou_portrait.texture = load(portrait_path)
-		mokou_portrait.position = Vector2(50, 250)  # 调整位置
-		mokou_portrait.size = Vector2(100, 150)     # 缩小尺寸
-		mokou_portrait.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+		mokou_portrait.position = Vector2(50, 150)  # 调整位置
+		mokou_portrait.size = Vector2(300, 450)     # 调整尺寸
+		mokou_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		mokou_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		mokou_portrait.modulate = Color(0.8, 0.8, 0.9, 1.0)
 		overlay.add_child(mokou_portrait)
+		
+		# 强制刷新布局属性
+		mokou_portrait.call_deferred("set_custom_minimum_size", Vector2(300, 450))
+		mokou_portrait.call_deferred("set_size", Vector2(300, 450))
 
 	# Game Over文字容器（右侧）
 	var text_container = Control.new()

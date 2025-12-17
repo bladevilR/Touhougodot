@@ -135,11 +135,22 @@ func _ready():
 	# 添加阴影（下午斜阳的长影子）
 	var map_system = get_tree().get_first_node_in_group("map_system")
 	if map_system and map_system.has_method("create_shadow_for_entity"):
-		# 根据敌人缩放调整阴影大小 - 拉长的椭圆
+		# 根据敌人缩放调整阴影大小
 		var enemy_scale = sprite.scale.x if sprite else 1.0
-		# 影子在脚下，大小根据敌人缩放调整
 		var shadow_size = Vector2(40 * enemy_scale, 10 * enemy_scale)
-		shadow_sprite = map_system.create_shadow_for_entity(self, shadow_size, Vector2(0, 0))
+		
+		# 根据敌人类型判断是否悬空
+		var shadow_offset = Vector2(0, 5) # 默认地面
+		var shadow_alpha = 0.5
+		
+		# 飞行单位
+		if enemy_type in [GameConstants.EnemyType.ELF, GameConstants.EnemyType.FAIRY, GameConstants.EnemyType.GHOST]:
+			shadow_offset = Vector2(0, 40 * enemy_scale) # 悬空偏移
+			shadow_alpha = 0.3 # 离地更远，影子更淡
+			
+		var shadow = map_system.create_shadow_for_entity(self, shadow_size, shadow_offset)
+		if shadow:
+			shadow.modulate.a = shadow_alpha
 	else:
 		# 备用：直接创建阴影
 		_create_enemy_shadow()
@@ -619,7 +630,8 @@ func _create_enemy_shadow():
 
 	shadow_sprite.texture = ImageTexture.create_from_image(image)
 	shadow_sprite.position = Vector2(12, 8)
-	shadow_sprite.rotation = 0.35
+	shadow_sprite.rotation = 0.8
+	shadow_sprite.skew = 0.0
 	shadow_sprite.z_index = -10
 	shadow_sprite.centered = true
 
