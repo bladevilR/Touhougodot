@@ -97,10 +97,7 @@ var post_process_enabled: bool = false  # 默认禁用后处理
 var bamboo_noise: FastNoiseLite = null
 
 func _ready():
-	print("DEBUG: MapSystem _ready started")
-	# 加载 Shader
-	bamboo_sway_shader = load("res://shaders/bamboo_sway.gdshader")
-	post_process_shader = load("res://shaders/post_process.gdshader")
+	add_to_group("map_system")
 
 	# 初始化噪声
 	bamboo_noise = FastNoiseLite.new()
@@ -109,14 +106,16 @@ func _ready():
 	bamboo_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	bamboo_noise.fractal_octaves = 3
 
-	add_to_group("map_system")
-
 	# 获取游戏对象父节点（用于阴影系统）
 	var world = get_parent()
 	if world and world.has_method("get_game_objects_parent"):
 		game_objects_parent = world.get_game_objects_parent()
 	else:
 		game_objects_parent = get_parent()
+	
+	if not game_objects_parent:
+		game_objects_parent = self
+		print("MapSystem WARNING: game_objects_parent not found, using self.")
 
 	setup_layers()
 	create_background()
@@ -134,6 +133,8 @@ func _ready():
 	print("DEBUG: MapSystem _ready finished")
 
 func setup_layers():
+	if lighting_layer: return
+
 	# ===== 背景层 =====
 	background_layer = Node2D.new()
 	background_layer.name = "BackgroundLayer"
@@ -436,6 +437,10 @@ func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	area.body_entered.connect(_on_bamboo_impact.bind(sprite))
 	body.add_child(area)
 
+	if not game_objects_parent:
+		game_objects_parent = get_parent()
+		if not game_objects_parent: game_objects_parent = self
+
 	game_objects_parent.call_deferred("add_child", body)
 	interior_bamboos.append(body)
 	return 1
@@ -501,12 +506,19 @@ func create_decoration_sprite(texture_path: String, pos: Vector2, scale: float) 
 	var shadow_size = Vector2(texture.get_width() * scale * 0.8, texture.get_height() * scale * 0.4)
 	create_shadow_for_entity(container, shadow_size, Vector2(0, 0), 0.3)
 	
+	if not game_objects_parent:
+		game_objects_parent = get_parent()
+		if not game_objects_parent: game_objects_parent = self
+		
 	game_objects_parent.call_deferred("add_child", container)
 	interior_decorations.append(container)
 	return container
 
 # ==================== 光照系统 (核心修改 - 修复灰色蒙版) ====================
 func create_lighting(style: String = "outskirts"):
+	if not is_inside_tree(): return
+	if not lighting_layer: setup_layers()
+	
 	_clear_lighting()
 	
 	if style == "outskirts":
@@ -736,34 +748,48 @@ func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), o
 		shadow.frame = source_sprite.frame
 		shadow.flip_h = source_sprite.flip_h 
 		
-		# --- 核心修正：倒影逻辑 ---
-		# 1. 垂直翻转 (Scale Y 负值) -> 形成倒影
-		# 2. Skew 正值 -> 向右倾斜
-		# 3. Offset 设置为 Bottom-Center (在未翻转坐标系下)
-		#    翻转后，这个 Bottom-Center 会变成顶部的锚点，影子向下延伸
+		# --- Robust Shadow Connection Algorithm ---
+		# Goal: Align the shadow's "visual bottom" exactly with the sprite's "visual bottom".
 		
-		var tex_h = source_sprite.texture.get_size().y / source_sprite.vframes
-		var tex_w = source_sprite.texture.get_size().x / source_sprite.hframes
+		var img = source_sprite.texture.get_image()
+		var visible_bottom_y = float(source_sprite.texture.get_height()) # Default to full height
+		var visible_center_x = float(source_sprite.texture.get_width()) / 2.0
 		
+		if img:
+			var used = img.get_used_rect()
+			visible_bottom_y = float(used.end.y)
+			visible_center_x = float(used.get_center().x)
+			
+		# 1. Calculate Source Sprite's visual bottom in Local Space
+		var source_local_bottom_y = visible_bottom_y
+		
+		# 额外向内"吃"一点距离 (40px)，解决底部凹陷/不规则图形的贴合问题
+		# 增加到40.0以确保石头根部完全覆盖影子起点
+		var contact_eat_in = 40.0 
+		source_local_bottom_y -= contact_eat_in
+		
+		# Adjust for Source Centering/Offset
+		if source_sprite.centered:
+			source_local_bottom_y -= source_sprite.texture.get_height() / 2.0
+		source_local_bottom_y += source_sprite.offset.y
+		
+		# Apply Source Scale
+		var source_feet_offset = Vector2(0, source_local_bottom_y * source_sprite.scale.y)
+		
+		# 2. Configure Shadow to anchor at ITS visible bottom
+		# We want pixel 'visible_bottom_y' to be at local (0,0) after offset
 		shadow.centered = false
-		shadow.offset = Vector2(-tex_w / 2.0, -tex_h) # 锚点设在图片底部中心
+		shadow.offset = Vector2(-visible_center_x, -visible_bottom_y)
 		
-		# 变换：翻转 + 倾斜
-		shadow.scale = Vector2(source_sprite.scale.x, source_sprite.scale.y * -0.6) 
-		shadow.skew = 0.6 
-		shadow.rotation = 0.0
+		# 3. Position Shadow at the calculated feet position
+		shadow.position = source_sprite.position + source_feet_offset + offset
 		
-		# 位置计算：找到源 Sprite 的"脚"
-		var src_visual_offset_y = source_sprite.offset.y
-		if source_sprite.centered: src_visual_offset_y -= tex_h / 2.0
-		var feet_local_y = src_visual_offset_y + tex_h
-		var feet_pos = source_sprite.position + Vector2(0, feet_local_y * source_sprite.scale.y)
-		
-		# 稍微向上提一点 (-2)，避免石头悬空感
-		shadow.position = feet_pos + Vector2(5, -2) 
+		# 4. Transform: Flip Y (Reflection) + Skew
+		shadow.scale = Vector2(source_sprite.scale.x, source_sprite.scale.y * -0.5) 
+		shadow.skew = 0.5 
 		
 	else:
-		# Fallback
+		# Fallback: Generic Ellipse
 		shadow = Sprite2D.new()
 		shadow.texture = _create_shadow_texture(int(size.x), int(size.y))
 		shadow.position = SHADOW_DIRECTION + offset
@@ -772,8 +798,9 @@ func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), o
 		shadow.scale = Vector2(1.0, 1.0) 
 		
 	shadow.name = "Shadow"
-	shadow.z_index = -10
-	shadow.modulate = Color(0, 0, 0, 0.5)
+	shadow.z_index = -10 
+	shadow.modulate = Color(0, 0, 0, 0.5) 
+	
 	parent.call_deferred("add_child", shadow)
 	return shadow
 
@@ -806,6 +833,11 @@ func spawn_nitori_npc():
 	if scene:
 		var npc = scene.instantiate()
 		npc.position = Vector2(1800, 600)
+		
+		if not game_objects_parent:
+			game_objects_parent = get_parent()
+			if not game_objects_parent: game_objects_parent = self
+			
 		game_objects_parent.call_deferred("add_child", npc)
 
 # Stub functions for compatibility

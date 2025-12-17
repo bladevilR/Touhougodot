@@ -57,6 +57,11 @@ var spiral_trail_timer: float = 0.0  # 螺旋线计时器
 var spiral_trail_points: Array = []  # 记录轨迹点
 const SPIRAL_TRAIL_MAX_POINTS: int = 30  # 最大轨迹点数
 
+# ==================== BOSS ATTACK SYSTEM ====================
+var boss_attack_timer: float = 0.0
+var current_attack_index: int = 0
+const BOSS_ATTACK_INTERVAL: float = 3.0 # Attack every 3 seconds
+
 # ==================== STATUS EFFECT SYSTEM ====================
 # Status effect tracking structures
 var active_status_effects = {
@@ -202,11 +207,24 @@ func setup_as_boss(boss_config):
 		sprite.modulate = boss_config.color
 
 	# 设置缩放（Boss更大）
-	var boss_scale = 3.0  # Boss是普通敌人的3倍大
+	var boss_scale = boss_config.scale
 	if sprite:
 		sprite.scale = Vector2(boss_scale, boss_scale)
 	if collision_shape and collision_shape.shape:
-		collision_shape.scale = Vector2(boss_scale, boss_scale)
+		# 碰撞箱也相应缩放 (注意：碰撞箱通常不需要像纹理那样缩放那么大，或者基于radius设置)
+		# EnemyData.gd 中 BossConfig 有 radius (25.0)。
+		# 如果这里直接缩放 collision_shape，可能会导致判定过大。
+		# 既然 HealthComp/Setup 使用了 radius，这里可能不需要再次缩放 Shape，或者应该重置 Scale?
+		# 但为了安全起见，我们假设 collision_shape 初始是 1.0，我们只设置 radius。
+		# 不过 setup_as_boss 前面已经设置了 radius (通过 EnemyData 逻辑?) 
+		# 不，setup_as_boss 并没有设置 radius! 只有 hp/speed/mass.
+		# 我们需要手动设置 radius.
+		
+		collision_shape.scale = Vector2(1.0, 1.0) # 重置缩放，使用半径控制
+		if collision_shape.shape is CircleShape2D:
+			collision_shape.shape.radius = boss_config.radius
+		elif collision_shape.shape is RectangleShape2D:
+			collision_shape.shape.size = Vector2(boss_config.radius * 2, boss_config.radius * 2)
 
 	# 发送Boss生成信号
 	SignalBus.boss_spawned.emit(boss_config.enemy_name, current_hp, max_hp)
@@ -248,6 +266,10 @@ func _physics_process(delta):
 		if shadow_sprite:
 			var shadow_scale = 1.0 - (jump_height / JUMP_MAX_HEIGHT) * 0.5  # 最多缩小50%
 			shadow_sprite.scale = Vector2(shadow_scale, shadow_scale * 0.5)  # 椭圆形影子
+
+	# ==================== BOSS LOGIC ====================
+	if enemy_type == GameConstants.EnemyType.BOSS:
+		_process_boss_attacks(delta)
 
 	# ==================== PHYSICS-BASED MOVEMENT ====================
 	var desired_velocity = Vector2.ZERO
@@ -326,6 +348,144 @@ func _physics_process(delta):
 		# 时间到，停止特效
 		if spiral_trail_timer >= spiral_trail_duration:
 			_stop_spiral_trail()
+
+# ==================== BOSS ATTACK LOGIC ====================
+func _process_boss_attacks(delta: float):
+	if not enemy_data or not enemy_data is EnemyData.BossConfig:
+		return
+		
+	boss_attack_timer -= delta
+	if boss_attack_timer <= 0:
+		boss_attack_timer = BOSS_ATTACK_INTERVAL
+		_execute_next_boss_attack()
+
+func _execute_next_boss_attack():
+	var patterns = enemy_data.attack_patterns
+	if patterns.size() == 0: return
+	
+	var pattern_name = patterns[current_attack_index % patterns.size()]
+	current_attack_index += 1
+	
+	print("[Boss] Executing attack: ", pattern_name)
+	
+	match pattern_name:
+		"ice_spread": _attack_ice_spread()
+		"freeze_circle": _attack_freeze_circle()
+		"sword_dash": _attack_sword_dash()
+		"spirit_split": _attack_spirit_split()
+		"impossible_bullet_hell": _attack_impossible_bullet_hell()
+		"time_stop": _attack_time_stop()
+
+func _spawn_boss_bullet(pos: Vector2, dir: Vector2, speed_val: float, weapon_id: String, color: Color, props: Dictionary = {}):
+	var bullet_scene = load("res://Bullet.tscn")
+	if not bullet_scene: return
+	
+	var bullet = bullet_scene.instantiate()
+	# Configure bullet
+	var config = {
+		"weapon_id": weapon_id,
+		"color": color,
+		"damage": enemy_data.damage,
+		"speed": speed_val,
+		"direction": dir,
+		"lifetime": 5.0,
+		"knockback": 0.0 # Boss bullets usually don't knockback player too much
+	}
+	config.merge(props)
+	
+	if bullet.has_method("setup"):
+		bullet.setup(config)
+	
+	bullet.global_position = pos
+	
+	# Add to bullet layer (usually parent of enemy)
+	get_parent().add_child(bullet)
+
+# --- Cirno Attacks ---
+func _attack_ice_spread():
+	# 360 degree spread of ice crystals
+	var count = 36
+	for i in range(count):
+		var angle = i * (TAU / count)
+		var dir = Vector2(cos(angle), sin(angle))
+		_spawn_boss_bullet(global_position, dir, 300.0, "star_dust", Color.CYAN, {"element": "ice", "freeze_duration": 1.0})
+
+func _attack_freeze_circle():
+	# Barrier field that freezes
+	var bullet_scene = load("res://Bullet.tscn")
+	if bullet_scene:
+		var barrier = bullet_scene.instantiate()
+		barrier.setup({
+			"weapon_id": "phoenix_wings", # Use aura visual
+			"color": Color(0.5, 0.8, 1.0, 0.5),
+			"damage": 5.0,
+			"is_barrier_field": true,
+			"damage_interval": 0.5,
+			"slow_effect": 0.2, # Extreme slow
+			"lifetime": 3.0,
+			"orbit_radius": 0.0, # Center on boss
+			"element": "ice"
+		})
+		barrier.global_position = global_position
+		# Attach to boss? No, create at position.
+		get_parent().add_child(barrier)
+
+# --- Youmu Attacks ---
+func _attack_sword_dash():
+	# Dash towards player
+	if is_instance_valid(target):
+		var dash_dir = global_position.direction_to(target.global_position)
+		knockback_target_velocity = dash_dir * 800.0 # Use knockback system for dash movement
+		
+		# Spawn sword projectiles along the path (delayed)
+		for i in range(5):
+			await get_tree().create_timer(0.1 * i).timeout
+			_spawn_boss_bullet(global_position, dash_dir, 500.0, "knives", Color.WHITE, {"penetration": 5})
+
+func _attack_spirit_split():
+	# Spawn phantom bullets
+	var count = 8
+	for i in range(count):
+		var angle = randf() * TAU
+		var dir = Vector2(cos(angle), sin(angle))
+		_spawn_boss_bullet(global_position + dir * 50, dir, 200.0, "homing_amulet", Color.WHITE, {"homing_strength": 0.05})
+
+# --- Kaguya Attacks ---
+func _attack_impossible_bullet_hell():
+	# Spiral pattern
+	var count = 50
+	for i in range(count):
+		var angle = i * 0.2
+		var dir = Vector2(cos(angle), sin(angle))
+		_spawn_boss_bullet(global_position, dir, 250.0, "yin_yang_orb", Color.GOLD, {"bounce_count": 2})
+		await get_tree().create_timer(0.02).timeout
+
+func _attack_time_stop():
+	# Spawn static bullets that wait then target player
+	var count = 20
+	for i in range(count):
+		var pos_offset = Vector2(randf_range(-300, 300), randf_range(-300, 300))
+		var bullet = load("res://Bullet.tscn").instantiate()
+		bullet.setup({
+			"weapon_id": "star_dust",
+			"color": Color.MAGENTA,
+			"damage": 20.0,
+			"speed": 0.0, # Stop initially
+			"lifetime": 5.0
+		})
+		bullet.global_position = global_position + pos_offset
+		get_parent().add_child(bullet)
+		
+		# After delay, launch at player
+		_launch_delayed_bullet(bullet)
+
+func _launch_delayed_bullet(bullet):
+	await get_tree().create_timer(1.0).timeout
+	if is_instance_valid(bullet) and is_instance_valid(target):
+		var dir = bullet.global_position.direction_to(target.global_position)
+		bullet.velocity = dir * 400.0
+		bullet.speed = 400.0
+		if bullet.sprite: bullet.sprite.rotation = dir.angle()
 
 # ==================== PHYSICS METHODS ====================
 
@@ -455,9 +615,9 @@ func take_damage(amount, weapon_id: String = ""):
 		# 发射伤害数字，包含武器ID
 		SignalBus.damage_dealt.emit(final_damage, global_position, false, weapon_id)
 		
-		# 受击震动反馈 (伤害较高时)
-		if final_damage > 20:
-			SignalBus.screen_shake.emit(0.05, 3.0)
+		# 受击震动反馈 (已移除)
+		# if final_damage > 20:
+		# 	SignalBus.screen_shake.emit(0.05, 3.0)
 
 		# 更新血量条
 		_update_health_bar()
@@ -591,13 +751,13 @@ func _get_boss_texture_path(boss_type: int) -> String:
 	"""根据Boss类型返回对应的纹理路径"""
 	match boss_type:
 		GameConstants.BossType.CIRNO:
-			return "res://assets/9.png"
+			return "res://assets/characters/9.png"
 		GameConstants.BossType.YOUMU:
-			return "res://assets/yaomeng.png"
+			return "res://assets/characters/yaomeng2.png"
 		GameConstants.BossType.KAGUYA:
-			return "res://assets/huiye2.png"
+			return "res://assets/characters/huiye.png"
 		_:
-			return "res://assets/9.png"
+			return "res://assets/characters/9.png"
 
 func _create_enemy_shadow():
 	"""备用阴影创建方法"""
@@ -668,7 +828,18 @@ func setup(type: int, wave: int = 1):
 
 		if sprite:
 			sprite.modulate = enemy_data.color
-			# 敌人的sprite由Enemy.tscn控制，不在这里设置scale
+			
+			# 加载正确的纹理
+			var texture_path = _get_texture_path_for_type(enemy_type)
+			if ResourceLoader.exists(texture_path):
+				sprite.texture = load(texture_path)
+				
+			# 应用缩放
+			if "scale" in enemy_data:
+				var s = enemy_data.scale
+				sprite.scale = Vector2(s, s)
+			else:
+				sprite.scale = Vector2(0.015, 0.015)
 
 		# 更新碰撞形状
 		if collision_shape and collision_shape.shape:

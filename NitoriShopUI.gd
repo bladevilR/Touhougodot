@@ -48,14 +48,17 @@ func _create_nitori_portrait():
 		var target_width = 500.0
 		var scale_factor = target_width / original_size.x
 		nitori_portrait.scale = Vector2(scale_factor, scale_factor)
+		
+		# 底部对齐
+		var target_height = original_size.y * scale_factor
+		nitori_portrait.position = Vector2(50, 1080 - target_height)
 
 		print("[NitoriShopUI] 河童立绘已创建, scale=", scale_factor)
 	else:
 		print("警告: 找不到河童立绘: ", portrait_path)
 		return
 
-	# 设置立绘位置（左侧）
-	nitori_portrait.position = Vector2(50, 100)
+	# 设置立绘位置（已在上方计算）
 	nitori_portrait.modulate = Color(1, 1, 1, 0.9) # 稍微半透明一点点
 
 	# 添加到界面

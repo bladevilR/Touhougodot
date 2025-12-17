@@ -449,8 +449,25 @@ func _start_boss_room():
 	print("Boss出现: ", _get_boss_name(boss_type), " (", int(minutes), " 分钟)")
 	print("Boss台词: ", boss_dialogue)
 
-	# 显示对话（通过UI信号）
-	SignalBus.emit_signal("boss_dialogue", _get_boss_name(boss_type), boss_dialogue)
+	# 显示对话（通过UI信号） - 替换为新的对话系统
+	# SignalBus.emit_signal("boss_dialogue", _get_boss_name(boss_type), boss_dialogue)
+	
+	if boss_type == GameConstants.BossType.KAGUYA:
+		var kaguya_dialogue = [
+			{"speaker": "辉夜", "text": "啊啦，妹红酱这么早就急着来找我，人家有点开心呢", "portrait": "res://assets/characters/4C.png"},
+			{"speaker": "妹红", "text": "少说废话", "portrait": null}, # 妹红无特定立绘，或者默认立绘
+			{"speaker": "辉夜", "text": "果然还是这么急躁呀", "portrait": "res://assets/characters/4C.png"},
+			{"speaker": "妹红", "text": "果然还是先打到你闭嘴好了", "portrait": null},
+			{"speaker": "辉夜", "text": "……", "portrait": "res://assets/characters/4C.png"},
+			{"speaker": "辉夜", "text": "……果然很急躁呢", "portrait": "res://assets/characters/42C.png"},
+		]
+		await _show_dialogue_sequence(kaguya_dialogue)
+	else:
+		# 其他Boss的默认对话
+		var default_boss_dialogue = [
+			{"speaker": _get_boss_name(boss_type), "text": boss_dialogue, "portrait": _get_boss_portrait_path(boss_type)},
+		]
+		await _show_dialogue_sequence(default_boss_dialogue)
 
 	# 设置击杀目标
 	target_kills = 1  # Boss算1个击杀目标
@@ -511,7 +528,93 @@ func _start_rest_room():
 	_on_room_cleared()
 
 # ==================== 工具函数 ====================
+var _dialogue_ui_node: Control = null
 
+func _show_dialogue_sequence(dialogue_data: Array):
+	get_tree().paused = true
+	
+	# 创建一个独立的 CanvasLayer 用于对话UI，确保在最上层
+	var dialogue_canvas_layer = CanvasLayer.new()
+	dialogue_canvas_layer.layer = 100 # Highest layer
+	get_tree().root.add_child(dialogue_canvas_layer)
+
+	_dialogue_ui_node = Control.new()
+	_dialogue_ui_node.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialogue_canvas_layer.add_child(_dialogue_ui_node)
+
+	# 半透明遮罩
+	var overlay = ColorRect.new()
+	overlay.color = Color(0,0,0,0.5)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_dialogue_ui_node.add_child(overlay)
+
+	var panel = Panel.new()
+	panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	panel.offset_top = -250
+	panel.offset_bottom = -20
+	panel.offset_left = 50
+	panel.offset_right = -50
+	
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.8)
+	style.border_color = Color("#ffd700") # 金色边框
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(10)
+	panel.add_theme_stylebox_override("panel", style)
+	_dialogue_ui_node.add_child(panel)
+
+	var portrait_node = TextureRect.new()
+	portrait_node.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait_node.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_dialogue_ui_node.add_child(portrait_node)
+
+	var name_label = Label.new()
+	name_label.position = Vector2(200, 20)
+	name_label.add_theme_font_size_override("font_size", 32)
+	name_label.add_theme_color_override("font_color", Color("#ffffff"))
+	panel.add_child(name_label)
+
+	var text_label = Label.new()
+	text_label.position = Vector2(200, 70)
+	text_label.add_theme_font_size_override("font_size", 24)
+	text_label.add_theme_color_override("font_color", Color("#ffffff"))
+	panel.add_child(text_label)
+	
+	# --- 对话输入处理器 ---
+	var input_handler = Control.new()
+	input_handler.process_mode = Node.PROCESS_MODE_ALWAYS # 始终处理输入
+	input_handler.set_script(
+		load("res://addons/custom_scripts/DialogueInputHandler.gd")
+	)
+	_dialogue_ui_node.add_child(input_handler) # 添加到对话UI
+		
+	for line in dialogue_data:
+		name_label.text = line.speaker
+		text_label.text = line.text
+		
+		# 立绘显示逻辑
+		if line.portrait and line.portrait != "":
+			var tex = load(line.portrait)
+			if tex:
+				portrait_node.texture = tex
+				var screen_height = get_tree().root.size.y
+				var target_height = screen_height * 0.9 # 占屏幕90%高
+				var scale_factor = target_height / tex.get_height()
+				portrait_node.scale = Vector2(scale_factor, scale_factor)
+				# 位置：左下角对齐
+				portrait_node.position = Vector2(50, screen_height - tex.get_height() * scale_factor)
+				portrait_node.visible = true
+			else:
+				portrait_node.visible = false
+		else:
+			portrait_node.visible = false # 隐藏立绘
+
+		# 等待玩家按下交互键 (Modified for paused game)
+		await input_handler.interact_pressed # Wait for our custom signal
+		
+	dialogue_canvas_layer.queue_free()
+	_dialogue_ui_node = null
+	get_tree().paused = false
 func _get_room_type_name(room_type: int) -> String:
 	match room_type:
 		RoomType.NORMAL: return "普通"
@@ -529,6 +632,14 @@ func _get_boss_name(boss_type: int) -> String:
 		GameConstants.BossType.YOUMU: return "妖梦"
 		GameConstants.BossType.KAGUYA: return "辉夜"
 		_: return "未知Boss"
+
+func _get_boss_portrait_path(boss_type: int) -> String:
+	"""根据Boss类型返回Boss对话立绘路径"""
+	match boss_type:
+		GameConstants.BossType.CIRNO: return "res://assets/characters/cirno_portrait.png" # 假设存在琪露诺立绘
+		GameConstants.BossType.YOUMU: return "res://assets/characters/youmu_portrait.png" # 假设存在妖梦立绘
+		GameConstants.BossType.KAGUYA: return "res://assets/characters/4C.png"
+		_: return ""
 
 func get_current_room_info() -> Dictionary:
 	return {

@@ -64,41 +64,111 @@ func _create_visual():
 	var sprite = Sprite2D.new()
 	sprite.name = "ShopSprite"
 
-	# 创建祭坛图标
-	var size = 64
-	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
-	var center = Vector2(size / 2.0, size / 2.0)
+	# 使用魔理沙地图形象
+	var texture = load("res://assets/characters/marisa3.png")
+	if texture:
+		sprite.texture = texture
+		sprite.scale = Vector2(0.08, 0.08) # 调小一点 (was 0.12)
+	else:
+		# Fallback if texture missing
+		var size = 64
+		var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+		image.fill(Color("#cc66ff"))
+		sprite.texture = ImageTexture.create_from_image(image)
 
-	# 绘制紫色祭坛
-	for x in range(size):
-		for y in range(size):
-			var pos = Vector2(x, y)
-			var dist = pos.distance_to(center)
-
-			if dist < 20:
-				# 中心圆
-				image.set_pixel(x, y, Color("#cc66ff"))
-			elif dist < 28:
-				# 外圈
-				var alpha = 1.0 - (dist - 20) / 8.0
-				image.set_pixel(x, y, Color(0.8, 0.4, 1.0, alpha))
-
-	sprite.texture = ImageTexture.create_from_image(image)
-	sprite.scale = Vector2(1.5, 1.5)
 	add_child(sprite)
 
 	# 添加文字提示
 	var label = Label.new()
-	label.text = "附魔祭坛"
-	label.position = Vector2(-40, 60)
+	label.text = "魔理沙的附魔店"
+	label.position = Vector2(-60, 60)
 	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", Color("#cc66ff"))
+	label.add_theme_color_override("font_color", Color("#ffd700")) # 金色
 	add_child(label)
+
+var is_dialogue_active: bool = false
+var dialogue_ui: Control = null
 
 func _process(delta):
 	# 检测E键打开商店
 	if player_in_range and Input.is_action_just_pressed("interact"):
-		_open_shop()
+		if not shop_ui and not is_dialogue_active:
+			_start_interaction()
+
+func _start_interaction():
+	"""开始交互 - 打招呼"""
+	is_dialogue_active = true
+	
+	# 创建对话框
+	var canvas_layer = get_tree().get_first_node_in_group("ui")
+	if not canvas_layer: return
+	
+	dialogue_ui = Control.new()
+	dialogue_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	canvas_layer.add_child(dialogue_ui)
+	
+	# 1. 立绘 (大，在左侧)
+	var avatar = TextureRect.new()
+	var tex = load("res://assets/characters/3.png") # 正常立绘
+	if tex:
+		avatar.texture = tex
+		avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		
+		# 自动高度
+		var aspect = tex.get_width() / float(tex.get_height())
+		var h = 500.0
+		var w = h * aspect
+		
+		avatar.size = Vector2(w, h)
+		avatar.position = Vector2(100, 1080 - h) # 左下角
+		dialogue_ui.add_child(avatar)
+	
+	# 2. 对话框 (在立绘右侧，连接感)
+	var panel = Panel.new()
+	panel.position = Vector2(100 + 200, 1080 - 250) # 从立绘中间开始
+	panel.size = Vector2(1200, 200)
+	
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.8)
+	style.border_color = Color("#ffd700")
+	style.set_border_width_all(2)
+	style.border_width_left = 0 # 去掉左边框，制造连接感
+	style.set_corner_radius_all(10)
+	style.corner_radius_top_left = 0
+	style.corner_radius_bottom_left = 0
+	panel.add_theme_stylebox_override("panel", style)
+	
+	dialogue_ui.add_child(panel)
+	
+	# 名字
+	var name_label = Label.new()
+	name_label.text = "魔理沙"
+	name_label.position = Vector2(20, 20)
+	name_label.add_theme_font_size_override("font_size", 32)
+	name_label.add_theme_color_override("font_color", Color("#ffd700"))
+	panel.add_child(name_label)
+	
+	# 内容
+	var text_label = Label.new()
+	text_label.text = "哟！好久不见！\n想要来点强力的魔法吗？普通的东西我可不卖哦 ze~"
+	text_label.position = Vector2(20, 70)
+	text_label.add_theme_font_size_override("font_size", 24)
+	panel.add_child(text_label)
+	
+	# 暂停游戏? 
+	# get_tree().paused = true # 暂不暂停，保持流畅
+	
+	# 延迟打开商店 (或点击继续)
+	# 这里简单处理：显示1.5秒后自动进入商店
+	await get_tree().create_timer(1.5).timeout
+	
+	if is_instance_valid(dialogue_ui):
+		dialogue_ui.queue_free()
+		dialogue_ui = null
+	is_dialogue_active = false
+	
+	_open_shop()
 
 func _on_body_entered(body):
 	if body.is_in_group("player"):
@@ -117,7 +187,7 @@ func _show_interaction_hint(show: bool):
 	if show and not hint:
 		hint = Label.new()
 		hint.name = "InteractionHint"
-		hint.text = "按 E 购买附魔"
+		hint.text = "按 E 对话"
 		hint.position = Vector2(-60, -40)
 		hint.add_theme_font_size_override("font_size", 14)
 		hint.add_theme_color_override("font_color", Color("#ffff00"))
@@ -155,17 +225,38 @@ func _open_shop():
 	overlay.color = Color(0, 0, 0, 0.7)
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shop_ui.add_child(overlay)
+	
+	# 魔理沙立绘 (大立绘，放在最底层背景上)
+	# 参考 NitoriShopUI: position(50, 100), width=500
+	var portrait = TextureRect.new()
+	var portrait_tex = load("res://assets/characters/3C.png")
+	if portrait_tex:
+		portrait.texture = portrait_tex
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		
+		# 自动计算高度以保持比例
+		var aspect = portrait_tex.get_width() / float(portrait_tex.get_height())
+		var h = 1080 * 0.5 # 占屏幕高度的50% (从60%减少)
+		var w = h * aspect
+		
+		portrait.size = Vector2(w, h)
+		portrait.position = Vector2(50, 1080 - h) # 左下角对齐
+		
+		# 稍微半透明
+		portrait.modulate.a = 0.95
+		shop_ui.add_child(portrait)
 
-	# 商店面板 - 居中显示
+	# 商店面板 - 居中显示 (稍微右移以避开立绘)
 	var panel = Control.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.anchor_left = 0.5
 	panel.anchor_top = 0.5
 	panel.anchor_right = 0.5
 	panel.anchor_bottom = 0.5
-	panel.offset_left = -400  # 宽度的一半
-	panel.offset_top = -300   # 高度的一半
-	panel.offset_right = 400
+	panel.offset_left = -300  # 稍微右移
+	panel.offset_top = -300
+	panel.offset_right = 500
 	panel.offset_bottom = 300
 	panel.size = Vector2(800, 600)
 	shop_ui.add_child(panel)
@@ -178,10 +269,10 @@ func _open_shop():
 
 	# 标题
 	var title = Label.new()
-	title.text = "附魔祭坛 - 选择元素附魔"
+	title.text = "魔理沙的魔法店"
 	title.position = Vector2(20, 20)
 	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color("#cc66ff"))
+	title.add_theme_color_override("font_color", Color("#ffd700"))
 	panel.add_child(title)
 
 	# 显示当前転流

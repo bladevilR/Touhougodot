@@ -184,27 +184,10 @@ func on_game_over():
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(overlay)
 
-	# 添加妹红立绘（失败时的表情）
-	var mokou_portrait = TextureRect.new()
-	mokou_portrait.name = "MokouPortrait"
-	var portrait_path = "res://assets/characters/1.png"
-	if ResourceLoader.exists(portrait_path):
-		mokou_portrait.texture = load(portrait_path)
-		mokou_portrait.position = Vector2(50, 150)  # 调整位置
-		mokou_portrait.size = Vector2(300, 450)     # 调整尺寸
-		mokou_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		mokou_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		mokou_portrait.modulate = Color(0.8, 0.8, 0.9, 1.0)
-		overlay.add_child(mokou_portrait)
-		
-		# 强制刷新布局属性
-		mokou_portrait.call_deferred("set_custom_minimum_size", Vector2(300, 450))
-		mokou_portrait.call_deferred("set_size", Vector2(300, 450))
-
 	# Game Over文字容器（右侧）
 	var text_container = Control.new()
-	text_container.position = Vector2(600, 200) # 避开立绘
-	text_container.size = Vector2(600, 400)
+	text_container.set_anchors_preset(Control.PRESET_CENTER) # 居中
+	text_container.size = Vector2(600, 300) # 更小
 	overlay.add_child(text_container)
 
 	var label = Label.new()
@@ -214,22 +197,12 @@ func on_game_over():
 	label.position = Vector2(0, 0)
 	text_container.add_child(label)
 
-	# 添加台词
-	var dialogue_label = Label.new()
-	dialogue_label.text = "不死鸟也有倒下的时候呢..."
-	dialogue_label.add_theme_font_size_override("font_size", 24)
-	dialogue_label.add_theme_color_override("font_color", Color(0.9, 0.9, 1.0))
-	dialogue_label.position = Vector2(0, 100)
-	dialogue_label.size = Vector2(600, 100)
-	dialogue_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	text_container.add_child(dialogue_label)
-
 	# 添加重启提示
 	var restart_label = Label.new()
 	restart_label.text = "正在重启游戏..."
 	restart_label.add_theme_font_size_override("font_size", 28)
 	restart_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.9))
-	restart_label.position = Vector2(0, 200)
+	restart_label.position = Vector2(0, 100)
 	text_container.add_child(restart_label)
 
 	# 优化的重启逻辑：延迟更短，避免卡顿

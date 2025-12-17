@@ -34,7 +34,9 @@ signal boss_defeated()
 signal damage_dealt(damage_amount: float, position: Vector2, is_critical: bool, weapon_id: String)
 
 # --- 视觉反馈信号 ---
-signal screen_shake(duration: float, intensity: float)  # 屏幕震动
+signal screen_shake(duration: float, intensity: float)  # 屏幕震动 (随机)
+signal directional_shake(direction: Vector2, force: float, duration: float) # 定向震动 (猛烈偏移)
+signal screen_flash(color: Color, duration: float) # 屏幕闪光 (受击泛红)
 signal spawn_death_particles(position: Vector2, color: Color, count: int)  # 死亡粒子
 
 # --- 技能效果信号 ---

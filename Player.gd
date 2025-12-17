@@ -103,33 +103,8 @@ func _ready():
 	# 监听升级事件
 	SignalBus.level_up.connect(on_level_up)
 
-	# 强制手动创建人物影子 (Hardcoded Fallback - 保持与MapSystem一致)
-	if sprite and sprite.texture:
-		var shadow = Sprite2D.new()
-		shadow.texture = sprite.texture
-		shadow.hframes = sprite.hframes
-		shadow.vframes = sprite.vframes
-		shadow.frame = sprite.frame
-		shadow.flip_h = sprite.flip_h
-		
-		# 影子配置：使用倒影逻辑
-		shadow.centered = false
-		var tex_size = sprite.texture.get_size() / Vector2(sprite.hframes, sprite.vframes)
-		shadow.offset = Vector2(-tex_size.x / 2.0, -tex_size.y) # 锚点在底部中心
-		
-		# 变换：翻转 + 倾斜
-		shadow.scale = Vector2(sprite.scale.x, sprite.scale.y * -0.6)
-		shadow.skew = 0.6
-		
-		# 位置：玩家中心 + 半个高度(脚底) + 微调
-		# Player Sprite 是 Centered，所以脚底是 +h/2
-		var feet_offset = tex_size.y / 2.0 * sprite.scale.y
-		shadow.position = Vector2(0, feet_offset) + Vector2(5, -2)
-		
-		shadow.name = "Shadow"
-		shadow.z_index = -1
-		shadow.modulate = Color(0, 0, 0, 0.5)
-		add_child(shadow)
+	# 尝试添加高级投影阴影
+	_try_add_shadow()
 
 	# 创建圆形粒子屏障效果
 	# _create_particle_barrier()  # 暂时关闭粒子屏障
@@ -367,10 +342,7 @@ func apply_knockback(direction: Vector2, force: float):
 	current_velocity += direction.normalized() * actual_force
 
 func take_damage(amount: float, should_shake: bool = true):
-	"""造成伤害
-	amount: 伤害值
-	should_shake: 是否播放震动效果（直接伤害=true, 火烧/中毒等DOT=false）
-	"""
+	"""造成伤害"""
 	# 无敌时不受伤害
 	if is_invulnerable:
 		return
@@ -378,16 +350,22 @@ func take_damage(amount: float, should_shake: bool = true):
 	if health_comp:
 		health_comp.damage(amount)
 
-		# 只有直接伤害才震动和后退（火烧/烫血等持续伤害不震动）
 		if should_shake:
-			# 发送受伤屏幕震动 (增强力度 - 更明显的受击反馈)
-			SignalBus.screen_shake.emit(0.4, 20.0)  # 提高震动强度和持续时间
+			# 自机受击：高频、小幅度、极短 + 泛红
+			SignalBus.screen_shake.emit(0.15, 5.0) 
+			SignalBus.screen_flash.emit(Color(1.0, 0.0, 0.0, 0.3), 0.2)
 
 		# 播放受击效果
 		if sprite:
 			sprite.modulate = Color.RED
 			await get_tree().create_timer(0.1).timeout
 			sprite.modulate = Color.WHITE
+
+func hitstop(duration: float):
+	"""顿帧效果"""
+	Engine.time_scale = 0.05 # 极慢
+	await get_tree().create_timer(duration * 0.05, true, false, true).timeout
+	Engine.time_scale = 1.0
 
 func _check_enemy_contact_damage():
 	"""检查与敌人的接触并造成伤害"""
@@ -451,6 +429,11 @@ func _check_dash_damage():
 
 			if enemy.has_method("apply_knockback"):
 				enemy.apply_knockback(dash_direction, 800.0)  # 强力前冲击飞
+				
+			# 视觉反馈：猛烈偏移 + 顿帧
+			# 屏幕向踢飞方向猛冲
+			SignalBus.directional_shake.emit(dash_direction, 20.0, 0.2)
+			hitstop(0.1) # 顿帧
 
 			# 火焰特效
 			SignalBus.spawn_death_particles.emit(enemy.global_position, Color("#ff4500"), 15)
@@ -559,10 +542,10 @@ func _create_player_shadow():
 				image.set_pixel(x, y, Color(0, 0, 0, 0))
 
 	shadow.texture = ImageTexture.create_from_image(image)
-	shadow.position = Vector2(12, 8)  # 下午阳光向右下偏移
-	shadow.rotation = 0.8
+	shadow.position = Vector2(0, 5)  # 居中在脚下
+	shadow.rotation = 0.0
 	shadow.skew = 0.0
-	shadow.z_index = -10
+	shadow.z_index = -1
 	shadow.centered = true
 
 	add_child(shadow)
@@ -652,7 +635,7 @@ func _load_mokou_textures():
 				mokou_textures.down.append(atlas)
 
 	# stand.png - 站立
-	mokou_textures.stand = load("res://assets/stand.png")
+	mokou_textures.stand = load("res://assets/characters/mokuo (4).png")
 
 	# mokuokick.png - 飞踢
 	mokou_textures.kick = load("res://assets/mokuokick.png")
@@ -717,6 +700,35 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 			sprite.texture = mokou_textures.stand
 			# stand.png: 2048x2048，计算缩放 = 100/2048 = 0.049
 			sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
+			
+	# 同步更新影子 (保持高级投影效果，严格对齐脚底)
+	var shadow = get_node_or_null("Shadow")
+	if shadow and sprite.texture:
+		shadow.texture = sprite.texture
+		shadow.hframes = sprite.hframes
+		shadow.vframes = sprite.vframes
+		shadow.frame = sprite.frame
+		shadow.flip_h = sprite.flip_h
+		
+		# 强制对齐逻辑：
+		# 1. 影子锚点设为底部中心 (Top-Center of inverted sprite)
+		#    这样影子的原点(0,0)就是它的"脚"
+		var tex_size = sprite.texture.get_size() / Vector2(sprite.hframes, sprite.vframes)
+		shadow.centered = false
+		shadow.offset = Vector2(-tex_size.x / 2.0, -tex_size.y)
+		
+		# 2. 将影子移到Sprite的脚底位置
+		#    假设Sprite是Centered，脚底在 +h/2 处
+		var feet_y = tex_size.y / 2.0
+		
+		# 额外向内"吃"一点距离 (15px)，解决底部凹陷/不规则图形的贴合问题
+		var contact_eat_in = 15.0
+		
+		shadow.position = Vector2(0, (feet_y - contact_eat_in) * sprite.scale.y)
+		
+		# 3. 变换
+		shadow.scale = Vector2(sprite.scale.x, sprite.scale.y * -0.5) 
+		shadow.skew = 0.5
 
 # ==================== 粒子屏障系统 ====================
 func _create_particle_barrier():
