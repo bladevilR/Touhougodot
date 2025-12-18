@@ -85,40 +85,50 @@ func _interact():
 
 func _show_nitori_dialogue():
 	"""显示河童对话立绘"""
-	# 查找或创建对话系统
-	var ui_layer = get_tree().get_first_node_in_group("ui")
-	if not ui_layer:
-		# 直接打开商店
-		_open_shop()
-		return
+	# 使用对话序列系统
+	var dialogue_data = [
+		{
+			"speaker": "妹红",
+			"text": "河童，好久不见啊！",
+			"portrait": "res://assets/characters/1C.png"
+		},
+		{
+			"speaker": "河童",
+			"text": "哎呀！是妹红啊！来得正好，我这有很多新发明的道具，要不要试试？",
+			"portrait": "res://assets/characters/2C.png"
+		}
+	]
 
-	# 检查是否已有对话系统
-	var dialogue = ui_layer.get_node_or_null("DialoguePortrait")
-	if not dialogue:
-		# 创建对话系统
-		var DialoguePortraitScript = load("res://DialoguePortrait.gd")
-		if DialoguePortraitScript:
-			dialogue = DialoguePortraitScript.new()
-			dialogue.name = "DialoguePortrait"
-			ui_layer.add_child(dialogue)
+	await _play_dialogue(dialogue_data)
+	_open_shop()
 
-	if dialogue:
-		# 随机选择河童的台词
-		var dialogues = [
-			"欢迎光临河童的道具店！我这里有最先进的河童科技产品哦~",
-			"哟！又是你啊，需要什么装备吗？",
-			"看看我的新货吧，都是精心调试过的！",
-			"河童制造，品质保证！来看看吧~"
-		]
-		var random_dialogue = dialogues[randi() % dialogues.size()]
+func _play_dialogue(data: Array):
+	"""播放对话序列"""
+	var dm = _get_dialogue_manager()
+	if dm:
+		dm.show_sequence(data)
+		await dm.dialogue_finished
+	else:
+		await get_tree().create_timer(1.0).timeout
 
-		print("[NitoriNPC] 显示河童对话...")
-		dialogue.show_dialogue(DialoguePortrait.CharacterPortrait.NITORI, random_dialogue)
-		print("[NitoriNPC] 对话框应该已显示")
+func _get_dialogue_manager() -> DialoguePortrait:
+	"""获取或创建对话管理器"""
+	# 检查是否存在 DialogueLayer/DialogueManager
+	var existing_layer = get_tree().root.get_node_or_null("DialogueLayer")
+	if existing_layer:
+		return existing_layer.get_node_or_null("DialogueManager")
 
-		# 对话关闭后打开商店
-		if not dialogue.dialogue_closed.is_connected(_open_shop):
-			dialogue.dialogue_closed.connect(_open_shop, CONNECT_ONE_SHOT)
+	# 创建新的 Layer 和 Manager
+	var layer = CanvasLayer.new()
+	layer.layer = 128 # 确保在最上层
+	layer.name = "DialogueLayer"
+	get_tree().root.add_child(layer)
+
+	var dm = DialoguePortrait.new()
+	dm.name = "DialogueManager"
+	layer.add_child(dm)
+
+	return dm
 
 func _open_shop():
 	"""打开商店"""

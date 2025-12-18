@@ -401,7 +401,7 @@ func _check_enemy_contact_damage():
 
 		if collider and collider.is_in_group("enemy"):
 			# 毛玉（KEDAMA）不造成接触伤害，只有撞击攻击才会伤害
-			if collider.has("enemy_type") and collider.enemy_type == GameConstants.EnemyType.KEDAMA:
+			if "enemy_type" in collider and collider.enemy_type == GameConstants.EnemyType.KEDAMA:
 				continue
 
 			# 获取敌人的伤害值
@@ -754,7 +754,7 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 		
 		# 额外向内"吃"一点距离，解决底部凹陷/不规则图形的贴合问题
 		# 妹红模型较大，减少偏移量以贴合脚底
-		var contact_eat_in = 5.0
+		var contact_eat_in = 250.0
 
 		shadow.position = Vector2(0, (feet_y - contact_eat_in) * sprite.scale.y)
 		

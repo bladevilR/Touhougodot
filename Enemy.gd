@@ -59,7 +59,7 @@ var attack_cooldown: float = 0.0  # 攻击冷却
 const CHARGE_DURATION: float = 0.3  # 蓄力时间（前摇）
 const DASH_DURATION: float = 0.4  # 冲刺时间
 const ATTACK_COOLDOWN: float = 2.0  # 攻击冷却2秒
-const DASH_SPEED_MULTIPLIER: float = 3.0  # 冲刺速度倍数
+const DASH_SPEED_MULTIPLIER: float = 2.0  # 冲刺速度倍数（降低速度）
 var charge_direction: Vector2 = Vector2.ZERO  # 蓄力方向
 var dash_hit_players: Array = []  # 记录已击中的玩家（避免重复伤害）
 
@@ -548,7 +548,8 @@ func _spawn_boss_bullet(pos: Vector2, dir: Vector2, speed_val: float, weapon_id:
 		"speed": speed_val,
 		"direction": dir,
 		"lifetime": 5.0,
-		"knockback": 0.0 # Boss bullets usually don't knockback player too much
+		"knockback": 0.0, # Boss bullets usually don't knockback player too much
+		"is_enemy_bullet": true # Mark as enemy bullet for collision detection
 	}
 	config.merge(props)
 	
@@ -861,6 +862,12 @@ func die():
 
 	# 通知全世界：这里死怪了，掉经验吧，播音效吧
 	SignalBus.enemy_killed.emit(xp_value, global_position)
+
+	# Boss死亡特殊处理：发出boss_defeated信号
+	if enemy_type == GameConstants.EnemyType.BOSS:
+		print("[Enemy] Boss defeated! Emitting boss_defeated signal...")
+		SignalBus.boss_defeated.emit()
+
 	queue_free()
 
 # 从波次配置设置敌人（新接口，用于波次系统）

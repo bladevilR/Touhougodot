@@ -48,7 +48,41 @@ static func generate_room_layout(room_type: int, room_index: int, map_system: No
 
 	return layout
 
+static func _is_pos_safe(pos: Vector2) -> bool:
+	var w = GameConstants.MAP_WIDTH
+	var h = GameConstants.MAP_HEIGHT
+	var center = Vector2(w / 2, h / 2)
+	
+	# Spawn/Tutorial Center
+	if pos.distance_to(center) < 400.0: return false
+	
+	# Doors
+	if pos.distance_to(Vector2(w / 2, 0)) < 300.0: return false # N
+	if pos.distance_to(Vector2(w / 2, h)) < 300.0: return false # S
+	if pos.distance_to(Vector2(0, h / 2)) < 300.0: return false # W
+	if pos.distance_to(Vector2(w, h / 2)) < 300.0: return false # E
+	
+	return true
+
 static func _get_layout_style_for_room(room_type: int, room_index: int) -> LayoutStyle:
+
+# # ORIGINAL CODE START
+# # static func _is_pos_safe(pos: Vector2) -> bool:
+# # 	var w = GameConstants.MAP_WIDTH
+# # 	var h = GameConstants.MAP_HEIGHT
+# # 	var center = Vector2(w / 2, h / 2)
+	
+# # 	# Spawn/Tutorial Center
+# # 	if pos.distance_to(center) < 400.0: return false
+	
+# # 	# Doors
+# # 	if pos.distance_to(Vector2(w / 2, 0)) < 300.0: return false # N
+# # 	if pos.distance_to(Vector2(w / 2, h)) < 300.0: return false # S
+# # 	if pos.distance_to(Vector2(0, h / 2)) < 300.0: return false # W
+# # 	if pos.distance_to(Vector2(w, h / 2)) < 300.0: return false # E
+	
+# # 	return true
+# # ORIGINAL CODE END
 	"""根据房间类型和索引决定布局风格"""
 	# 商店和特殊房间使用开阔布局
 	if room_type == 1 or room_type == 3 or room_type == 4 or room_type == 5:  # SHOP, ENCHANT, REST, TREASURE
