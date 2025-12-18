@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://player001"]
+[gd_scene load_steps=10 format=3 uid="uid://player001"]
 
 [ext_resource type="Script" path="res://Player.gd" id="1"]
 [ext_resource type="Script" path="res://HealthComponent.gd" id="2"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://BondSystem.gd" id="6"]
 [ext_resource type="Script" path="res://FusionSystem.gd" id="7"]
 [ext_resource type="Script" path="res://NitoriShop.gd" id="8"]
+[ext_resource type="Script" path="res://CharacterSkills.gd" id="9"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_1"]
 radius = 20.0
@@ -44,6 +45,9 @@ script = ExtResource("7")
 
 [node name="NitoriShop" type="Node" parent="." groups=["shop", "shop_system"]]
 script = ExtResource("8")
+
+[node name="CharacterSkills" type="Node2D" parent="."]
+script = ExtResource("9")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 enabled = true

@@ -165,6 +165,10 @@ func _setup_bullet_visual():
 			texture_path = "res://assets/bullets/star.png"
 			base_radius = 240.0
 			should_rotate = true
+		"rice_grain":  # 米粒弹 - 敌人射击用
+			texture_path = "res://assets/map/rice_bullet.png"
+			base_radius = 120.0
+			should_rotate = true
 		"phoenix_wings":
 			# 为光环创建高级感半透明纹理（火焰能量场效果）
 			var aura_texture = _create_premium_aura_texture(120.0, Color(1.0, 0.5, 0.1, 0.6))

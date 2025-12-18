@@ -76,9 +76,9 @@ func _ready():
 	character_skills = get_node_or_null("CharacterSkills")
 	bond_system = get_node_or_null("BondSystem")
 
-	# 先隐藏精灵，等加载完角色数据后再显示
+	# 确保精灵可见
 	if sprite:
-		sprite.visible = false
+		sprite.visible = true
 
 	# 初始化角色数据
 	CharacterData.initialize()
@@ -112,7 +112,22 @@ func _ready():
 	# 显示精灵（角色数据已加载）
 	if sprite:
 		sprite.visible = true
+		# 复位 Sprite，不再尝试上移
+		sprite.position = Vector2.ZERO
 
+	# 阴影下移找脚
+	var shadow = get_node_or_null("Shadow")
+	if shadow:
+		shadow.position = Vector2(0, 45)
+
+	# 碰撞箱下移找脚
+	if collision_shape and collision_shape.shape:
+		if collision_shape.shape is CircleShape2D:
+			collision_shape.shape.radius = 15.0
+			collision_shape.position = Vector2(0, 45)
+		elif collision_shape.shape is RectangleShape2D:
+			collision_shape.shape.size = Vector2(30, 20)
+			collision_shape.position = Vector2(0, 45)
 func _try_add_shadow():
 	var map_system = get_tree().get_first_node_in_group("map_system")
 	if map_system and map_system.has_method("ensure_entity_shadow"):
@@ -162,6 +177,12 @@ func _load_character_data(char_id: int):
 		# 加载妹红动画（如果是妹红）
 		if char_id == GameConstants.CharacterId.MOKOU:
 			_load_mokou_textures()
+			# 立即应用站立纹理，防止首帧隐身
+			if mokou_textures.stand:
+				sprite.texture = mokou_textures.stand
+				# 预设一个合理的 Scale
+				sprite.scale = Vector2(0.05, 0.05) 
+			
 			# Give her a secondary active weapon since wings are passive
 			SignalBus.weapon_added.emit("phoenix_claws")
 
@@ -379,6 +400,10 @@ func _check_enemy_contact_damage():
 		var collider = collision.get_collider()
 
 		if collider and collider.is_in_group("enemy"):
+			# 毛玉（KEDAMA）不造成接触伤害，只有撞击攻击才会伤害
+			if collider.has("enemy_type") and collider.enemy_type == GameConstants.EnemyType.KEDAMA:
+				continue
+
 			# 获取敌人的伤害值
 			var damage = 10.0  # 默认伤害
 			if collider.enemy_data and "damage" in collider.enemy_data:
@@ -432,7 +457,7 @@ func _check_dash_damage():
 				
 			# 视觉反馈：猛烈偏移 + 顿帧
 			# 屏幕向踢飞方向猛冲
-			SignalBus.directional_shake.emit(dash_direction, 20.0, 0.2)
+			# SignalBus.directional_shake.emit(dash_direction, 20.0, 0.2)
 			hitstop(0.1) # 顿帧
 
 			# 火焰特效
@@ -542,10 +567,10 @@ func _create_player_shadow():
 				image.set_pixel(x, y, Color(0, 0, 0, 0))
 
 	shadow.texture = ImageTexture.create_from_image(image)
-	shadow.position = Vector2(0, 5)  # 居中在脚下
+	shadow.position = Vector2(0, -15)  # 修正位置，往里吃进
 	shadow.rotation = 0.0
-	shadow.skew = 0.0
-	shadow.z_index = -1
+	shadow.skew = 0.5
+	shadow.z_index = -10
 	shadow.centered = true
 
 	add_child(shadow)
@@ -555,8 +580,8 @@ func _spawn_dash_landing_effect():
 	# 发射橙红色火焰粒子
 	SignalBus.spawn_death_particles.emit(global_position, Color("#ff4500"), 30)
 
-	# 触发轻微屏幕震动
-	SignalBus.screen_shake.emit(0.1, 8.0)  # 0.1秒，8像素
+	# 移除震动，保留打击感 (打击感由_check_dash_damage中的顿帧提供)
+	# SignalBus.screen_shake.emit(0.1, 8.0) 
 
 	# 范围伤害
 	var landing_damage = dash_damage * 0.8
@@ -635,7 +660,13 @@ func _load_mokou_textures():
 				mokou_textures.down.append(atlas)
 
 	# stand.png - 站立
-	mokou_textures.stand = load("res://assets/characters/mokuo (4).png")
+	# 改用无特殊字符的文件名，防止加载失败
+	var stand_path = "res://assets/characters/mokuo.png"
+	if ResourceLoader.exists(stand_path):
+		mokou_textures.stand = load(stand_path)
+	else:
+		# Fallback
+		mokou_textures.stand = load("res://assets/characters/mokuo (4).png")
 
 	# mokuokick.png - 飞踢
 	mokou_textures.kick = load("res://assets/mokuokick.png")
@@ -721,9 +752,10 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 		#    假设Sprite是Centered，脚底在 +h/2 处
 		var feet_y = tex_size.y / 2.0
 		
-		# 额外向内"吃"一点距离 (15px)，解决底部凹陷/不规则图形的贴合问题
-		var contact_eat_in = 15.0
-		
+		# 额外向内"吃"一点距离，解决底部凹陷/不规则图形的贴合问题
+		# 妹红模型较大，减少偏移量以贴合脚底
+		var contact_eat_in = 5.0
+
 		shadow.position = Vector2(0, (feet_y - contact_eat_in) * sprite.scale.y)
 		
 		# 3. 变换

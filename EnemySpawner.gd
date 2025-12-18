@@ -65,3 +65,88 @@ func on_game_started():
 	room_wave_spawned = 0
 
 func _process(delta):
+	if not use_room_system:
+		return
+		
+	# 房间波次生成逻辑
+	if room_wave_enemies_to_spawn > 0:
+		room_wave_spawn_timer += delta
+		if room_wave_spawn_timer >= ROOM_WAVE_SPAWN_INTERVAL:
+			room_wave_spawn_timer = 0
+			_spawn_next_room_enemy()
+
+func _spawn_next_room_enemy():
+	if room_wave_enemies_to_spawn <= 0:
+		return
+		
+	# 检查当前敌人总数
+	var current_enemies = get_tree().get_nodes_in_group("enemy").size()
+	if current_enemies >= max_enemies:
+		return
+		
+	spawn_enemy()
+	room_wave_enemies_to_spawn -= 1
+	room_wave_spawned += 1
+
+func _on_spawn_wave(count: int, room_index: int):
+	"""接收来自 RoomManager 的生成信号"""
+	print("[EnemySpawner] 收到生成请求: ", count, " 个敌人")
+	room_wave_enemies_to_spawn = count
+	room_wave_spawned = 0
+	room_wave_spawn_timer = ROOM_WAVE_SPAWN_INTERVAL # 立即开始生成第一个
+
+func spawn_enemy(config = null):
+	"""在随机位置生成一个敌人"""
+	if not player:
+		var players = get_tree().get_nodes_in_group("player")
+		if players.size() > 0:
+			player = players[0]
+		else:
+			return null
+
+	# 如果没有提供配置，根据游戏进度随机选择
+	if config == null:
+		config = EnemyData.get_random_enemy_for_time(game_time)
+
+	# 随机位置（在玩家周围的一定距离）
+	var random_angle = randf() * PI * 2.0
+	var spawn_pos = player.global_position + Vector2(cos(random_angle), sin(random_angle)) * spawn_distance
+	
+	# 确保在地图边界内 (100-2300, 100-1700)
+	spawn_pos.x = clamp(spawn_pos.x, 100, 2300)
+	spawn_pos.y = clamp(spawn_pos.y, 100, 1700)
+
+	var enemy = enemy_scene.instantiate()
+	enemy.global_position = spawn_pos
+	
+	# 设置敌人数据
+	if enemy.has_method("setup_from_config"):
+		enemy.setup_from_config(config)
+	elif enemy.has_method("setup"):
+		# 尝试为了兼容性（虽然可能会失败如果setup只接受int）
+		enemy.setup(config)
+	
+	game_objects_parent.add_child(enemy)
+	return enemy
+
+func spawn_boss(boss_config):
+	"""生成BOSS"""
+	print("[EnemySpawner] 正在生成BOSS: ", boss_config.enemy_name)
+	
+	if not player: return
+	
+	var spawn_pos = player.global_position + Vector2(0, -300) # 玩家上方
+	spawn_pos.x = clamp(spawn_pos.x, 500, 1900)
+	spawn_pos.y = clamp(spawn_pos.y, 400, 1400)
+	
+	var boss = enemy_scene.instantiate()
+	boss.global_position = spawn_pos
+	
+	if boss.has_method("setup"):
+		boss.setup(boss_config)
+		
+	game_objects_parent.add_child(boss)
+	return boss
+
+func _on_spawn_boss(boss_config):
+	spawn_boss(boss_config)

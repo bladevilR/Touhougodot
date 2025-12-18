@@ -68,7 +68,7 @@ func _create_visual():
 	var texture = load("res://assets/characters/marisa3.png")
 	if texture:
 		sprite.texture = texture
-		sprite.scale = Vector2(0.08, 0.08) # 调小一点 (was 0.12)
+		sprite.scale = Vector2(0.05, 0.05) # 调小一点 (was 0.08)
 	else:
 		# Fallback if texture missing
 		var size = 64
@@ -99,76 +99,43 @@ func _start_interaction():
 	"""开始交互 - 打招呼"""
 	is_dialogue_active = true
 	
-	# 创建对话框
-	var canvas_layer = get_tree().get_first_node_in_group("ui")
-	if not canvas_layer: return
+	var dialogue_data = [
+		{
+			"speaker": "魔理沙", 
+			"text": "哟！好久不见！\n想要来点强力的魔法吗？普通的东西我可不卖哦 ze~", 
+			"portrait": "res://assets/characters/3C.png"
+		}
+	]
 	
-	dialogue_ui = Control.new()
-	dialogue_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
-	canvas_layer.add_child(dialogue_ui)
-	
-	# 1. 立绘 (大，在左侧)
-	var avatar = TextureRect.new()
-	var tex = load("res://assets/characters/3.png") # 正常立绘
-	if tex:
-		avatar.texture = tex
-		avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		
-		# 自动高度
-		var aspect = tex.get_width() / float(tex.get_height())
-		var h = 500.0
-		var w = h * aspect
-		
-		avatar.size = Vector2(w, h)
-		avatar.position = Vector2(100, 1080 - h) # 左下角
-		dialogue_ui.add_child(avatar)
-	
-	# 2. 对话框 (在立绘右侧，连接感)
-	var panel = Panel.new()
-	panel.position = Vector2(100 + 200, 1080 - 250) # 从立绘中间开始
-	panel.size = Vector2(1200, 200)
-	
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0.8)
-	style.border_color = Color("#ffd700")
-	style.set_border_width_all(2)
-	style.border_width_left = 0 # 去掉左边框，制造连接感
-	style.set_corner_radius_all(10)
-	style.corner_radius_top_left = 0
-	style.corner_radius_bottom_left = 0
-	panel.add_theme_stylebox_override("panel", style)
-	
-	dialogue_ui.add_child(panel)
-	
-	# 名字
-	var name_label = Label.new()
-	name_label.text = "魔理沙"
-	name_label.position = Vector2(20, 20)
-	name_label.add_theme_font_size_override("font_size", 32)
-	name_label.add_theme_color_override("font_color", Color("#ffd700"))
-	panel.add_child(name_label)
-	
-	# 内容
-	var text_label = Label.new()
-	text_label.text = "哟！好久不见！\n想要来点强力的魔法吗？普通的东西我可不卖哦 ze~"
-	text_label.position = Vector2(20, 70)
-	text_label.add_theme_font_size_override("font_size", 24)
-	panel.add_child(text_label)
-	
-	# 暂停游戏? 
-	# get_tree().paused = true # 暂不暂停，保持流畅
-	
-	# 延迟打开商店 (或点击继续)
-	# 这里简单处理：显示1.5秒后自动进入商店
-	await get_tree().create_timer(1.5).timeout
-	
-	if is_instance_valid(dialogue_ui):
-		dialogue_ui.queue_free()
-		dialogue_ui = null
+	await _play_dialogue(dialogue_data)
 	is_dialogue_active = false
-	
 	_open_shop()
+
+func _play_dialogue(data: Array):
+	var dm = _get_dialogue_manager()
+	if dm:
+		dm.show_sequence(data)
+		await dm.dialogue_finished
+	else:
+		await get_tree().create_timer(1.0).timeout
+
+func _get_dialogue_manager() -> DialoguePortrait:
+	# 检查是否存在 DialogueLayer/DialogueManager
+	var existing_layer = get_tree().root.get_node_or_null("DialogueLayer")
+	if existing_layer:
+		return existing_layer.get_node_or_null("DialogueManager")
+	
+	# 创建新的 Layer 和 Manager
+	var layer = CanvasLayer.new()
+	layer.layer = 128 # 确保在最上层
+	layer.name = "DialogueLayer"
+	get_tree().root.add_child(layer)
+	
+	var dm = DialoguePortrait.new()
+	dm.name = "DialogueManager"
+	layer.add_child(dm)
+	
+	return dm
 
 func _on_body_entered(body):
 	if body.is_in_group("player"):

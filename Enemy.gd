@@ -14,6 +14,9 @@ var health_bar = null  # 血量条引用
 var target: Node2D = null
 var enemy_data = null
 
+# Shooting system
+var shoot_timer: float = 0.0
+
 # ==================== PHYSICS SYSTEM ====================
 # Physics properties
 var mass: float = 10.0
@@ -45,6 +48,20 @@ var jump_height: float = 0.0  # 当前跳跃高度（视觉用）
 var jump_progress: float = 0.0  # 跳跃进度 0-1
 const JUMP_MAX_HEIGHT: float = 30.0  # 跳跃最大高度（像素）
 const JUMP_DURATION: float = 0.5  # 跳跃持续时间（秒）
+
+# ==================== KEDAMA CHARGE ATTACK SYSTEM ====================
+# 毛玉撞击攻击系统
+var is_charging: bool = false  # 是否正在蓄力
+var is_dashing_attack: bool = false  # 是否正在冲刺攻击
+var charge_timer: float = 0.0  # 蓄力计时器
+var dash_timer: float = 0.0  # 冲刺计时器
+var attack_cooldown: float = 0.0  # 攻击冷却
+const CHARGE_DURATION: float = 0.3  # 蓄力时间（前摇）
+const DASH_DURATION: float = 0.4  # 冲刺时间
+const ATTACK_COOLDOWN: float = 2.0  # 攻击冷却2秒
+const DASH_SPEED_MULTIPLIER: float = 3.0  # 冲刺速度倍数
+var charge_direction: Vector2 = Vector2.ZERO  # 蓄力方向
+var dash_hit_players: Array = []  # 记录已击中的玩家（避免重复伤害）
 
 # ==================== VISUAL EFFECTS ====================
 var shadow_sprite: Sprite2D = null  # 地面影子
@@ -139,19 +156,24 @@ func _ready():
 
 	# 添加阴影（下午斜阳的长影子）
 	var map_system = get_tree().get_first_node_in_group("map_system")
-	if map_system and map_system.has_method("create_shadow_for_entity"):
+	
+	# 毛玉特殊处理：使用简单影子防止反转问题
+	if enemy_type == GameConstants.EnemyType.KEDAMA:
+		_create_enemy_shadow()
+	elif map_system and map_system.has_method("create_shadow_for_entity"):
 		# 根据敌人缩放调整阴影大小
 		var enemy_scale = sprite.scale.x if sprite else 1.0
 		var shadow_size = Vector2(40 * enemy_scale, 10 * enemy_scale)
 		
 		# 根据敌人类型判断是否悬空
-		var shadow_offset = Vector2(0, 5) # 默认地面
+		# 调整偏移：往里吃进一些 (负Y) - 用户要求更激进的偏移
+		var shadow_offset = Vector2(0, -15) # 激进吃进
 		var shadow_alpha = 0.5
 		
 		# 飞行单位
 		if enemy_type in [GameConstants.EnemyType.ELF, GameConstants.EnemyType.FAIRY, GameConstants.EnemyType.GHOST]:
-			shadow_offset = Vector2(0, 40 * enemy_scale) # 悬空偏移
-			shadow_alpha = 0.3 # 离地更远，影子更淡
+			shadow_offset = Vector2(0, 30 * enemy_scale) # 悬空还是在下方，但稍微拉近
+			shadow_alpha = 0.3 
 			
 		var shadow = map_system.create_shadow_for_entity(self, shadow_size, shadow_offset)
 		if shadow:
@@ -267,6 +289,21 @@ func _physics_process(delta):
 			var shadow_scale = 1.0 - (jump_height / JUMP_MAX_HEIGHT) * 0.5  # 最多缩小50%
 			shadow_sprite.scale = Vector2(shadow_scale, shadow_scale * 0.5)  # 椭圆形影子
 
+	# ==================== KEDAMA CHARGE ATTACK SYSTEM ====================
+	# 毛玉撞击攻击（带前摇）
+	if enemy_type == GameConstants.EnemyType.KEDAMA:
+		_process_kedama_charge_attack(delta)
+
+	# ==================== GENERAL SHOOTING LOGIC ====================
+	if enemy_data and enemy_data.can_shoot and is_instance_valid(target):
+		# 简单的视距检查
+		if global_position.distance_to(target.global_position) < 600.0:
+			shoot_timer -= delta
+			if shoot_timer <= 0:
+				print("[Enemy] Pew! Shooting at target.")
+				shoot_timer = enemy_data.shoot_interval
+				_shoot_at_target()
+
 	# ==================== BOSS LOGIC ====================
 	if enemy_type == GameConstants.EnemyType.BOSS:
 		_process_boss_attacks(delta)
@@ -349,15 +386,137 @@ func _physics_process(delta):
 		if spiral_trail_timer >= spiral_trail_duration:
 			_stop_spiral_trail()
 
+func _shoot_at_target():
+	if not is_instance_valid(target): return
+	
+	var dir = global_position.direction_to(target.global_position)
+	var bullet_scene = load("res://Bullet.tscn")
+	if bullet_scene:
+		var bullet = bullet_scene.instantiate()
+		
+		var color = enemy_data.color if enemy_data else Color.RED
+		# 米粒弹外观配置
+		var config = {
+			"weapon_id": "rice_grain", # 假设有这个ID或默认
+			"color": color,
+			"damage": enemy_data.damage,
+			"speed": 300.0,
+			"direction": dir,
+			"lifetime": 4.0,
+			"is_enemy_bullet": true
+		}
+		
+		if bullet.has_method("setup"):
+			bullet.setup(config)
+			
+		bullet.global_position = global_position
+		get_parent().add_child(bullet)
+
 # ==================== BOSS ATTACK LOGIC ====================
 func _process_boss_attacks(delta: float):
 	if not enemy_data or not enemy_data is EnemyData.BossConfig:
 		return
-		
+
 	boss_attack_timer -= delta
 	if boss_attack_timer <= 0:
 		boss_attack_timer = BOSS_ATTACK_INTERVAL
 		_execute_next_boss_attack()
+
+# ==================== KEDAMA CHARGE ATTACK ====================
+func _process_kedama_charge_attack(delta: float):
+	"""处理毛玉的撞击攻击系统"""
+	# 更新攻击冷却
+	if attack_cooldown > 0:
+		attack_cooldown -= delta
+
+	# 如果正在蓄力
+	if is_charging:
+		charge_timer += delta
+
+		# 蓄力视觉效果：变大+变红
+		if sprite:
+			var charge_progress = charge_timer / CHARGE_DURATION
+			var scale_mult = 1.0 + charge_progress * 0.3  # 最多放大30%
+			sprite.scale = Vector2(enemy_data.scale, enemy_data.scale) * scale_mult
+			sprite.modulate = Color.WHITE.lerp(Color.RED, charge_progress)
+
+		# 蓄力完成，开始冲刺
+		if charge_timer >= CHARGE_DURATION:
+			is_charging = false
+			is_dashing_attack = true
+			dash_timer = 0.0
+			dash_hit_players.clear()
+
+			# 恢复颜色
+			if sprite:
+				sprite.modulate = Color.WHITE
+		return
+
+	# 如果正在冲刺攻击
+	if is_dashing_attack:
+		dash_timer += delta
+
+		# 冲刺移动
+		velocity = charge_direction * base_speed * DASH_SPEED_MULTIPLIER
+		move_and_slide()
+
+		# 检测击中玩家
+		_check_dash_hit_player()
+
+		# 冲刺结束
+		if dash_timer >= DASH_DURATION:
+			is_dashing_attack = false
+			attack_cooldown = ATTACK_COOLDOWN
+
+			# 恢复正常大小
+			if sprite:
+				sprite.scale = Vector2(enemy_data.scale, enemy_data.scale)
+		return
+
+	# 正常状态：检测是否应该开始蓄力
+	if attack_cooldown <= 0 and is_instance_valid(target):
+		var distance = global_position.distance_to(target.global_position)
+		# 在150像素范围内触发撞击攻击
+		if distance < 150.0 and distance > 30.0:
+			_start_charge_attack()
+
+func _start_charge_attack():
+	"""开始蓄力攻击"""
+	if not is_instance_valid(target):
+		return
+
+	is_charging = true
+	charge_timer = 0.0
+	charge_direction = global_position.direction_to(target.global_position)
+	print("[Kedama] 开始蓄力撞击！")
+
+func _check_dash_hit_player():
+	"""检查冲刺攻击是否击中玩家"""
+	var players = get_tree().get_nodes_in_group("player")
+	for player in players:
+		if not is_instance_valid(player):
+			continue
+
+		# 避免重复伤害
+		var player_id = player.get_instance_id()
+		if player_id in dash_hit_players:
+			continue
+
+		var distance = global_position.distance_to(player.global_position)
+		if distance < 40.0:  # 撞击判定范围
+			dash_hit_players.append(player_id)
+
+			# 造成伤害
+			if player.has_method("take_damage"):
+				var damage = enemy_data.damage if enemy_data else 10.0
+				player.take_damage(damage)
+				print("[Kedama] 撞击命中！造成", damage, "点伤害")
+
+			# 击退玩家
+			if player.has_method("apply_knockback"):
+				player.apply_knockback(charge_direction, 600.0)
+
+# ==================== BOSS ATTACK LOGIC (continued) ====================
 
 func _execute_next_boss_attack():
 	var patterns = enemy_data.attack_patterns
@@ -452,40 +611,85 @@ func _attack_spirit_split():
 
 # --- Kaguya Attacks ---
 func _attack_impossible_bullet_hell():
-	# Spiral pattern
-	var count = 50
-	for i in range(count):
-		var angle = i * 0.2
-		var dir = Vector2(cos(angle), sin(angle))
-		_spawn_boss_bullet(global_position, dir, 250.0, "yin_yang_orb", Color.GOLD, {"bounce_count": 2})
-		await get_tree().create_timer(0.02).timeout
+	# 东方风格：七彩扩散弹幕
+	# 从Boss位置向四周发射彩虹色弹幕
+	var wave_count = 5  # 5波弹幕
+	var bullets_per_wave = 36  # 每波36颗子弹（10度间隔）
+
+	for wave in range(wave_count):
+		# 彩虹色渐变
+		var colors = [
+			Color("#ff0000"),  # 红
+			Color("#ff7f00"),  # 橙
+			Color("#ffff00"),  # 黄
+			Color("#00ff00"),  # 绿
+			Color("#0000ff"),  # 蓝
+			Color("#4b0082"),  # 靛
+			Color("#9400d3")   # 紫
+		]
+
+		for i in range(bullets_per_wave):
+			var angle = i * (TAU / bullets_per_wave) + wave * 0.1  # 每波稍微旋转
+			var dir = Vector2(cos(angle), sin(angle))
+			var color = colors[i % colors.size()]
+
+			_spawn_boss_bullet(
+				global_position,
+				dir,
+				200.0 + wave * 20.0,  # 速度逐波递增
+				"yin_yang_orb",
+				color,
+				{"bounce_count": 1}
+			)
+
+		# 波次间隔
+		await get_tree().create_timer(0.3).timeout
 
 func _attack_time_stop():
-	# Spawn static bullets that wait then target player
-	var count = 20
-	for i in range(count):
-		var pos_offset = Vector2(randf_range(-300, 300), randf_range(-300, 300))
-		var bullet = load("res://Bullet.tscn").instantiate()
-		bullet.setup({
-			"weapon_id": "star_dust",
-			"color": Color.MAGENTA,
-			"damage": 20.0,
-			"speed": 0.0, # Stop initially
-			"lifetime": 5.0
-		})
-		bullet.global_position = global_position + pos_offset
-		get_parent().add_child(bullet)
-		
-		# After delay, launch at player
-		_launch_delayed_bullet(bullet)
+	# 东方风格：延迟直线弹幕
+	# 先生成静止的弹幕，然后同时激活向玩家射去
+	var count = 24  # 24颗子弹围成一圈
+	var bullets = []
 
-func _launch_delayed_bullet(bullet):
-	await get_tree().create_timer(1.0).timeout
-	if is_instance_valid(bullet) and is_instance_valid(target):
-		var dir = bullet.global_position.direction_to(target.global_position)
-		bullet.velocity = dir * 400.0
-		bullet.speed = 400.0
-		if bullet.sprite: bullet.sprite.rotation = dir.angle()
+	# 第一阶段：生成静止弹幕（圆形阵列）
+	for i in range(count):
+		var angle = i * (TAU / count)
+		var offset = Vector2(cos(angle), sin(angle)) * 250  # 距离Boss 250像素
+		var bullet_scene = load("res://Bullet.tscn")
+
+		if bullet_scene:
+			var bullet = bullet_scene.instantiate()
+			bullet.setup({
+				"weapon_id": "star_dust",
+				"color": Color.MAGENTA,
+				"damage": 25.0,
+				"speed": 0.0,  # 初始静止
+				"lifetime": 8.0,
+				"is_enemy_bullet": true
+			})
+			bullet.global_position = global_position + offset
+			get_parent().add_child(bullet)
+			bullets.append(bullet)
+
+	# 等待1.5秒（给玩家反应时间）
+	await get_tree().create_timer(1.5).timeout
+
+	# 第二阶段：同时激活，向玩家位置射去
+	if is_instance_valid(target):
+		var target_pos = target.global_position
+		for bullet in bullets:
+			if is_instance_valid(bullet):
+				var dir = (target_pos - bullet.global_position).normalized()
+				# 重新配置子弹，使其移动
+				bullet.setup({
+					"weapon_id": "star_dust",
+					"color": Color.MAGENTA,
+					"damage": 25.0,
+					"speed": 350.0,  # 快速射出
+					"direction": dir,
+					"lifetime": 5.0,
+					"is_enemy_bullet": true
+				})
 
 # ==================== PHYSICS METHODS ====================
 
@@ -632,9 +836,14 @@ func take_damage(amount, weapon_id: String = ""):
 				sprite.modulate = Color.RED
 
 func die():
-	# 发射死亡粒子效果
+	# 发射死亡粒子效果 - 爆开效果
 	var particle_color = original_color if original_color != Color.RED else Color.WHITE
-	SignalBus.spawn_death_particles.emit(global_position, particle_color, 20)
+	
+	# 增加粒子数量和爆发感
+	SignalBus.spawn_death_particles.emit(global_position, particle_color, 30) 
+	
+	# 额外的白色闪光粒子，模拟爆炸核心
+	SignalBus.spawn_death_particles.emit(global_position, Color.WHITE, 10)
 
 	# 精英怪特殊处理：更强的屏幕震动 + 掉落宝箱
 	if enemy_data and enemy_data.is_elite:
@@ -712,6 +921,58 @@ func setup_from_wave(wave_config: EnemyData.WaveConfig):
 
 		# 更新血量条
 		_update_health_bar()
+
+func setup_from_config(config: EnemyData.EnemyConfig):
+	"""从EnemyConfig对象初始化敌人"""
+	# 0. 获取节点引用
+	if not health_comp: health_comp = get_node_or_null("HealthComponent")
+	if not sprite: sprite = get_node_or_null("Sprite2D")
+	if not collision_shape: collision_shape = get_node_or_null("CollisionShape2D")
+	if not health_bar: health_bar = get_node_or_null("HealthBar")
+
+	enemy_data = config
+	enemy_type = config.enemy_type
+	
+	# 应用属性
+	if health_comp:
+		health_comp.max_hp = config.hp
+		health_comp.current_hp = config.hp
+		
+	speed = config.speed * 100.0
+	base_speed = speed
+	xp_value = config.exp
+	mass = config.mass
+	original_color = config.color
+	
+	if sprite:
+		sprite.modulate = config.color
+		if config.scale > 0:
+			sprite.scale = Vector2(config.scale, config.scale)
+		
+		# Y-Sort Fix: Sprite 上移半个身位，让 Position 代表脚底
+		sprite.position.y = -40
+		
+		# 加载纹理
+		var texture_path = ""
+		if "boss_type" in config: # Check property existence
+			texture_path = _get_boss_texture_path(config.boss_type)
+		else:
+			texture_path = _get_texture_path_for_type(enemy_type)
+			
+		if ResourceLoader.exists(texture_path):
+			sprite.texture = load(texture_path)
+			
+	if collision_shape and collision_shape.shape:
+		if collision_shape.shape is CircleShape2D:
+			collision_shape.shape.radius = config.radius
+			collision_shape.position = Vector2(0, 0) # 碰撞箱在脚底
+			
+	# 特殊属性
+	can_jump = config.can_jump
+	jump_interval = config.jump_interval
+	
+	_update_health_bar()
+	print("[Enemy] Setup from config: ", config.enemy_name, " CanShoot:", config.can_shoot)
 
 func _get_enemy_type_from_string(enemy_type_str: String) -> int:
 	"""将字符串敌人类型转换为GameConstants枚举"""
@@ -798,7 +1059,12 @@ func _create_enemy_shadow():
 	add_child(shadow_sprite)
 
 # 设置敌人类型和属性（旧接口，保留兼容性）
-func setup(type: int, wave: int = 1):
+func setup(config_or_type, wave: int = 1):
+	if typeof(config_or_type) == TYPE_OBJECT:
+		setup_from_config(config_or_type)
+		return
+
+	var type = config_or_type
 	enemy_type = type
 
 	# 重新加载配置

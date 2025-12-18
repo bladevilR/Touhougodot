@@ -81,18 +81,20 @@ static func initialize():
 
 	# ==================== 普通敌人 ====================
 
-	# 小妖精 - 基础敌人
+	# 小妖精 - 稀有射击怪 (原基础敌人)
 	var fairy = EnemyConfig.new(
 		GameConstants.EnemyType.FAIRY,
-		"小妖精",
-		50.0,   # HP
-		10.0,   # 伤害
-		2.0,    # 速度
-		3,      # 经验
-		Color("#ff69b4"),  # 粉色
-		8.0,    # 半径 - 缩小到人的一半大小
-		5.0     # 质量 - 很轻，容易被击退
+		"向日葵妖精",
+		60.0,   # HP 稍高
+		15.0,   # 伤害
+		1.5,    # 速度 稍慢
+		8,      # 经验 较高
+		Color("#ffcc00"),  # 金黄色
+		10.0,   # 半径
+		8.0     # 质量
 	)
+	fairy.can_shoot = true
+	fairy.shoot_interval = 2.5
 	ENEMIES[GameConstants.EnemyType.FAIRY] = fairy
 
 	# 幽灵 - 中等敌人
@@ -109,23 +111,23 @@ static func initialize():
 	)
 	ENEMIES[GameConstants.EnemyType.GHOST] = ghost
 
-	# 毛玉 - 跳跃敌人
+	# 毛玉 - 基础杂兵 (原跳跃敌人)
 	var kedama = EnemyConfig.new(
 		GameConstants.EnemyType.KEDAMA,
 		"毛玉",
-		100.0,
-		20.0,
-		1.8,
-		8,
-		Color("#3498db"),  # 蓝色
-		12.0,   # 半径 - 缩小到人的一半大小
-		15.0    # 质量 - 较重
+		30.0,   # HP 较低
+		8.0,    # 伤害 较低
+		2.2,    # 速度 较快 (只会冲撞)
+		2,      # 经验 低
+		Color("#ffffff"),  # 白色
+		8.0,    # 半径 小
+		5.0     # 质量 轻
 	)
 	kedama.can_jump = true
-	kedama.jump_interval = 1.0
+	kedama.jump_interval = 0.8
 	ENEMIES[GameConstants.EnemyType.KEDAMA] = kedama
 
-	# 精灵 - 远程射击敌人
+	# 精灵 - 远程射击敌人 (保留为高级远程)
 	var elf = EnemyConfig.new(
 		GameConstants.EnemyType.ELF,
 		"精灵",
@@ -134,8 +136,8 @@ static func initialize():
 		2.2,
 		10,
 		Color("#2ecc71"),  # 绿色
-		9.0,    # 半径 - 缩小到人的一半大小
-		6.0     # 质量 - 很轻
+		9.0,    # 半径
+		6.0     # 质量
 	)
 	elf.can_shoot = true
 	elf.shoot_interval = 2.0
@@ -362,3 +364,21 @@ static func should_spawn_boss(time: float) -> BossConfig:
 	elif time >= 900.0 and time < 901.0:  # 15分钟 - 辉夜
 		return BOSSES[GameConstants.BossType.KAGUYA]
 	return null
+
+static func get_random_enemy_for_time(time: float) -> EnemyConfig:
+	"""根据时间获取随机敌人配置 (毛玉为主)"""
+	var rand = randf()
+	
+	# 早期 (0-2分钟)
+	if time < 120.0:
+		if rand < 0.9: return ENEMIES[GameConstants.EnemyType.KEDAMA] # 90% 毛玉
+		else: return ENEMIES[GameConstants.EnemyType.FAIRY] # 10% 妖精
+		
+	# 中期 (2-5分钟)
+	if time < 300.0:
+		if rand < 0.8: return ENEMIES[GameConstants.EnemyType.KEDAMA]
+		else: return ENEMIES[GameConstants.EnemyType.FAIRY] # 20%
+		
+	# 后期
+	if rand < 0.7: return ENEMIES[GameConstants.EnemyType.KEDAMA]
+	else: return ENEMIES[GameConstants.EnemyType.FAIRY]

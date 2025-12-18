@@ -129,7 +129,7 @@ func _ready():
 	create_lighting("outskirts")
 	
 	setup_camera_limits()
-	spawn_nitori_npc()
+	spawn_nitori_npc() # 恢复河童
 	print("DEBUG: MapSystem _ready finished")
 
 func setup_layers():
@@ -352,6 +352,8 @@ func create_interior_bamboo():
 		for y in range(WALL_THICKNESS, MAP_HEIGHT - WALL_THICKNESS, step):
 			var pos = Vector2(x + randf_range(-20, 20), y + randf_range(-20, 20))
 			if pos.distance_to(Vector2(PLAYER_SPAWN_X, PLAYER_SPAWN_Y)) < safe_radius: continue
+			# NPC 区域保护
+			if pos.distance_to(Vector2(1800, 600)) < 300: continue
 
 			var noise_val = bamboo_noise.get_noise_2d(pos.x, pos.y)
 			
@@ -469,7 +471,7 @@ func _create_flower_cluster(center: Vector2, count: int, base_scale: float) -> i
 		var radius = randf_range(20, 50)
 		var pos = center + Vector2(cos(angle), sin(angle)) * radius
 		var tex = flower_types[randi() % flower_types.size()]
-		if create_decoration_sprite(tex, pos, base_scale + randf_range(-0.02, 0.02)):
+		if create_decoration_sprite(tex, pos, base_scale + randf_range(-0.02, 0.02), -1, Vector2(0, 0)):
 			created += 1
 	return created
 
@@ -479,21 +481,59 @@ func _create_rock_group(center: Vector2, count: int, base_scale: float) -> int:
 	for i in range(count):
 		var pos = center + Vector2(randf_range(-30, 30), randf_range(-20, 20))
 		var tex = rock_types[randi() % rock_types.size()]
-		if create_decoration_sprite(tex, pos, base_scale + randf_range(-0.05, 0.05)):
-			created += 1
+		create_solid_rock(tex, pos, base_scale + randf_range(-0.05, 0.05))
+		created += 1
 	return created
+
+# 公开此方法供 RoomLayoutManager 使用，确保石头生成逻辑一致
+func create_solid_rock(texture_path: String, pos: Vector2, scale: float) -> Node2D:
+	var texture = load(texture_path)
+	if not texture: return null
+	
+	var body = StaticBody2D.new()
+	body.position = pos
+	body.collision_layer = 2
+	body.collision_mask = 1
+	body.z_index = 0
+	
+	var sprite = Sprite2D.new()
+	sprite.texture = texture
+	sprite.scale = Vector2(scale, scale)
+	sprite.centered = false
+	sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
+	body.add_child(sprite)
+	
+	var col = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	# 增大碰撞体积覆盖底部
+	shape.radius = texture.get_width() * scale * 0.45
+	col.shape = shape
+	col.position = Vector2(0, -10 * scale)
+	body.add_child(col)
+	
+	var shadow_size = Vector2(texture.get_width() * scale * 0.8, texture.get_height() * scale * 0.4)
+	# 统一使用吃进 -20 的阴影
+	create_shadow_for_entity(body, shadow_size, Vector2(0, -20), 0.3)
+	
+	if not game_objects_parent:
+		game_objects_parent = get_parent()
+		if not game_objects_parent: game_objects_parent = self
+		
+	game_objects_parent.call_deferred("add_child", body)
+	return body
 
 func _create_shoot(pos: Vector2, scale: float) -> int:
 	var shoot_types = decoration_textures["shoots"]
 	var tex = shoot_types[randi() % shoot_types.size()]
-	if create_decoration_sprite(tex, pos, scale): return 1
+	if create_decoration_sprite(tex, pos, scale, -1, Vector2(0, 0)): return 1
 	return 0
 
-func create_decoration_sprite(texture_path: String, pos: Vector2, scale: float) -> Node2D:
+func create_decoration_sprite(texture_path: String, pos: Vector2, scale: float, z_index: int = 0, shadow_offset: Vector2 = Vector2(0, -10)) -> Node2D:
 	var texture = load(texture_path)
 	if not texture: return null
 	var container = Node2D.new()
 	container.position = pos
+	container.z_index = z_index
 	
 	var sprite = Sprite2D.new()
 	sprite.texture = texture
@@ -504,7 +544,7 @@ func create_decoration_sprite(texture_path: String, pos: Vector2, scale: float) 
 	
 	# Shadow (After sprite added)
 	var shadow_size = Vector2(texture.get_width() * scale * 0.8, texture.get_height() * scale * 0.4)
-	create_shadow_for_entity(container, shadow_size, Vector2(0, 0), 0.3)
+	create_shadow_for_entity(container, shadow_size, shadow_offset, 0.3)
 	
 	if not game_objects_parent:
 		game_objects_parent = get_parent()
@@ -813,7 +853,7 @@ func ensure_entity_shadow(entity: Node2D, scale_mult: float = 1.0):
 	if entity is CharacterBody2D: # Player/Enemy
 		size = Vector2(60, 25) * scale_mult
 	
-	create_shadow_for_entity(entity, size, Vector2(0, 5), 0.5)
+	create_shadow_for_entity(entity, size, Vector2(0, -15), 0.5)
 
 # ==================== 其他接口 ====================
 func setup_camera_limits():

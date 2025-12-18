@@ -123,60 +123,33 @@ func _create_simple_bamboo(pos: Vector2):
 	spawned_objects.append(body)
 
 func _spawn_decoration(pos: Vector2, type: String):
-	"""生成装饰物"""
-	var texture_path = ""
-	var scale = 0.1
+	"""生成装饰物 - 委托给 MapSystem 统一处理"""
+	if not map_system: return
 
+	var obj = null
 	match type:
 		"flower":
-			var flower_textures = [
-				"res://flower_white_daisy_single.png",
-				"res://flower_blue_single_1.png",
-				"res://flower_red_cluster_1.png",
-			]
-			if flower_textures.size() > 0:
-				texture_path = flower_textures[randi() % flower_textures.size()]
-			scale = 0.08
+			var textures = map_system.decoration_textures.get("flowers", [])
+			if not textures.is_empty():
+				var tex = textures[randi() % textures.size()]
+				# 花草：Z-Index -1 (在脚下)，无特殊阴影偏移
+				obj = map_system.create_decoration_sprite(tex, pos, 0.08 + randf_range(-0.02, 0.02), -1, Vector2(0, 0))
 		"rock":
-			var rock_textures = [
-				"res://rock_medium_grey.png",
-				"res://rock_large_moss_1.png",
-			]
-			if rock_textures.size() > 0:
-				texture_path = rock_textures[randi() % rock_textures.size()]
-			scale = 0.15
+			var textures = map_system.decoration_textures.get("rocks", [])
+			if not textures.is_empty():
+				var tex = textures[randi() % textures.size()]
+				# 石头：实体碰撞，Z-Index 0，阴影偏移 -20
+				if map_system.has_method("create_solid_rock"):
+					obj = map_system.create_solid_rock(tex, pos, 0.15 + randf_range(-0.03, 0.03))
 		"shoot":
-			var shoot_textures = [
-				"res://shoot_small_1.png",
-				"res://shoot_medium_1.png",
-			]
-			if shoot_textures.size() > 0:
-				texture_path = shoot_textures[randi() % shoot_textures.size()]
-			scale = 0.08
+			var textures = map_system.decoration_textures.get("shoots", [])
+			if not textures.is_empty():
+				var tex = textures[randi() % textures.size()]
+				# 竹笋：Z-Index -1
+				obj = map_system.create_decoration_sprite(tex, pos, 0.08, -1, Vector2(0, 0))
 
-	if texture_path == "" or not ResourceLoader.exists(texture_path):
-		return
-
-	var texture = load(texture_path)
-	if not texture:
-		return
-
-	# 创建简单的精灵容器
-	var container = Node2D.new()
-	container.name = "DynamicDecoration"
-	container.position = pos
-
-	var sprite = Sprite2D.new()
-	sprite.texture = texture
-	sprite.scale = Vector2(scale, scale)
-	sprite.centered = false
-	sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
-	sprite.modulate.a = randf_range(0.7, 0.9)
-	container.add_child(sprite)
-
-	# 添加到场景
-	game_objects_parent.call_deferred("add_child", container)
-	spawned_objects.append(container)
+	if obj:
+		spawned_objects.append(obj)
 
 func _get_room_type_from_name(room_type_name: String) -> int:
 	"""将房间类型名称转换为枚举"""

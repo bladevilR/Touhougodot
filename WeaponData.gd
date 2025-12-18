@@ -245,18 +245,18 @@ static func initialize():
 	yin_yang_orb.knockback = 10.0
 	WEAPONS["yin_yang_orb"] = yin_yang_orb
 
-	# 10. 上海人形
-	var shanghai_doll = WeaponConfig.new(
-		"shanghai_doll",
-		"上海人形",
-		"召唤3个小人偶自动索敌攻击。",
-		8, 0.8, 8.0, GameConstants.WeaponType.PROJECTILE
-	)
-	shanghai_doll.projectile_count = 3
-	shanghai_doll.projectile_speed = 250.0
-	shanghai_doll.homing_strength = 0.15
-	shanghai_doll.projectile_lifetime = 2.0
-	WEAPONS["shanghai_doll"] = shanghai_doll
+	# 10. 上海人形 - 暂时注释（未完成实现）
+	# var shanghai_doll = WeaponConfig.new(
+	# 	"shanghai_doll",
+	# 	"上海人形",
+	# 	"召唤3个小人偶自动索敌攻击。",
+	# 	8, 0.8, 8.0, GameConstants.WeaponType.PROJECTILE
+	# )
+	# shanghai_doll.projectile_count = 3
+	# shanghai_doll.projectile_speed = 250.0
+	# shanghai_doll.homing_strength = 0.15
+	# shanghai_doll.projectile_lifetime = 2.0
+	# WEAPONS["shanghai_doll"] = shanghai_doll
 
 	# 11. 天狗团扇
 	var tengu_fan = WeaponConfig.new(
