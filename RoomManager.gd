@@ -93,10 +93,11 @@ func _generate_room_map():
 	for i in range(3):
 		var room = RoomNode.new()
 		room.id = room_id
-		room.type = RoomType.NORMAL
+		# 将北边的房间（索引1）设为商店房间，确保在必经之路上
+		room.type = RoomType.SHOP if i == 1 else RoomType.NORMAL
 		room.position = start_room.position + depth1_offsets[i]
 		room.depth = 1
-		room.is_cleared = false  # 确保需要战斗
+		room.is_cleared = false  # 确保需要战斗（商店房会自动清理）
 		start_room.connected_rooms.append(room.id)
 		room.connected_rooms.append(start_room.id)
 		depth1_rooms.append(room)
@@ -138,7 +139,8 @@ func _generate_room_map():
 		room_id += 1
 
 	# 深度3：特殊房间 (连接深度2的末端)
-	var special_types = [RoomType.SHOP, RoomType.ENCHANT, RoomType.TREASURE]
+	# 移除商店和附魔房间，因为商店已在深度1
+	var special_types = [RoomType.TREASURE, RoomType.REST, RoomType.NORMAL]
 	var depth3_rooms = []
 	for i in range(3):
 		var room = RoomNode.new()
@@ -256,6 +258,10 @@ func _start_room(room_index: int):
 			_start_treasure_room()
 		RoomType.REST:
 			_start_rest_room()
+
+	# 在起始房间生成教程触发器
+	if room_index == 0:
+		_spawn_tutorial_trigger()
 
 func _start_combat_room():
 	"""开始战斗房间 - 基于击杀数"""
@@ -603,3 +609,32 @@ func get_current_room_info() -> Dictionary:
 func get_room_map_data() -> Array[RoomNode]:
 	"""返回房间地图数据供UI使用"""
 	return room_map
+
+func _spawn_tutorial_trigger():
+	"""在起始房间生成教程触发器"""
+	# 检查是否已存在教程触发器
+	var existing_trigger = get_tree().get_first_node_in_group("tutorial_trigger")
+	if existing_trigger:
+		return
+
+	# 加载教程触发器场景/脚本
+	var TutorialTriggerScript = load("res://TutorialTrigger.gd")
+	if not TutorialTriggerScript:
+		print("警告：无法加载 TutorialTrigger.gd")
+		return
+
+	# TutorialTrigger 继承自 Area2D，所以需要创建 Area2D 实例
+	var trigger = TutorialTriggerScript.new()
+
+	# 将触发器放在玩家出生点附近
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		trigger.position = player.global_position + Vector2(150, -100)
+	else:
+		trigger.position = Vector2(1200, 800)  # 默认位置
+
+	# 添加到场景
+	var world = get_parent()
+	if world:
+		world.call_deferred("add_child", trigger)
+		print("教程触发器已生成在起始房间")

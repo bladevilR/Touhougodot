@@ -18,6 +18,21 @@ func _ready():
 	add_child(room_layout_manager)
 	print("[World] RoomLayoutManager 已实例化")
 
+	# 实例化VictoryScreen
+	var VictoryScreenScript = preload("res://VictoryScreen.gd")
+	if VictoryScreenScript:
+		# VictoryScreen 继承自 Control，直接实例化脚本
+		var victory_screen = VictoryScreenScript.new()
+		victory_screen.name = "VictoryScreen"
+		# 添加到UI层
+		var ui_layer = get_node_or_null("GameUI")
+		if ui_layer:
+			ui_layer.add_child(victory_screen)
+			print("[World] VictoryScreen 已实例化")
+		else:
+			add_child(victory_screen)
+			print("[World] VictoryScreen 已实例化（添加到World）")
+
 	# 发送游戏开始信号
 	SignalBus.game_started.emit()
 

@@ -101,8 +101,13 @@ func _start_interaction():
 	
 	var dialogue_data = [
 		{
-			"speaker": "魔理沙", 
-			"text": "哟！好久不见！\n想要来点强力的魔法吗？普通的东西我可不卖哦 ze~", 
+			"speaker": "妹红",
+			"text": "今天也来采蘑菇吗？",
+			"portrait": "res://assets/characters/huiye.png"
+		},
+		{
+			"speaker": "魔理沙",
+			"text": "没错！要不要试试我新研制的魔法药剂？可以附魔'元素'属性，多种元素之间可以触发奇妙的效果哦 ze~",
 			"portrait": "res://assets/characters/3C.png"
 		}
 	]
