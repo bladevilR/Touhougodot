@@ -1332,7 +1332,7 @@ func _fire_melee_light(weapon_id: String, config: WeaponData.WeaponConfig, stats
 			get_tree().create_timer(0.05, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
 
 func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary):
-	"""近战攻击 - 强力踢击 (定帧 + 击飞 + 旋转 + 火焰)"""
+	"""近战攻击 - 强力踢击 (范围击退 + 最近敌人旋转击飞)"""
 	
 	# 伤害计算
 	var final_damage = config.base_damage * stats.might * 8.0 
@@ -1386,7 +1386,7 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 	# === 3. 立即判定 (分两层攻击) ===
 	# 获取所有敌人
 	var enemies = get_tree().get_nodes_in_group("enemy")
-	var nearby_enemies = []  # 面前小范围的敌人
+	var nearby_enemies = []  # 面前大范围的敌人
 	var nearest_enemy = null  # 最近的敌人
 	var min_dist = INF
 
@@ -1398,53 +1398,55 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 		var dist = to_enemy.length()
 		var enemy_dir = to_enemy.normalized()
 
-		# 第一层：面前小范围（距离<80，角度<45度）- 被踢开
-		if dist < 80.0 and direction.dot(enemy_dir) > 0.7:
+		# 第一层：面前大范围（距离<250，角度<60度）- 被踢开
+		# 0.5 dot product 约为 60 度扇形
+		if dist < 250.0 and direction.dot(enemy_dir) > 0.5:
 			nearby_enemies.append(enemy)
 
-		# 找最近的敌人（重点击飞目标）
-		if dist < min_dist:
+		# 找最近的敌人（重点击飞目标），且必须在前方一定范围内
+		if dist < min_dist and dist < 300.0 and direction.dot(enemy_dir) > 0.3:
 			min_dist = dist
 			nearest_enemy = enemy
 
-	# === 4. 第一波：小范围敌人被踢开 ===
+	# === 4. 第一波：大范围敌人被猛烈踢开 ===
 	if nearby_enemies.size() > 0:
+		SignalBus.screen_shake.emit(0.2, 10.0) # 轻微震动
 		for enemy in nearby_enemies:
 			var to_enemy = enemy.global_position - player.global_position
 			var enemy_dir = to_enemy.normalized()
 
-			# 踢开（中等力度）
+			# 踢开（强力击退）
 			if enemy.has_method("apply_knockback"):
-				enemy.apply_knockback(enemy_dir, 1200.0)
+				# 击退方向稍微向两侧偏一点，形成“破开”的效果
+				enemy.apply_knockback(enemy_dir, 1500.0)
 
-			# 轻微伤害
+			# 造成伤害
 			if enemy.has_method("take_damage"):
-				enemy.take_damage(final_damage * 0.6)
+				enemy.take_damage(final_damage * 0.8)
 
-	# === 5. 第二波：最近敌人旋转击飞 ===
+	# === 5. 第二波：最近敌人旋转击飞 (如果不为空) ===
 	if nearest_enemy:
-		# 震动
-		SignalBus.screen_shake.emit(0.5, 25.0)
+		# 强烈震动
+		SignalBus.screen_shake.emit(0.5, 30.0)
 
 		# 击飞（极大力度）
 		if nearest_enemy.has_method("apply_knockback"):
 			# 重置速度以确保击飞方向纯粹
 			if "velocity" in nearest_enemy: nearest_enemy.velocity = Vector2.ZERO
-			nearest_enemy.apply_knockback(direction, 4000.0)  # 更强的击飞
+			# 向前击飞
+			nearest_enemy.apply_knockback(direction, 5000.0)
 
-			# 旋转特效 - 多转几圈
+			# 旋转特效 - 疯狂旋转
 			if "sprite" in nearest_enemy and nearest_enemy.sprite:
 				var tween = get_tree().create_tween()
-				# 先向右转两圈
-				tween.tween_property(nearest_enemy.sprite, "rotation", PI * 4, 0.4)
-				# 再向左转两圈
-				tween.tween_property(nearest_enemy.sprite, "rotation", 0, 0.4)
+				# 快速旋转多圈
+				tween.tween_property(nearest_enemy.sprite, "rotation", PI * 12, 0.8).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 
-		# 延迟伤害，确保击飞效果可见（防止立即死亡）
-		await get_tree().create_timer(0.3).timeout
+		# 延迟伤害，确保击飞效果可见
+		await get_tree().create_timer(0.1).timeout
 
 		if is_instance_valid(nearest_enemy) and nearest_enemy.has_method("take_damage"):
-			nearest_enemy.take_damage(final_damage * 2.0)  # 更高的伤害
+			nearest_enemy.take_damage(final_damage * 2.5)  # 致命伤害
 
 
 func _create_melee_hitbox(pos: Vector2, radius: float, duration: float, damage: float, knockback: float, direction: Vector2, is_heavy: bool = false, damage_delay: float = 0.0):

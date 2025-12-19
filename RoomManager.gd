@@ -453,6 +453,15 @@ func _start_shop_room():
 func _start_boss_room():
 	"""BOSS房间 - 根据玩家到达时间选择Boss"""
 	print("BOSS房间 - 准备战斗!")
+	
+	# [修复] 强制清理所有残留小怪，确保Boss战纯净
+	get_tree().call_group("enemy", "queue_free")
+	
+	# [修复] 确保生成器不会生成小怪
+	var spawner = get_tree().get_first_node_in_group("enemy_spawner")
+	if spawner:
+		spawner.room_wave_enemies_to_spawn = 0
+		spawner.room_wave_spawned = 0
 
 	# 计算玩家到达Boss房间的时间（秒）
 	var elapsed_time = (Time.get_ticks_msec() / 1000.0) - game_start_time
@@ -505,7 +514,7 @@ func _start_boss_room():
 	# 生成BOSS（传递boss类型）
 	var boss_config = EnemyData.BOSSES.get(boss_type)
 	if boss_config:
-		var spawner = get_tree().get_first_node_in_group("enemy_spawner")
+		# 复用之前获取的 spawner
 		if spawner and spawner.has_method("spawn_boss"):
 			spawner.spawn_boss(boss_config)
 
@@ -565,7 +574,7 @@ func _play_dialogue(data: Array):
 		print("Error: Dialogue Manager not found!")
 		await get_tree().create_timer(1.0).timeout
 
-func _get_dialogue_manager() -> DialoguePortrait:
+func _get_dialogue_manager() -> Node:
 	# 检查是否存在 DialogueLayer/DialogueManager (在当前场景中查找)
 	var world = get_tree().current_scene
 	if not world: return null
@@ -580,7 +589,13 @@ func _get_dialogue_manager() -> DialoguePortrait:
 	layer.name = "DialogueLayer"
 	world.add_child(layer)
 	
-	var dm = DialoguePortrait.new()
+	var dm = null
+	var DialoguePortraitScript = load("res://DialoguePortrait.gd")
+	if DialoguePortraitScript:
+		dm = DialoguePortraitScript.new()
+	else:
+		print("Error: Could not load DialoguePortrait.gd")
+		return null
 	dm.name = "DialogueManager"
 	layer.add_child(dm)
 	

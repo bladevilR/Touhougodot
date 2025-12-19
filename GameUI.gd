@@ -856,11 +856,14 @@ func _create_room_map_ui():
 
 	# 创建绘制画布 - 使用自定义RoomMapCanvas类
 	var RoomMapCanvasScript = load("res://RoomMapCanvas.gd")
-	room_map_canvas = RoomMapCanvasScript.new()
-	room_map_canvas.name = "RoomMapCanvas"
-	room_map_canvas.position = Vector2(10, 30)
-	room_map_canvas.size = Vector2(280, 210)  # 调整画布大小
-	room_map_panel.add_child(room_map_canvas)
+	if RoomMapCanvasScript:
+		room_map_canvas = RoomMapCanvasScript.new()
+		room_map_canvas.name = "RoomMapCanvas"
+		room_map_canvas.position = Vector2(10, 30)
+		room_map_canvas.size = Vector2(280, 210)  # 调整画布大小
+		room_map_panel.add_child(room_map_canvas)
+	else:
+		print("[GameUI] Error: Could not load RoomMapCanvas.gd")
 
 func _on_boss_dialogue(boss_name: String, dialogue: String):
 	"""Boss对话显示 - 使用对话立绘系统"""
@@ -868,6 +871,7 @@ func _on_boss_dialogue(boss_name: String, dialogue: String):
 	var dialogue_system = get_node_or_null("DialoguePortrait")
 	if not dialogue_system:
 		# 创建对话系统
+		# 使用动态加载避免循环依赖
 		var DialoguePortraitScript = load("res://DialoguePortrait.gd")
 		if DialoguePortraitScript:
 			dialogue_system = DialoguePortraitScript.new()
@@ -876,17 +880,18 @@ func _on_boss_dialogue(boss_name: String, dialogue: String):
 
 	if dialogue_system:
 		# 根据Boss名字选择立绘
-		var character_portrait = DialoguePortrait.CharacterPortrait.MOKOU  # 默认
+		var DPScript = load("res://DialoguePortrait.gd")
+		var character_portrait = DPScript.CharacterPortrait.MOKOU  # 默认
 		match boss_name:
 			"蓬莱山辉夜", "辉夜":
-				character_portrait = DialoguePortrait.CharacterPortrait.KAGUYA
+				character_portrait = DPScript.CharacterPortrait.KAGUYA
 			"魂魄妖梦", "妖梦":
-				character_portrait = DialoguePortrait.CharacterPortrait.YOUMU
+				character_portrait = DPScript.CharacterPortrait.YOUMU
 			"琪露诺":
-				character_portrait = DialoguePortrait.CharacterPortrait.CIRNO
+				character_portrait = DPScript.CharacterPortrait.CIRNO
 			_:
 				# 默认使用琪露诺
-				character_portrait = DialoguePortrait.CharacterPortrait.CIRNO
+				character_portrait = DPScript.CharacterPortrait.CIRNO
 
 		dialogue_system.show_dialogue(character_portrait, dialogue)
 

@@ -89,7 +89,7 @@ static func initialize():
 		15.0,   # 伤害
 		1.5,    # 速度 稍慢
 		8,      # 经验 较高
-		Color("#ffcc00"),  # 金黄色
+		Color.WHITE,  # [修复] 恢复原色
 		10.0,   # 半径
 		8.0     # 质量
 	)
@@ -120,8 +120,9 @@ static func initialize():
 		2.2,    # 速度 较快 (只会冲撞)
 		2,      # 经验 低
 		Color("#ffffff"),  # 白色
-		8.0,    # 半径 小
-		5.0     # 质量 轻
+		12.0,    # 半径 [修复] 稍微变大
+		5.0,     # 质量 轻
+		0.04     # [修复] 缩放变大 (原0.025)
 	)
 	kedama.can_jump = true
 	kedama.jump_interval = 0.8
@@ -217,7 +218,7 @@ static func initialize():
 	# Wave 1: 毛玉 - 每3秒生成，持续整局
 	WAVES.append(WaveConfig.new(
 		0.0,          # 开始时间
-		3.0,          # 每3秒生成（进一步放慢节奏）
+		4.0,          # [修复] 间隔增加到4秒（减少数量）
 		"kedama",
 		20.0,         # HP
 		5.0,          # 伤害
@@ -241,7 +242,7 @@ static func initialize():
 	# Wave 3: 毛玉强化 - 1分钟后，每2秒生成
 	WAVES.append(WaveConfig.new(
 		60.0,         # 1分钟后
-		2.0,          # 每2秒生成（进一步放慢）
+		3.0,          # [修复] 间隔增加到3秒（减少数量）
 		"kedama",
 		60.0,
 		8.0,

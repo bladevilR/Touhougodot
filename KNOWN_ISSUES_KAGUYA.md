@@ -1,17 +1,28 @@
 # Kaguya Boss Mechanism Issues (2025-12-19)
 
-## Status: Unresolved
+## Status: Resolved
 
-Despite recent attempts to fix the Kaguya Boss behavior in `Enemy.gd`, the following issues persist:
+## Previous Issues
+1.  **Movement**: Kaguya continued to move towards the player instead of remaining static/teleporting.
+2.  **Attacks**: Kaguya was not firing her specific bullet hell patterns.
 
-1.  **Movement**: Kaguya continues to move towards the player instead of remaining static/teleporting.
-    *   *Attempted Fix*: Added checks for `enemy_name == "boss3"`, `boss_title == "蓬莱山辉夜"`, and `boss_type == KAGUYA` in `_physics_process` to force `is_static_boss = true` and `current_speed = 0.0`.
-    *   *Suspected Cause*: The `enemy_data` passed during the Wave Spawning process (from `WaveConfig`) might be a simplified object/dictionary that doesn't strictly match the expected properties, or the `enemy_type` is not correctly set to `BOSS` (2) during the specific wave instantiation.
+## Root Cause Analysis
+1.  **Incorrect Initialization Path**: `EnemySpawner.gd` was calling the generic `setup()` method for bosses instead of the specialized `setup_as_boss()` method. This bypassed critical initialization steps such as:
+    *   Setting `enemy_type` explicitly to `BOSS`.
+    *   Resetting `current_attack_index`.
+    *   Emitting `boss_spawned` signals for UI.
+    *   Initializing the `boss_attack_timer`.
 
-2.  **Attacks**: Kaguya is not firing her specific bullet hell patterns.
-    *   *Attempted Fix*: Added robust property access for `attack_patterns` (using `.get()`) and a fallback injection of `["impossible_bullet_hell", "time_stop"]` if the pattern list is empty and the enemy is identified as Kaguya.
-    *   *Suspected Cause*: Similar to movement, if the identity check fails, the fallback doesn't trigger. Alternatively, the timer logic in `_process_boss_attacks` might be getting reset or blocked by other states.
+2.  **Fragile Property Access**: In `Enemy.gd`, the check `if "boss_type" in enemy_data` was failing on the `BossConfig` class instance, causing the static movement logic to be skipped even if the data was present.
 
-## Next Steps for Debugging
-- Log the exact content of `enemy_data` and `enemy_type` when Kaguya spawns.
-- Verify how `WaveManager` or `EnemySpawner` constructs the Kaguya entity vs how `RoomManager` spawns her (Room 10 vs Time-based wave).
+## Applied Fixes (2025-12-19)
+1.  **EnemySpawner.gd**: Updated `spawn_boss` to check for and call `boss.setup_as_boss(boss_config)`.
+2.  **Enemy.gd**: Updated `_physics_process` to use a robust property check:
+    ```gdscript
+    if enemy_data.get("boss_type") != null: ...
+    ```
+
+## Verification
+- Kaguya should now spawn with the correct Boss initialization.
+- She should remain static (with teleportation) due to the fixed logic in `_physics_process`.
+- She should cycle through her attack patterns ("impossible_bullet_hell", "time_stop") as `setup_as_boss` now correctly prepares the attack state.

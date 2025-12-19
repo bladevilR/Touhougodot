@@ -785,22 +785,8 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 			sprite.texture = mokou_textures.stand
 			sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
 			
-	# 同步更新影子
-	var shadow = get_node_or_null("Shadow")
-	if shadow and sprite and sprite.texture:
-		shadow.texture = sprite.texture
-		shadow.hframes = sprite.hframes
-		shadow.vframes = sprite.vframes
-		shadow.frame = sprite.frame
-		shadow.flip_h = sprite.flip_h
-		var tex_size = sprite.texture.get_size() / Vector2(sprite.hframes, sprite.vframes)
-		shadow.centered = false
-		shadow.offset = Vector2(-tex_size.x / 2.0, -tex_size.y)
-		var feet_y = tex_size.y / 2.0
-		var contact_eat_in = 350.0
-		shadow.position = Vector2(0, (feet_y - contact_eat_in) * sprite.scale.y)
-		shadow.scale = Vector2(sprite.scale.x, sprite.scale.y * -0.5)
-		shadow.skew = 0.5
+	# [修复] 移除此处同步更新影子的逻辑
+	# 影子应该保持在 _ready 中创建的固定椭圆状态，不随人物翻转或改变贴图
 
 # ==================== 粒子屏障系统 ====================
 func _create_particle_barrier():

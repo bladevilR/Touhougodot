@@ -111,23 +111,25 @@ func _play_dialogue(data: Array):
 	else:
 		await get_tree().create_timer(1.0).timeout
 
-func _get_dialogue_manager() -> DialoguePortrait:
-	"""获取或创建对话管理器"""
+func _get_dialogue_manager() -> Node:
 	# 检查是否存在 DialogueLayer/DialogueManager
 	var existing_layer = get_tree().root.get_node_or_null("DialogueLayer")
 	if existing_layer:
 		return existing_layer.get_node_or_null("DialogueManager")
-
+	
 	# 创建新的 Layer 和 Manager
 	var layer = CanvasLayer.new()
 	layer.layer = 128 # 确保在最上层
 	layer.name = "DialogueLayer"
 	get_tree().root.add_child(layer)
-
-	var dm = DialoguePortrait.new()
-	dm.name = "DialogueManager"
-	layer.add_child(dm)
-
+	
+	var DialoguePortraitScript = load("res://DialoguePortrait.gd")
+	var dm = null
+	if DialoguePortraitScript:
+		dm = DialoguePortraitScript.new()
+		dm.name = "DialogueManager"
+		layer.add_child(dm)
+	
 	return dm
 
 func _open_shop():

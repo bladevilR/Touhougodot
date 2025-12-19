@@ -120,24 +120,27 @@ func _ready():
 	# 初始化敌人数据
 	EnemyData.initialize()
 
-	# 加载敌人配置
-	enemy_data = EnemyData.ENEMIES.get(enemy_type)
-	if enemy_data and health_comp:
-		# 应用敌人属性
-		health_comp.max_hp = enemy_data.hp
-		health_comp.current_hp = enemy_data.hp
-		speed = enemy_data.speed * 100.0
-		xp_value = enemy_data.exp
-		mass = enemy_data.mass  # 应用质量
+	# [修复] 如果enemy_data已经存在（例如通过setup_as_boss设置过），不要覆盖它
+	# 仅当enemy_data为空时，才尝试从默认配置加载
+	if enemy_data == null:
+		# 加载敌人配置
+		enemy_data = EnemyData.ENEMIES.get(enemy_type)
+		if enemy_data and health_comp:
+			# 应用敌人属性
+			health_comp.max_hp = enemy_data.hp
+			health_comp.current_hp = enemy_data.hp
+			speed = enemy_data.speed * 100.0
+			xp_value = enemy_data.exp
+			mass = enemy_data.mass  # 应用质量
 
-		if sprite:
-			sprite.modulate = enemy_data.color
-			if "scale" in enemy_data:
-				var s = enemy_data.scale
-				sprite.scale = Vector2(s, s)
+			if sprite:
+				sprite.modulate = enemy_data.color
+				if "scale" in enemy_data:
+					var s = enemy_data.scale
+					sprite.scale = Vector2(s, s)
 
-		# 初始化血量条
-		_update_health_bar()
+			# 初始化血量条
+			_update_health_bar()
 
 	# Store base speed for status effect calculations
 	base_speed = speed
@@ -242,21 +245,38 @@ func setup_as_boss(boss_config):
 	# 设置sprite颜色（如果有）
 	if sprite:
 		sprite.modulate = boss_config.color
+		
+		# [修复] 强制使用正常混合模式，防止Boss变成发光球
+		sprite.material = CanvasItemMaterial.new()
+		sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
+		
+		# [修复] 加载Boss纹理
+		var texture_path = _get_boss_texture_path(boss_config.boss_type)
+		if ResourceLoader.exists(texture_path):
+			sprite.texture = load(texture_path)
+			print("[Enemy] Loaded boss texture: ", texture_path)
+		else:
+			print("[Enemy] Warning: Boss texture not found: ", texture_path)
 
 	# 设置缩放（Boss更大）
-	var boss_scale = boss_config.scale
-	if sprite:
-		sprite.scale = Vector2(boss_scale, boss_scale)
+	# [修复] 智能缩放：根据纹理实际大小计算缩放，确保Boss高度约为120像素
+	if sprite and sprite.texture:
+		var target_height = 120.0
+		var tex_height = sprite.texture.get_height()
+		if tex_height > 0:
+			var auto_scale = target_height / tex_height
+			sprite.scale = Vector2(auto_scale, auto_scale)
+			print("[Enemy] Boss auto-scaled to: ", auto_scale, " (Texture height: ", tex_height, ")")
+		else:
+			sprite.scale = Vector2(0.1, 0.1) # 保底
+			
+		# 修正：将Sprite向上移动，使其底部对齐中心点（脚下）
+		sprite.position.y = - (tex_height * 0.5)
+	else:
+		# 无纹理时的保底
+		sprite.scale = Vector2(0.1, 0.1)
+
 	if collision_shape and collision_shape.shape:
-		# 碰撞箱也相应缩放 (注意：碰撞箱通常不需要像纹理那样缩放那么大，或者基于radius设置)
-		# EnemyData.gd 中 BossConfig 有 radius (25.0)。
-		# 如果这里直接缩放 collision_shape，可能会导致判定过大。
-		# 既然 HealthComp/Setup 使用了 radius，这里可能不需要再次缩放 Shape，或者应该重置 Scale?
-		# 但为了安全起见，我们假设 collision_shape 初始是 1.0，我们只设置 radius。
-		# 不过 setup_as_boss 前面已经设置了 radius (通过 EnemyData 逻辑?) 
-		# 不，setup_as_boss 并没有设置 radius! 只有 hp/speed/mass.
-		# 我们需要手动设置 radius.
-		
 		collision_shape.scale = Vector2(1.0, 1.0) # 重置缩放，使用半径控制
 		if collision_shape.shape is CircleShape2D:
 			collision_shape.shape.radius = boss_config.radius
@@ -269,6 +289,14 @@ func setup_as_boss(boss_config):
 	# 隐藏头顶小血条（使用顶部大血条）
 	if health_bar:
 		health_bar.visible = false
+	
+	# 强制确保可见性
+	modulate.a = 1.0
+	if sprite:
+		sprite.modulate.a = 1.0
+		
+	# [修复] 初始化 original_color，防止状态效果结束后颜色重置错误
+	original_color = boss_config.color
 
 	print("[Enemy] Boss设置完成: ", boss_config.enemy_name, " HP=", max_hp)
 
@@ -276,6 +304,13 @@ func _physics_process(delta):
 	# ==================== STATUS EFFECT UPDATES ====================
 	_update_status_effects(delta)
 	_update_status_visuals(delta)
+	
+	# [保底修复] 防止模型隐身
+	if enemy_type == GameConstants.EnemyType.BOSS:
+		if modulate.a < 0.1:
+			modulate.a = 1.0
+		if sprite and sprite.modulate.a < 0.1:
+			sprite.modulate.a = 1.0
 
 	# ==================== BOSS ATTACK LOGIC ====================
 	# 所有Boss都需要处理攻击逻辑
@@ -341,8 +376,15 @@ func _physics_process(delta):
 
 		# 辉夜状态检查 - 强制静态逻辑
 		if enemy_type == GameConstants.EnemyType.BOSS:
-			# 检查 boss_type (优先)
-			if enemy_data and "boss_type" in enemy_data and enemy_data.boss_type == GameConstants.BossType.KAGUYA:
+			# 检查 boss_type (优先) - 使用更稳健的检查方式
+			var b_type = -1
+			if enemy_data:
+				if enemy_data.get("boss_type") != null:
+					b_type = enemy_data.boss_type
+				elif "boss_type" in enemy_data:
+					b_type = enemy_data.boss_type
+			
+			if b_type == GameConstants.BossType.KAGUYA:
 				is_static_boss = true
 			# 检查名字/标题 (Fallback - 针对波次生成的配置)
 			elif enemy_data:
@@ -354,13 +396,18 @@ func _physics_process(delta):
 					is_static_boss = true
 			
 			if is_static_boss:
-				# 辉夜瞬移逻辑
+				# 辉夜瞬移逻辑 - [调试] 暂时禁用瞬移，排查模型消失问题
 				boss_teleport_timer -= delta
 				if boss_teleport_timer <= 0:
-					_boss_teleport()
+					# _boss_teleport()
 					boss_teleport_timer = randf_range(5.0, 8.0)
+					
 				# 强制将速度设为0
 				current_speed = 0.0
+				
+				# [调试] 打印辉夜状态
+				if Engine.get_physics_frames() % 60 == 0:
+					print("[Boss Debug] Pos:", global_position, " Vis:", visible, " Mod:", modulate, " SprVis:", sprite.visible if sprite else "NoSprite", " SprMod:", sprite.modulate if sprite else "N/A")
 
 		if not is_static_boss:
 			var direction = global_position.direction_to(target.global_position)
@@ -510,18 +557,23 @@ func _process_boss_attacks(delta: float):
 		# 传递模式给执行函数
 		var pattern_name = patterns[current_attack_index % patterns.size()]
 		current_attack_index += 1
+		print("[Boss] Kaguya Attack Triggered! Pattern: ", pattern_name, " Index: ", current_attack_index)
 		_execute_boss_attack_by_name(pattern_name)
 
 func _execute_boss_attack_by_name(pattern_name: String):
-	print("[Boss] Executing attack: ", pattern_name)
+	# print("[Boss] Executing attack: ", pattern_name) 
 
 	match pattern_name:
 		"ice_spread": _attack_ice_spread()
 		"freeze_circle": _attack_freeze_circle()
 		"sword_dash": _attack_sword_dash()
 		"spirit_split": _attack_spirit_split()
-		"impossible_bullet_hell": _attack_impossible_bullet_hell()
-		"time_stop": _attack_time_stop()
+		"impossible_bullet_hell": 
+			print("[Boss] Executing impossible_bullet_hell")
+			_attack_impossible_bullet_hell()
+		"time_stop": 
+			print("[Boss] Executing time_stop")
+			_attack_time_stop()
 		_:
 			print("[Boss] Unknown attack pattern: ", pattern_name)
 
@@ -1223,10 +1275,10 @@ func _create_enemy_shadow():
 				image.set_pixel(x, y, Color(0, 0, 0, 0))
 
 	shadow_sprite.texture = ImageTexture.create_from_image(image)
-	shadow_sprite.position = Vector2(12, 8)
-	shadow_sprite.rotation = 0.8
-	shadow_sprite.skew = 0.0
-	shadow_sprite.z_index = -10
+	shadow_sprite.position = Vector2(0, 10) # [修复] 居中脚下
+	shadow_sprite.rotation = 0.0 # 不旋转
+	shadow_sprite.skew = 0.5 # 稍微倾斜模拟透视
+	shadow_sprite.z_index = -1
 	shadow_sprite.centered = true
 
 	add_child(shadow_sprite)
@@ -1507,7 +1559,7 @@ func _update_status_visuals(delta: float):
 		sprite.modulate = original_color.lerp(blended_color, blend_factor)
 	else:
 		# No active status effects - restore original color
-		sprite.modulate = Color.WHITE
+		sprite.modulate = original_color
 
 # Blend multiple status effect colors together
 func _blend_status_colors(colors: Array) -> Color:
@@ -1642,14 +1694,12 @@ func _boss_teleport():
 	if not map_bounds.has_point(target_pos):
 		target_pos = global_position # 如果出界就不动，或者重试
 	
-	# 视觉效果：消失
-	var tween = create_tween()
-	tween.tween_property(self, "modulate:a", 0.0, 0.5)
+	# [修复] 移除可能导致隐身的Tween渐变，改为直接瞬移
+	# 可以添加粒子效果
+	SignalBus.spawn_death_particles.emit(global_position, Color.GOLD, 20) # 原地留下金光
 	
-	# 移动
-	tween.tween_callback(func(): global_position = target_pos)
+	global_position = target_pos
 	
-	# 视觉效果：出现
-	tween.tween_property(self, "modulate:a", 1.0, 0.5)
+	SignalBus.spawn_death_particles.emit(global_position, Color.GOLD, 20) # 新位置出现金光
 	
 	print("[Boss] Kaguya teleporting to ", target_pos)

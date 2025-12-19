@@ -142,7 +142,9 @@ func spawn_boss(boss_config):
 	var boss = enemy_scene.instantiate()
 	boss.global_position = spawn_pos
 	
-	if boss.has_method("setup"):
+	if boss.has_method("setup_as_boss"):
+		boss.setup_as_boss(boss_config)
+	elif boss.has_method("setup"):
 		boss.setup(boss_config)
 		
 	game_objects_parent.add_child(boss)

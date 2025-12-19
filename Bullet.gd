@@ -169,13 +169,13 @@ func _setup_bullet_visual():
 			if tex:
 				sprite.texture = tex
 				# 强制缩小：米粒弹应该很小
-				# 假设原图可能是64x64或更大，给一个0.1的缩放
-				sprite.scale = Vector2(0.1, 0.1) 
+				# 假设原图可能是64x64或更大，给一个0.15的缩放
+				sprite.scale = Vector2(0.15, 0.15) 
 				sprite.material = CanvasItemMaterial.new()
 				sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 				sprite.modulate = bullet_color
 				if velocity.length() > 0:
-					sprite.rotation = velocity.angle() + PI/2 # 恢复旋转修正
+					sprite.rotation = velocity.angle() # 移除90度偏移
 				return # 直接返回，避免后续逻辑覆盖
 			else:
 				# Fallback
@@ -612,11 +612,38 @@ func _on_area_entered(area):
 
 func _on_body_entered(body):
 	if body.is_in_group("enemy"):
-		_hit_enemy(body)
+		if not is_enemy_bullet: # 玩家子弹打敌人
+			_hit_enemy(body)
+	elif body.is_in_group("player"):
+		if is_enemy_bullet: # 敌人子弹打玩家
+			_hit_player(body)
 	else:
 		# 碰到墙壁/竹子等环境物体时反弹
 		if bounce_count > 0 or wall_bounces > 0:
 			_bounce_off_body(body)
+
+func _hit_player(player):
+	"""处理击中玩家"""
+	# Prevent duplicate damage
+	var player_id = player.get_instance_id()
+	if player_id in hit_enemies:
+		return
+	hit_enemies.append(player_id)
+
+	# Apply damage
+	if player.has_method("take_damage"):
+		player.take_damage(damage)
+		
+	# Apply knockback
+	if knockback > 0 and player.has_method("apply_knockback"):
+		var knock_dir = (player.global_position - global_position).normalized()
+		player.apply_knockback(knock_dir, knockback * 100.0) # Player needs more force
+		
+	# 销毁子弹（除非是穿透性很强的）
+	if penetration <= 0:
+		queue_free()
+	else:
+		penetration -= 1
 
 # ==================== HIT DETECTION & DAMAGE ====================
 func _hit_enemy(enemy):
