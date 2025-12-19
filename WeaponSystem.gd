@@ -48,23 +48,25 @@ func _ready():
 	WeaponData.initialize()
 	ElementData.initialize()
 
-func _input(event):
-	# 鼠标左键点击触发近战攻击
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		_try_melee_attack()
-
-func _try_melee_attack():
-	"""尝试进行近战攻击"""
-	for weapon_id in weapons.keys():
-		var weapon_data = weapons[weapon_id]
-		if weapon_data.config.weapon_type == GameConstants.WeaponType.MELEE:
-			# 检查冷却
-			if melee_cooldowns.get(weapon_id, 0.0) <= 0:
-				fire_weapon(weapon_id)
-				# 设置冷却
-				var stats = _get_player_stats()
-				var level_cooldown_mult = weapon_data.get("level_bonuses", {}).get("cooldown_mult", 1.0)
-				melee_cooldowns[weapon_id] = weapon_data.config.cooldown_max * stats.cooldown * level_cooldown_mult
+func try_fire_weapon(weapon_id: String) -> bool:
+	"""尝试发射指定武器（检查冷却）"""
+	if not weapon_id in weapons:
+		return false
+		
+	var weapon_data = weapons[weapon_id]
+	
+	# 如果是近战武器，检查近战冷却
+	if weapon_data.config.weapon_type == GameConstants.WeaponType.MELEE:
+		if melee_cooldowns.get(weapon_id, 0.0) <= 0:
+			fire_weapon(weapon_id)
+			# 设置冷却
+			var stats = _get_player_stats()
+			var level_cooldown_mult = weapon_data.get("level_bonuses", {}).get("cooldown_mult", 1.0)
+			melee_cooldowns[weapon_id] = weapon_data.config.cooldown_max * stats.cooldown * level_cooldown_mult
+			return true
+		return false
+	
+	return false # 非近战武器由_process自动发射
 
 func _process(delta):
 	if not player:
@@ -573,6 +575,19 @@ func _apply_upgrade_effect(weapon_id: String, weapon_data: Dictionary, upgrade_i
 			config.explosion_radius *= 3.0
 			_apply_damage_mult(weapon_data, 3.0)
 			print("  → 核心爆炸: 超大范围巨额伤害")
+
+		# === Mokou Skill (凯风快晴蹴) ===
+		"sk_cd":
+			if player and player.has_node("CharacterSkills"):
+				# 注意：max_cooldown 会在下一次 start_cooldown 时重置为配置值
+				# 所以我们需要修改配置，或者在 CharacterSkills 里加一个 cooldown_multiplier
+				# 简单起见，修改 CharacterSkills 的内部变量
+				pass # 暂时无法直接修改配置
+			print("  → 快速复燃: 冷却时间 -20% (暂未实装)")
+		"sk_cost":
+			if player and player.has_node("CharacterSkills"):
+				player.get_node("CharacterSkills").cost_multiplier = 0.5
+			print("  → 节能模式: 生命消耗减少 50%")
 
 		# 其他武器的升级可以继续添加...
 		_:
@@ -1220,11 +1235,105 @@ func _fire_aura(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dicti
 
 
 func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
+	"""近战攻击分发"""
+	if weapon_id == "mokou_kick_light":
+		_fire_melee_light(weapon_id, config, stats)
+	else:
+		_fire_melee_heavy(weapon_id, config, stats)
+
+func _fire_melee_light(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary):
+	"""妹红普攻：面前弧形扫腿，带火焰路径"""
+	# 伤害计算
+	var final_damage = config.base_damage * stats.might
+	
+	# 获取鼠标方向
+	var mouse_pos = get_global_mouse_position()
+	var direction = (mouse_pos - player.global_position).normalized()
+	
+	# === 1. 攻击动画 ===
+	if player.has_method("play_attack_animation"):
+		player.play_attack_animation(0, 0.2) # 第0帧
+	
+	# === 2. 火焰弧形路径 ===
+	var arc_particles = GPUParticles2D.new()
+	var mat = ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
+	mat.emission_ring_radius = 50.0 
+	mat.emission_ring_inner_radius = 45.0
+	mat.emission_ring_axis = Vector3(0, 0, 1)
+	mat.gravity = Vector3(0, -150, 0) # 更快向上飘
+	mat.scale_min = 0.3 # 更大的粒子
+	mat.scale_max = 0.5
+	
+	# 修复渐变纹理创建逻辑
+	var gradient = Gradient.new()
+	# 清除默认点（如果有）或直接覆盖
+	gradient.offsets = [0.0, 0.5, 1.0]
+	gradient.colors = [Color(1.0, 1.0, 0.5), Color(1.0, 0.5, 0.0), Color(1.0, 0.0, 0.0, 0.0)]
+	
+	var gradient_tex = GradientTexture1D.new()
+	gradient_tex.gradient = gradient
+	mat.color_ramp = gradient_tex
+	
+	mat.initial_velocity_min = 80.0
+	mat.initial_velocity_max = 150.0
+	mat.direction = Vector3(direction.x, direction.y, 0)
+	mat.spread = 20.0 
+	
+	arc_particles.process_material = mat
+	
+	var img = Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	arc_particles.texture = ImageTexture.create_from_image(img)
+	
+	arc_particles.emitting = true
+	arc_particles.one_shot = true
+	arc_particles.explosiveness = 0.8 # 爆发感
+	arc_particles.amount = 60 # 更多粒子
+	arc_particles.lifetime = 0.4
+	arc_particles.global_position = player.global_position + direction * 30
+	arc_particles.z_index = 5 # 确保在最上层
+	
+	var canvas_mat = CanvasItemMaterial.new()
+	canvas_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	arc_particles.material = canvas_mat
+	get_tree().current_scene.add_child(arc_particles)
+	get_tree().create_timer(1.0).timeout.connect(func(): if is_instance_valid(arc_particles): arc_particles.queue_free())
+	
+	# === 3. 立即伤害判定 (AOE) ===
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	var hit_count = 0
+	
+	for enemy in enemies:
+		if not is_instance_valid(enemy): continue
+		
+		var to_enemy = enemy.global_position - player.global_position
+		var dist = to_enemy.length()
+		var enemy_dir = to_enemy.normalized()
+		
+		# 判定范围：宽扇形 (距离 < 120, 角度 > 0.2 约80度)
+		if dist < 120.0 and direction.dot(enemy_dir) > 0.2:
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(final_damage)
+			if enemy.has_method("apply_knockback"):
+				enemy.apply_knockback(direction, 300.0)
+			# 增加僵直
+			if enemy.has_method("apply_stun"):
+				enemy.apply_stun(0.3) # 0.3秒僵直
+			
+			hit_count += 1
+			
+	# 如果打中任何东西，顿帧 + 震动
+	if hit_count > 0:
+		SignalBus.screen_shake.emit(0.1, 5.0)
+		# 轻微顿帧
+		if Engine.time_scale > 0.9:
+			Engine.time_scale = 0.1
+			get_tree().create_timer(0.05, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+
+func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary):
 	"""近战攻击 - 强力踢击 (定帧 + 击飞 + 旋转 + 火焰)"""
 	
-	# 强制设置3秒冷却
-	melee_cooldowns[weapon_id] = 3.0
-
 	# 伤害计算
 	var final_damage = config.base_damage * stats.might * 8.0 
 
@@ -1232,24 +1341,13 @@ func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dict
 	var mouse_pos = get_global_mouse_position()
 	var direction = (mouse_pos - player.global_position).normalized()
 
+	# 玩家冲刺位移
+	if player and player.has_method("apply_knockback"):
+		player.apply_knockback(direction, 1200.0)
+
 	# === 1. 攻击动画 ===
-	var player_sprite = player.get_node_or_null("Sprite2D")
-	if player_sprite: player_sprite.visible = false
-	
-	var attack_sprite = Sprite2D.new()
-	attack_sprite.texture = load("res://assets/attack.png")
-	attack_sprite.hframes = 2
-	attack_sprite.frame = melee_attack_frame
-	melee_attack_frame = (melee_attack_frame + 1) % 2
-	attack_sprite.scale = Vector2(0.1, 0.1)
-	attack_sprite.global_position = player.global_position
-	if direction.x < 0: attack_sprite.flip_h = true
-	get_tree().current_scene.add_child(attack_sprite)
-	
-	get_tree().create_timer(0.3).timeout.connect(func():
-		if is_instance_valid(attack_sprite): attack_sprite.queue_free()
-		if is_instance_valid(player_sprite): player_sprite.visible = true
-	)
+	if player.has_method("play_attack_animation"):
+		player.play_attack_animation(1, 0.3)
 
 	# === 2. 火焰特效 ===
 	var particles = GPUParticles2D.new()
@@ -1265,7 +1363,7 @@ func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dict
 	mat.scale_max = 0.2
 	mat.color = Color(1.0, 0.4, 0.1)
 	particles.process_material = mat
-	# 使用默认白色方块如果没图
+	
 	var img = Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	img.fill(Color.WHITE)
 	particles.texture = ImageTexture.create_from_image(img)
@@ -1283,72 +1381,109 @@ func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dict
 	particles.material = canvas_mat
 	
 	get_tree().current_scene.add_child(particles)
-	get_tree().create_timer(1.0).timeout.connect(func(): particles.queue_free())
+	get_tree().create_timer(1.0).timeout.connect(func(): if is_instance_valid(particles): particles.queue_free())
 
-	# === 3. 伤害区域 ===
-	var attack_area = Area2D.new()
-	attack_area.global_position = player.global_position
-	var collision = CollisionShape2D.new()
-	var shape = CircleShape2D.new()
-	shape.radius = 100.0
-	collision.shape = shape
-	attack_area.add_child(collision)
-	attack_area.collision_layer = 0
-	attack_area.collision_mask = 4 
-	get_tree().current_scene.add_child(attack_area)
+	# === 3. 立即判定 (分两层攻击) ===
+	# 获取所有敌人
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	var nearby_enemies = []  # 面前小范围的敌人
+	var nearest_enemy = null  # 最近的敌人
+	var min_dist = INF
 
-	# 伤害检测
-	await get_tree().process_frame
+	for enemy in enemies:
+		if not is_instance_valid(enemy): continue
 
-	var hit_enemies = attack_area.get_overlapping_bodies()
-	var first_hit = true
+		# 计算相对位置
+		var to_enemy = enemy.global_position - player.global_position
+		var dist = to_enemy.length()
+		var enemy_dir = to_enemy.normalized()
 
-	if hit_enemies.size() > 0:
-		# === 4. 打击感核心：定帧 (Hit Stop) ===
-		Engine.time_scale = 0.05
-		get_tree().create_timer(0.1, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+		# 第一层：面前小范围（距离<80，角度<45度）- 被踢开
+		if dist < 80.0 and direction.dot(enemy_dir) > 0.7:
+			nearby_enemies.append(enemy)
 
-		# 屏幕大震动
-		SignalBus.screen_shake.emit(0.4, 20.0)
+		# 找最近的敌人（重点击飞目标）
+		if dist < min_dist:
+			min_dist = dist
+			nearest_enemy = enemy
 
-		# === 5. 只击飞最近的一只敌人 ===
-		# 找到最近的敌人
-		var nearest_enemy = null
-		var min_distance = INF
-		for body in hit_enemies:
-			if is_instance_valid(body) and body.is_in_group("enemy"):
-				var distance = player.global_position.distance_to(body.global_position)
-				if distance < min_distance:
-					min_distance = distance
-					nearest_enemy = body
+	# === 4. 第一波：小范围敌人被踢开 ===
+	if nearby_enemies.size() > 0:
+		for enemy in nearby_enemies:
+			var to_enemy = enemy.global_position - player.global_position
+			var enemy_dir = to_enemy.normalized()
 
-		# 只对最近的敌人应用超级击飞 + 旋转 + 螺旋线特效
-		if nearest_enemy and nearest_enemy.has_method("apply_knockback"):
-			var knockback_dir = (nearest_enemy.global_position - player.global_position).normalized()
-			var force = 10000.0 # 超级暴力击飞
+			# 踢开（中等力度）
+			if enemy.has_method("apply_knockback"):
+				enemy.apply_knockback(enemy_dir, 1200.0)
 
-			# 旋转动画 + 螺旋线特效
+			# 轻微伤害
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(final_damage * 0.6)
+
+	# === 5. 第二波：最近敌人旋转击飞 ===
+	if nearest_enemy:
+		# 震动
+		SignalBus.screen_shake.emit(0.5, 25.0)
+
+		# 击飞（极大力度）
+		if nearest_enemy.has_method("apply_knockback"):
+			# 重置速度以确保击飞方向纯粹
+			if "velocity" in nearest_enemy: nearest_enemy.velocity = Vector2.ZERO
+			nearest_enemy.apply_knockback(direction, 4000.0)  # 更强的击飞
+
+			# 旋转特效 - 多转几圈
 			if "sprite" in nearest_enemy and nearest_enemy.sprite:
 				var tween = get_tree().create_tween()
-				# 0.5秒内转5圈
-				tween.tween_property(nearest_enemy.sprite, "rotation", PI * 10, 0.5).as_relative()
+				# 先向右转两圈
+				tween.tween_property(nearest_enemy.sprite, "rotation", PI * 4, 0.4)
+				# 再向左转两圈
+				tween.tween_property(nearest_enemy.sprite, "rotation", 0, 0.4)
 
-				# 启动螺旋线特效
-				if nearest_enemy.has_method("start_spiral_trail"):
-					nearest_enemy.start_spiral_trail(0.5)  # 持续0.5秒（与旋转同步）
-
-			nearest_enemy.apply_knockback(knockback_dir, force)
-
-		# === 6. 延迟0.3秒后再造成伤害，让玩家看到击飞效果 ===
+		# 延迟伤害，确保击飞效果可见（防止立即死亡）
 		await get_tree().create_timer(0.3).timeout
 
-		for body in hit_enemies:
-			if is_instance_valid(body) and body.is_in_group("enemy"):
-				if body.has_method("take_damage"):
-					body.take_damage(final_damage)
+		if is_instance_valid(nearest_enemy) and nearest_enemy.has_method("take_damage"):
+			nearest_enemy.take_damage(final_damage * 2.0)  # 更高的伤害
 
-	attack_area.queue_free()
 
+func _create_melee_hitbox(pos: Vector2, radius: float, duration: float, damage: float, knockback: float, direction: Vector2, is_heavy: bool = false, damage_delay: float = 0.0):
+	"""创建临时近战伤害判定区域"""
+	var area = Area2D.new()
+	area.global_position = pos
+	var col = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = radius
+	col.shape = shape
+	area.add_child(col)
+	area.collision_layer = 0
+	area.collision_mask = 4 # Detect Enemy
+	
+	get_tree().current_scene.add_child(area)
+	
+	# 连接信号处理伤害
+	area.body_entered.connect(func(body):
+		if body.is_in_group("enemy"):
+			# 先击飞 (重击)
+			if body.has_method("apply_knockback"):
+				var knock_dir = direction if is_heavy else (body.global_position - player.global_position).normalized()
+				if is_heavy:
+					if "velocity" in body: body.velocity = Vector2.ZERO
+					body.apply_knockback(knock_dir, knockback)
+				else:
+					body.apply_knockback(knock_dir, knockback)
+			
+			# 延迟伤害
+			if damage_delay > 0:
+				await get_tree().create_timer(damage_delay).timeout
+				
+			if is_instance_valid(body) and body.has_method("take_damage"):
+				body.take_damage(damage)
+	)
+	
+	await get_tree().create_timer(duration).timeout
+	if is_instance_valid(area):
+		area.queue_free()
 
 func get_nearest_enemy() -> Node2D:
 	var enemies = get_tree().get_nodes_in_group("enemy")

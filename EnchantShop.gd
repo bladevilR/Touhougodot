@@ -85,6 +85,13 @@ func _create_visual():
 	label.add_theme_font_size_override("font_size", 16)
 	label.add_theme_color_override("font_color", Color("#ffd700")) # 金色
 	add_child(label)
+	
+	# 添加影子
+	var map_system = get_tree().get_first_node_in_group("map_system")
+	if map_system and map_system.has_method("create_shadow_for_entity"):
+		# 手动调整大小
+		var shadow_size = Vector2(60, 20)
+		map_system.create_shadow_for_entity(self, shadow_size, Vector2(0, -10))
 
 var is_dialogue_active: bool = false
 var dialogue_ui: Control = null
@@ -103,7 +110,7 @@ func _start_interaction():
 		{
 			"speaker": "妹红",
 			"text": "今天也来采蘑菇吗？",
-			"portrait": "res://assets/characters/huiye.png"
+			"portrait": "res://assets/characters/1C.png"
 		},
 		{
 			"speaker": "魔理沙",

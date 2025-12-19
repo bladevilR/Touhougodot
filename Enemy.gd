@@ -49,20 +49,19 @@ var jump_progress: float = 0.0  # 跳跃进度 0-1
 const JUMP_MAX_HEIGHT: float = 30.0  # 跳跃最大高度（像素）
 const JUMP_DURATION: float = 0.5  # 跳跃持续时间（秒）
 
-# ==================== KEDAMA CHARGE ATTACK SYSTEM ====================
+	# ==================== KEDAMA CHARGE ATTACK SYSTEM ====================
 # 毛玉撞击攻击系统
 var is_charging: bool = false  # 是否正在蓄力
 var is_dashing_attack: bool = false  # 是否正在冲刺攻击
 var charge_timer: float = 0.0  # 蓄力计时器
 var dash_timer: float = 0.0  # 冲刺计时器
 var attack_cooldown: float = 0.0  # 攻击冷却
-const CHARGE_DURATION: float = 0.3  # 蓄力时间（前摇）
+const CHARGE_DURATION: float = 0.5  # 蓄力时间（前摇）- 缩短到0.5秒
 const DASH_DURATION: float = 0.4  # 冲刺时间
 const ATTACK_COOLDOWN: float = 2.0  # 攻击冷却2秒
-const DASH_SPEED_MULTIPLIER: float = 2.0  # 冲刺速度倍数（降低速度）
+const DASH_SPEED_MULTIPLIER: float = 1.5  # 冲刺速度倍数（降低速度，原2.0）
 var charge_direction: Vector2 = Vector2.ZERO  # 蓄力方向
 var dash_hit_players: Array = []  # 记录已击中的玩家（避免重复伤害）
-
 # ==================== VISUAL EFFECTS ====================
 var shadow_sprite: Sprite2D = null  # 地面影子
 
@@ -78,6 +77,7 @@ const SPIRAL_TRAIL_MAX_POINTS: int = 30  # 最大轨迹点数
 var boss_attack_timer: float = 0.0
 var current_attack_index: int = 0
 const BOSS_ATTACK_INTERVAL: float = 3.0 # Attack every 3 seconds
+var boss_teleport_timer: float = 5.0 # Boss瞬移计时器
 
 # ==================== STATUS EFFECT SYSTEM ====================
 # Status effect tracking structures
@@ -141,6 +141,12 @@ func _ready():
 
 	# Store base speed for status effect calculations
 	base_speed = speed
+	
+	# 初始化射击计时器（随机偏移，避免同时射击）
+	shoot_timer = randf_range(0.5, 2.0)
+	
+	if enemy_type == GameConstants.EnemyType.BOSS:
+		boss_attack_timer = 2.0 # 初始攻击延迟
 
 	# 设置碰撞层
 	_setup_collision_layers()
@@ -196,6 +202,8 @@ func _setup_collision_layers():
 func setup_as_boss(boss_config):
 	"""设置为Boss"""
 	print("[Enemy] 设置为Boss: ", boss_config.enemy_name)
+	print("[Enemy] Boss type: ", boss_config.boss_type)
+	print("[Enemy] Attack patterns: ", boss_config.attack_patterns)
 
 	# 0. 先获取节点引用（防止在add_child之前调用导致组件为空）
 	if not health_comp:
@@ -208,6 +216,13 @@ func setup_as_boss(boss_config):
 	# 保存boss配置
 	enemy_data = boss_config
 	enemy_type = GameConstants.EnemyType.BOSS
+
+	# 重置攻击索引
+	current_attack_index = 0
+
+	# 设置Boss攻击计时器
+	boss_attack_timer = 2.0  # Boss生成2秒后开始攻击
+	print("[Enemy] Boss攻击计时器已设置: 2秒后开始")
 
 	# 设置Boss属性
 	var current_hp = boss_config.hp
@@ -250,6 +265,10 @@ func setup_as_boss(boss_config):
 
 	# 发送Boss生成信号
 	SignalBus.boss_spawned.emit(boss_config.enemy_name, current_hp, max_hp)
+	
+	# 隐藏头顶小血条（使用顶部大血条）
+	if health_bar:
+		health_bar.visible = false
 
 	print("[Enemy] Boss设置完成: ", boss_config.enemy_name, " HP=", max_hp)
 
@@ -257,6 +276,11 @@ func _physics_process(delta):
 	# ==================== STATUS EFFECT UPDATES ====================
 	_update_status_effects(delta)
 	_update_status_visuals(delta)
+
+	# ==================== BOSS ATTACK LOGIC ====================
+	# 所有Boss都需要处理攻击逻辑
+	if enemy_type == GameConstants.EnemyType.BOSS:
+		_process_boss_attacks(delta)
 
 	# Check if enemy can move (not frozen or stunned)
 	if _is_movement_disabled():
@@ -292,10 +316,11 @@ func _physics_process(delta):
 	# ==================== KEDAMA CHARGE ATTACK SYSTEM ====================
 	# 毛玉撞击攻击（带前摇）
 	if enemy_type == GameConstants.EnemyType.KEDAMA:
-		_process_kedama_charge_attack(delta)
+		if _process_kedama_charge_attack(delta):
+			return # 正在攻击，跳过移动和射击逻辑
 
 	# ==================== GENERAL SHOOTING LOGIC ====================
-	if enemy_data and enemy_data.can_shoot and is_instance_valid(target):
+	if enemy_data and enemy_data.get("can_shoot") and is_instance_valid(target):
 		# 简单的视距检查
 		if global_position.distance_to(target.global_position) < 600.0:
 			shoot_timer -= delta
@@ -304,16 +329,44 @@ func _physics_process(delta):
 				shoot_timer = enemy_data.shoot_interval
 				_shoot_at_target()
 
-	# ==================== BOSS LOGIC ====================
-	if enemy_type == GameConstants.EnemyType.BOSS:
-		_process_boss_attacks(delta)
-
 	# ==================== PHYSICS-BASED MOVEMENT ====================
 	var desired_velocity = Vector2.ZERO
+	
+	# 如果正在被大力击飞（速度>100），禁止自主移动
+	var is_being_knocked_back = knockback_target_velocity.length() > 100.0 or knockback_velocity.length() > 100.0
 
-	if is_instance_valid(target):
-		var direction = global_position.direction_to(target.global_position)
-		desired_velocity = direction * current_speed
+	if is_instance_valid(target) and not is_being_knocked_back:
+		# 辉夜 (KAGUYA=2) 不移动，作为固定炮台
+		var is_static_boss = false
+
+		# 辉夜状态检查 - 强制静态逻辑
+		if enemy_type == GameConstants.EnemyType.BOSS:
+			# 检查 boss_type (优先)
+			if enemy_data and "boss_type" in enemy_data and enemy_data.boss_type == GameConstants.BossType.KAGUYA:
+				is_static_boss = true
+			# 检查名字/标题 (Fallback - 针对波次生成的配置)
+			elif enemy_data:
+				var e_name = enemy_data.get("enemy_name")
+				var b_title = enemy_data.get("boss_title")
+				if e_name == "boss3" or e_name == "蓬莱山辉夜" or e_name == "Kaguya":
+					is_static_boss = true
+				elif b_title == "蓬莱山辉夜":
+					is_static_boss = true
+			
+			if is_static_boss:
+				# 辉夜瞬移逻辑
+				boss_teleport_timer -= delta
+				if boss_teleport_timer <= 0:
+					_boss_teleport()
+					boss_teleport_timer = randf_range(5.0, 8.0)
+				# 强制将速度设为0
+				current_speed = 0.0
+
+		if not is_static_boss:
+			var direction = global_position.direction_to(target.global_position)
+			desired_velocity = direction * current_speed
+		else:
+			desired_velocity = Vector2.ZERO # 强制静止
 
 	# ==================== ENEMY-ENEMY COLLISION AVOIDANCE ====================
 	# 性能优化：每0.1秒计算一次，而非每帧
@@ -385,7 +438,6 @@ func _physics_process(delta):
 		# 时间到，停止特效
 		if spiral_trail_timer >= spiral_trail_duration:
 			_stop_spiral_trail()
-
 func _shoot_at_target():
 	if not is_instance_valid(target): return
 	
@@ -395,9 +447,15 @@ func _shoot_at_target():
 		var bullet = bullet_scene.instantiate()
 		
 		var color = enemy_data.color if enemy_data else Color.RED
+		
+		# 确定武器ID
+		var weapon_id = "rice_grain" # 默认米粒弹
+		if enemy_type == GameConstants.EnemyType.FAIRY:
+			weapon_id = "rice_grain"
+		
 		# 米粒弹外观配置
 		var config = {
-			"weapon_id": "rice_grain", # 假设有这个ID或默认
+			"weapon_id": weapon_id,
 			"color": color,
 			"damage": enemy_data.damage,
 			"speed": 300.0,
@@ -414,17 +472,62 @@ func _shoot_at_target():
 
 # ==================== BOSS ATTACK LOGIC ====================
 func _process_boss_attacks(delta: float):
-	if not enemy_data or not enemy_data is EnemyData.BossConfig:
+	# 放宽检查：只要有attack_patterns属性就视为Boss配置
+	if not enemy_data:
+		print("[Boss] No enemy_data!")
+		return
+
+	# 尝试访问 attack_patterns
+	# 注意：在GDScript中，如果对象是自定义类，使用 'in' 关键字检查属性可能失败
+	# 我们直接尝试访问，因为我们知道如果是Boss类型，它应该有这个属性
+	var patterns = []
+	
+	# 方法1：直接访问（最常用）
+	if enemy_data.get("attack_patterns") != null:
+		patterns = enemy_data.attack_patterns
+	# 方法2：如果是字典
+	elif typeof(enemy_data) == TYPE_DICTIONARY and enemy_data.has("attack_patterns"):
+		patterns = enemy_data["attack_patterns"]
+	# 方法3：盲目尝试（如果它是对象但get失败）
+	elif "attack_patterns" in enemy_data:
+		patterns = enemy_data.attack_patterns
+		
+	if patterns == null or patterns.size() == 0:
+		# 辉夜保底逻辑：如果找不到配置，强制使用辉夜的技能
+		if enemy_data:
+			var e_name = enemy_data.get("enemy_name")
+			if e_name == "boss3" or e_name == "蓬莱山辉夜" or e_name == "Kaguya":
+				patterns = ["impossible_bullet_hell", "time_stop"]
+				
+	if patterns == null or patterns.size() == 0:
+		# print("[Boss] No attack_patterns found or empty!")
 		return
 
 	boss_attack_timer -= delta
 	if boss_attack_timer <= 0:
 		boss_attack_timer = BOSS_ATTACK_INTERVAL
-		_execute_next_boss_attack()
+		
+		# 传递模式给执行函数
+		var pattern_name = patterns[current_attack_index % patterns.size()]
+		current_attack_index += 1
+		_execute_boss_attack_by_name(pattern_name)
+
+func _execute_boss_attack_by_name(pattern_name: String):
+	print("[Boss] Executing attack: ", pattern_name)
+
+	match pattern_name:
+		"ice_spread": _attack_ice_spread()
+		"freeze_circle": _attack_freeze_circle()
+		"sword_dash": _attack_sword_dash()
+		"spirit_split": _attack_spirit_split()
+		"impossible_bullet_hell": _attack_impossible_bullet_hell()
+		"time_stop": _attack_time_stop()
+		_:
+			print("[Boss] Unknown attack pattern: ", pattern_name)
 
 # ==================== KEDAMA CHARGE ATTACK ====================
-func _process_kedama_charge_attack(delta: float):
-	"""处理毛玉的撞击攻击系统"""
+func _process_kedama_charge_attack(delta: float) -> bool:
+	"""处理毛玉的撞击攻击系统。返回true表示正在进行攻击动作（应阻止移动）"""
 	# 更新攻击冷却
 	if attack_cooldown > 0:
 		attack_cooldown -= delta
@@ -432,25 +535,41 @@ func _process_kedama_charge_attack(delta: float):
 	# 如果正在蓄力
 	if is_charging:
 		charge_timer += delta
+		
+		# 强制停止移动
+		velocity = Vector2.ZERO
 
-		# 蓄力视觉效果：变大+变红
+		# 蓄力视觉效果：压扁+变金+震动
 		if sprite:
 			var charge_progress = charge_timer / CHARGE_DURATION
-			var scale_mult = 1.0 + charge_progress * 0.3  # 最多放大30%
-			sprite.scale = Vector2(enemy_data.scale, enemy_data.scale) * scale_mult
-			sprite.modulate = Color.WHITE.lerp(Color.RED, charge_progress)
-
+			
+			# 1. 压扁 (蓄力感)：宽变大，高变小
+			# 0 -> 1 过程中，X从1.0变1.3，Y从1.0变0.7
+			var squash_x = 1.0 + charge_progress * 0.3
+			var squash_y = 1.0 - charge_progress * 0.3
+			sprite.scale = Vector2(enemy_data.scale * squash_x, enemy_data.scale * squash_y)
+			
+			# 2. 变金 (Color.GOLD)
+			sprite.modulate = Color.WHITE.lerp(Color.GOLD, charge_progress)
+			
+			# 3. 震动 (聚气不稳感) - 仅在X轴震动，Y轴被压扁控制
+			var shake_offset = randf_range(-2, 2) * charge_progress
+			sprite.position.x = shake_offset
+			
 		# 蓄力完成，开始冲刺
 		if charge_timer >= CHARGE_DURATION:
 			is_charging = false
 			is_dashing_attack = true
 			dash_timer = 0.0
 			dash_hit_players.clear()
+			
+			# 播放突进音效（如果有）
+			# SignalBus.play_sfx.emit("dash")
 
 			# 恢复颜色
 			if sprite:
 				sprite.modulate = Color.WHITE
-		return
+		return true # 阻止外部移动控制
 
 	# 如果正在冲刺攻击
 	if is_dashing_attack:
@@ -459,6 +578,21 @@ func _process_kedama_charge_attack(delta: float):
 		# 冲刺移动
 		velocity = charge_direction * base_speed * DASH_SPEED_MULTIPLIER
 		move_and_slide()
+		
+		# 冲刺视觉效果：跳跃 + 拉长
+		if sprite:
+			var dash_progress = dash_timer / DASH_DURATION
+			
+			# 1. 跳跃抛物线 (sin 0->PI)
+			# 最高跳起 60 像素
+			var jump_h = sin(dash_progress * PI) * 60.0
+			sprite.position.y = -jump_h
+			sprite.position.x = 0 # 消除震动偏移
+			
+			# 2. 拉长 (冲刺感)：X变小，Y变大 (或者沿运动方向拉长，这里简单处理)
+			# 简单的拉长：跳得越高拉得越长
+			var stretch = 1.0 + sin(dash_progress * PI) * 0.3
+			sprite.scale = Vector2(enemy_data.scale / stretch, enemy_data.scale * stretch)
 
 		# 检测击中玩家
 		_check_dash_hit_player()
@@ -468,10 +602,11 @@ func _process_kedama_charge_attack(delta: float):
 			is_dashing_attack = false
 			attack_cooldown = ATTACK_COOLDOWN
 
-			# 恢复正常大小
+			# 恢复正常状态
 			if sprite:
 				sprite.scale = Vector2(enemy_data.scale, enemy_data.scale)
-		return
+				sprite.position = Vector2.ZERO # 落地
+		return true # 阻止外部移动控制
 
 	# 正常状态：检测是否应该开始蓄力
 	if attack_cooldown <= 0 and is_instance_valid(target):
@@ -479,6 +614,9 @@ func _process_kedama_charge_attack(delta: float):
 		# 在150像素范围内触发撞击攻击
 		if distance < 150.0 and distance > 30.0:
 			_start_charge_attack()
+			return true # 开始蓄力，阻止移动
+			
+	return false # 正常移动
 
 func _start_charge_attack():
 	"""开始蓄力攻击"""
@@ -519,14 +657,30 @@ func _check_dash_hit_player():
 # ==================== BOSS ATTACK LOGIC (continued) ====================
 
 func _execute_next_boss_attack():
-	var patterns = enemy_data.attack_patterns
-	if patterns.size() == 0: return
-	
+	if not enemy_data:
+		print("[Boss] ERROR: No enemy_data!")
+		return
+
+	# 尝试获取攻击模式
+	var patterns = []
+	if enemy_data.get("attack_patterns") != null:
+		patterns = enemy_data.attack_patterns
+	elif "attack_patterns" in enemy_data:
+		patterns = enemy_data.attack_patterns
+		
+	if patterns.size() == 0:
+		# 再次尝试直接访问
+		patterns = enemy_data.attack_patterns
+
+	if patterns.size() == 0:
+		print("[Boss] ERROR: attack_patterns is empty! Boss type: ", enemy_data.boss_type if enemy_data.get("boss_type") != null else "unknown")
+		return
+
 	var pattern_name = patterns[current_attack_index % patterns.size()]
 	current_attack_index += 1
-	
+
 	print("[Boss] Executing attack: ", pattern_name)
-	
+
 	match pattern_name:
 		"ice_spread": _attack_ice_spread()
 		"freeze_circle": _attack_freeze_circle()
@@ -534,6 +688,8 @@ func _execute_next_boss_attack():
 		"spirit_split": _attack_spirit_split()
 		"impossible_bullet_hell": _attack_impossible_bullet_hell()
 		"time_stop": _attack_time_stop()
+		_:
+			print("[Boss] Unknown attack pattern: ", pattern_name)
 
 func _spawn_boss_bullet(pos: Vector2, dir: Vector2, speed_val: float, weapon_id: String, color: Color, props: Dictionary = {}):
 	var bullet_scene = load("res://Bullet.tscn")
@@ -638,7 +794,7 @@ func _attack_impossible_bullet_hell():
 				global_position,
 				dir,
 				200.0 + wave * 20.0,  # 速度逐波递增
-				"yin_yang_orb",
+				"rice_grain",  # 使用米粒弹
 				color,
 				{"bounce_count": 1}
 			)
@@ -744,11 +900,17 @@ func apply_knockback(direction: Vector2, force: float):
 	# 设置目标击退速度（将在_physics_process中逐渐加速）
 	knockback_target_velocity = direction.normalized() * actual_force
 
-	# 重置加速进度，开始慢镜头加速
+	# 重置加速进度
 	knockback_progress = 0.0
 
-	# 初始速度设为很小（慢镜头开始）
-	knockback_velocity = knockback_target_velocity * 0.1  # 从10%速度开始
+	# 修改：如果力度很大（>1000），直接应用一部分速度，无需等待加速
+	# 这能实现瞬间击飞的效果
+	if actual_force > 1000.0:
+		knockback_velocity = knockback_target_velocity * 0.8 # 立即获得80%速度
+		knockback_progress = 0.8
+	else:
+		# 初始速度设为很小（慢镜头开始）
+		knockback_velocity = knockback_target_velocity * 0.1
 
 	print("[Enemy] 击飞! 方向:", direction, " 力度:", force, " 目标速度:", knockback_target_velocity.length())
 
@@ -826,6 +988,10 @@ func take_damage(amount, weapon_id: String = ""):
 
 		# 更新血量条
 		_update_health_bar()
+		
+		# 如果是Boss，更新全局UI
+		if enemy_type == GameConstants.EnemyType.BOSS:
+			SignalBus.boss_health_changed.emit(health_comp.current_hp, health_comp.max_hp)
 
 		# 播放受击闪白
 		if sprite:
@@ -1460,3 +1626,30 @@ func apply_armor_reduction(amount: float, duration: float):
 # 获取易伤加成伤害
 func get_vulnerability_bonus() -> float:
 	return vulnerability_stacks * VULNERABILITY_DAMAGE_PER_STACK
+
+func _boss_teleport():
+	"""Boss瞬移逻辑 (辉夜)"""
+	if not is_instance_valid(target): return
+	
+	# 随机选择玩家周围的一个位置
+	var angle = randf() * TAU
+	var distance = randf_range(300.0, 500.0)
+	var offset = Vector2(cos(angle), sin(angle)) * distance
+	var target_pos = target.global_position + offset
+	
+	# 确保在地图范围内
+	var map_bounds = Rect2(200, 200, 2000, 1400) # 假设地图大小
+	if not map_bounds.has_point(target_pos):
+		target_pos = global_position # 如果出界就不动，或者重试
+	
+	# 视觉效果：消失
+	var tween = create_tween()
+	tween.tween_property(self, "modulate:a", 0.0, 0.5)
+	
+	# 移动
+	tween.tween_callback(func(): global_position = target_pos)
+	
+	# 视觉效果：出现
+	tween.tween_property(self, "modulate:a", 1.0, 0.5)
+	
+	print("[Boss] Kaguya teleporting to ", target_pos)

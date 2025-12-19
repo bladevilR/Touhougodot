@@ -75,6 +75,14 @@ func _create_ui():
 	title_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
 	menu_container.add_child(title_label)
 
+	# 操作说明
+	var controls_label = Label.new()
+	controls_label.text = "操作说明:\nWASD - 移动\nJ / 左键 - 轻攻击\nK / 右键 - 重攻击\nSpace - 技能\nESC - 暂停"
+	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	controls_label.add_theme_font_size_override("font_size", 18)
+	controls_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	menu_container.add_child(controls_label)
+
 	# 分隔线
 	var separator = HSeparator.new()
 	separator.add_theme_constant_override("separation", 20)

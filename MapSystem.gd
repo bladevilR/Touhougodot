@@ -96,6 +96,9 @@ var post_process_enabled: bool = false  # 默认禁用后处理
 # Noise for bamboo generation
 var bamboo_noise: FastNoiseLite = null
 
+# 关键区域（避让区）
+var critical_zones: Array[Rect2] = []
+
 func _ready():
 	add_to_group("map_system")
 
@@ -105,6 +108,9 @@ func _ready():
 	bamboo_noise.frequency = 0.003 # 降低频率，斑块更大更自然
 	bamboo_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	bamboo_noise.fractal_octaves = 3
+
+	# 注册关键区域
+	_register_critical_zones()
 
 	# 获取游戏对象父节点（用于阴影系统）
 	var world = get_parent()
@@ -131,6 +137,37 @@ func _ready():
 	setup_camera_limits()
 	spawn_nitori_npc() # 恢复河童
 	print("DEBUG: MapSystem _ready finished")
+
+func _register_critical_zones():
+	"""注册所有需要避让的关键区域"""
+	critical_zones.clear()
+	
+	# 1. 出生点保护区
+	critical_zones.append(Rect2(PLAYER_SPAWN_X - 300, PLAYER_SPAWN_Y - 300, 600, 600))
+	
+	# 2. 四个门的位置 (减小避让半径)
+	var door_clearance = 200.0
+	var door_width = 300.0
+	
+	# Top Door
+	critical_zones.append(Rect2(1200 - door_width/2, -100, door_width, door_clearance + 100))
+	# Bottom Door
+	critical_zones.append(Rect2(1200 - door_width/2, MAP_HEIGHT - door_clearance, door_width, door_clearance + 100))
+	# Left Door
+	critical_zones.append(Rect2(-100, MAP_HEIGHT/2 - door_width/2, door_clearance + 100, door_width))
+	# Right Door
+	critical_zones.append(Rect2(MAP_WIDTH - door_clearance, MAP_HEIGHT/2 - door_width/2, door_clearance + 100, door_width))
+	
+	# 3. NPC位置 (河童)
+	critical_zones.append(Rect2(1800 - 200, 600 - 200, 400, 400))
+
+func is_position_valid(pos: Vector2) -> bool:
+	"""检查位置是否有效（不在关键区域内）"""
+	for zone in critical_zones:
+		if zone.has_point(pos):
+			return false
+	return true
+
 
 func setup_layers():
 	if lighting_layer: return
@@ -242,6 +279,10 @@ func _create_organic_forest_edge() -> int:
 				if bamboo_pos.x < -100 or bamboo_pos.x > MAP_WIDTH + 100: continue
 				if bamboo_pos.y < -50 or bamboo_pos.y > MAP_HEIGHT + 150: continue
 
+				# 关键修正：边缘竹子也要避让门和关键区域
+				if not is_position_valid(bamboo_pos):
+					continue
+
 				var depth_ratio = depth / edge_depth
 				var has_collision = depth_ratio > 0.7
 				count += _create_forest_bamboo_enhanced(bamboo_pos, depth_ratio, has_collision, true)
@@ -344,16 +385,16 @@ func create_interior_bamboo():
 	"""使用柏林噪声生成自然分布的内部竹林"""
 	print("MapSystem: Generating interior bamboo (Walls + Scatter)...")
 	var count = 0
-	var safe_radius = 250.0 # 出生点保护半径
-
+	
 	# 遍历地图网格点
 	var step = 80 # 采样步长
 	for x in range(WALL_THICKNESS, MAP_WIDTH - WALL_THICKNESS, step):
 		for y in range(WALL_THICKNESS, MAP_HEIGHT - WALL_THICKNESS, step):
 			var pos = Vector2(x + randf_range(-20, 20), y + randf_range(-20, 20))
-			if pos.distance_to(Vector2(PLAYER_SPAWN_X, PLAYER_SPAWN_Y)) < safe_radius: continue
-			# NPC 区域保护
-			if pos.distance_to(Vector2(1800, 600)) < 300: continue
+			
+			# 使用统一的避让逻辑检查
+			if not is_position_valid(pos):
+				continue
 
 			var noise_val = bamboo_noise.get_noise_2d(pos.x, pos.y)
 			
@@ -896,4 +937,3 @@ func get_player_spawn_position() -> Vector2: return Vector2(PLAYER_SPAWN_X, PLAY
 func get_enemy_spawn_points() -> Array: return enemy_spawn_points
 func get_map_size() -> Vector2: return Vector2(MAP_WIDTH, MAP_HEIGHT)
 func get_random_position_in_map() -> Vector2: return Vector2(randf_range(200, MAP_WIDTH-200), randf_range(200, MAP_HEIGHT-200))
-func is_position_valid(pos: Vector2) -> bool: return true

@@ -43,6 +43,8 @@ var mokou_textures = {
 	"stand": null, # 站立
 	"kick": null   # 飞踢
 }
+var is_attacking: bool = false # 是否正在播放攻击动画
+var current_attack_id: int = 0 # 攻击动画实例ID
 var animation_frame: int = 0
 var animation_timer: float = 0.0
 const ANIMATION_SPEED: float = 0.08  # 每帧持续时间
@@ -183,11 +185,16 @@ func _load_character_data(char_id: int):
 				# 预设一个合理的 Scale
 				sprite.scale = Vector2(0.05, 0.05) 
 			
-			# Give her a secondary active weapon since wings are passive
-			SignalBus.weapon_added.emit("phoenix_claws")
+			# Give her weapons: Light Kick (LMB) and Heavy Kick (RMB)
+			SignalBus.weapon_added.emit("mokou_kick_light")
+			SignalBus.weapon_added.emit("mokou_kick_heavy")
 
 		# 装备初始武器
 		SignalBus.weapon_added.emit(character_data.starting_weapon_id)
+		
+		# 同步ID到技能组件（解决初始化时序问题）
+		if character_skills:
+			character_skills.character_id = char_id
 
 	# Adjust Camera Zoom (适当的视野大小)
 	var camera = get_node_or_null("Camera2D")
@@ -218,6 +225,23 @@ func _setup_collision_layers():
 		# 普通碰撞
 		collision_mask = 2 + 4 + 16 + 32  # 墙壁(Layer 2) + 敌人(Layer 3) + 敌人子弹(Layer 5) + 拾取物(Layer 6)
 
+func _input(event):
+	# 妹红攻击输入处理
+	if character_id == GameConstants.CharacterId.MOKOU and weapon_system:
+		# 鼠标输入
+		if event is InputEventMouseButton and event.pressed:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				weapon_system.try_fire_weapon("mokou_kick_light")
+			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				weapon_system.try_fire_weapon("mokou_kick_heavy")
+		
+		# 键盘输入 (J/K)
+		if event is InputEventKey and event.pressed:
+			if event.keycode == KEY_J:
+				weapon_system.try_fire_weapon("mokou_kick_light")
+			elif event.keycode == KEY_K:
+				weapon_system.try_fire_weapon("mokou_kick_heavy")
+
 func _physics_process(delta):
 	# 更新无敌计时器
 	if invulnerable_timer > 0:
@@ -228,12 +252,15 @@ func _physics_process(delta):
 	if contact_damage_cooldown > 0:
 		contact_damage_cooldown -= delta
 
+	# 如果正在执行技能，跳过普通移动逻辑 (包括Dash)
+	if character_skills and character_skills.is_skill_active():
+		# 修复：技能期间（如飞踢）也需要更新动画
+		if character_id == GameConstants.CharacterId.MOKOU and character_skills.is_fire_kicking:
+			_update_mokou_animation(delta, character_skills.fire_kick_direction)
+		return
+
 	# ==================== DASH LOGIC ====================
 	_update_dash_timers(delta)
-
-	# 使用"dash"输入动作触发冲刺（Shift键或空格键）
-	if Input.is_action_just_pressed("dash") and can_dash and not is_dashing:
-		start_dash()
 
 	if is_dashing:
 		velocity = dash_direction * (base_speed * DASH_SPEED_MULTIPLIER)
@@ -249,10 +276,6 @@ func _physics_process(delta):
 		if character_id == GameConstants.CharacterId.MOKOU:
 			_update_mokou_animation(delta, dash_direction)
 
-		return
-
-	# 如果正在执行技能，跳过普通移动逻辑
-	if character_skills and character_skills.is_skill_active():
 		return
 
 	# 获取输入方向
@@ -424,8 +447,13 @@ func _check_enemy_contact_damage():
 func _check_dash_damage():
 	"""检查飞踢伤害（妹红专属）- 增强版"""
 	# 使用区域检测而不是碰撞检测
-	var dash_detection_radius = 80.0
+	var dash_detection_radius = 120.0 # 扩大判定范围 (原80)
 	var enemies = get_tree().get_nodes_in_group("enemy")
+	
+	# 妹红特效：生成火墙（简化版，不需要Area2D，只作为视觉或瞬时伤害）
+	# 实际上，如果用 Dash CD，那么频率很高，不需要持久火墙，瞬时燃烧更好
+	if Engine.get_physics_frames() % 3 == 0:
+		_spawn_dash_fire_particles()
 
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
@@ -436,7 +464,7 @@ func _check_dash_damage():
 			continue
 
 		var enemy_id = enemy.get_instance_id()
-		# 避免重复伤害同一个敌人
+		# 避免重复伤害同一个敌人 (但在一次Dash中，如果持续时间长，可以多次伤害？暂保持一次)
 		if enemy_id in dash_hit_enemies:
 			continue
 
@@ -446,25 +474,27 @@ func _check_dash_damage():
 		var to_enemy = (enemy.global_position - global_position).normalized()
 		var dot = dash_direction.dot(to_enemy)
 
-		# 前方的敌人（dot > 0.7，约45度内）
-		if dot > 0.7:
+		# 前方的敌人（dot > 0.5，范围扩大）
+		if dot > 0.5:
 			# 向前击飞
 			if enemy.has_method("take_damage"):
-				enemy.take_damage(dash_damage * 1.5)  # 前方敌人受到更高伤害
+				enemy.take_damage(dash_damage * 2.0)  # 伤害翻倍
 
 			if enemy.has_method("apply_knockback"):
-				enemy.apply_knockback(dash_direction, 800.0)  # 强力前冲击飞
+				enemy.apply_knockback(dash_direction, 1000.0)  # 超强力击飞
 				
+			# 施加燃烧
+			if enemy.has_method("apply_burn"):
+				enemy.apply_burn(10.0, 5.0) # 强力燃烧
+
 			# 视觉反馈：猛烈偏移 + 顿帧
-			# 屏幕向踢飞方向猛冲
-			# SignalBus.directional_shake.emit(dash_direction, 20.0, 0.2)
-			hitstop(0.1) # 顿帧
+			hitstop(0.15) # 更长顿帧
 
 			# 火焰特效
-			SignalBus.spawn_death_particles.emit(enemy.global_position, Color("#ff4500"), 15)
+			SignalBus.spawn_death_particles.emit(enemy.global_position, Color("#ff4500"), 25)
 
 		# 两侧的敌人
-		elif dot > 0:
+		elif dot > -0.2: # 稍微背后一点也能打到
 			# 向两侧击退
 			if enemy.has_method("take_damage"):
 				enemy.take_damage(dash_damage)
@@ -491,24 +521,26 @@ func on_level_up(new_level):
 # ==================== DASH METHODS ====================
 
 func start_dash():
+	# 统一逻辑：空格/Shift都触发技能
+	if character_skills:
+		character_skills.activate_skill()
+		return
+
+	# Fallback (如果没有技能组件，虽然不太可能)
 	is_dashing = true
 	can_dash = false
 	dash_timer = DASH_DURATION
 	dash_cooldown_timer = DASH_COOLDOWN
-	dash_hit_enemies.clear()  # 清空已击中敌人列表
-
+	
 	# Determine dash direction
 	var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	if input_dir.length() > 0:
+	if input_dir.length() > 0.1: 
 		dash_direction = input_dir.normalized()
 	else:
-		# If no input, dash in facing direction or right by default
 		if sprite and sprite.flip_h:
 			dash_direction = Vector2.LEFT
 		else:
 			dash_direction = Vector2.RIGHT
-
-	# Optional: Visual effect
 	if sprite:
 		sprite.modulate.a = 0.5
 
@@ -669,97 +701,105 @@ func _load_mokou_textures():
 		mokou_textures.stand = load("res://assets/characters/mokuo (4).png")
 
 	# mokuokick.png - 飞踢
-	mokou_textures.kick = load("res://assets/mokuokick.png")
+	var kick_path = "res://assets/mokuokick.png"
+	print("Loading kick texture from: ", kick_path)
+	if ResourceLoader.exists(kick_path):
+		mokou_textures.kick = load(kick_path)
+		print("Kick texture loaded successfully: ", mokou_textures.kick)
+	else:
+		print("错误：找不到飞踢图片文件！")
+		mokou_textures.kick = null
 
 func _update_mokou_animation(delta: float, input_dir: Vector2):
 	"""更新妹红的动画帧"""
+	# 状态 1: 攻击 (Attack) - 由 play_attack_animation 控制
+	if is_attacking: 
+		return 
+		
+	# 兜底重置：非攻击状态下，必须重置 Sprite 属性以支持 AtlasTexture
+	if sprite:
+		sprite.hframes = 1
+		sprite.vframes = 1
+
+	# 优先处理空格技能飞踢 (强制使用飞踢图)
+	var is_skill_kicking = false
+	if character_skills:
+		is_skill_kicking = character_skills.is_fire_kicking
+
+	if is_skill_kicking:
+		print("显示飞踢图片！") # Debug
+
+	if (is_skill_kicking or is_dashing) and mokou_textures.kick:
+		sprite.texture = mokou_textures.kick
+		# mokuokick.png: 2496x1696，保持与其他动画一致的高度
+		var kick_height = 100.0
+		sprite.scale = Vector2(kick_height / 1696.0, kick_height / 1696.0)
+
+		# 冲刺时增加亮度效果
+		if is_dashing:
+			sprite.modulate = Color(1.2, 1.2, 1.2, 1.0)  # 稍微亮一点
+		else:
+			sprite.modulate = Color.WHITE
+
+		# 翻转逻辑：优先考虑技能方向
+		if is_skill_kicking:
+			if character_skills.fire_kick_direction.x != 0:
+				sprite.flip_h = character_skills.fire_kick_direction.x > 0
+		else:
+			sprite.flip_h = dash_direction.x > 0
+		return
+
+	# 状态 3: 正常移动 (Normal)
 	if not sprite or mokou_textures.sprite.size() == 0:
 		return
 
-	# 目标视觉高度：约100像素
-	const TARGET_HEIGHT = 100.0
-
-	# 优先处理冲刺动画（飞踢）
-	if is_dashing and mokou_textures.kick:
-		sprite.texture = mokou_textures.kick
-		# mokuokick.png: 2496x1696，保持与其他动画一致的高度
-		var kick_height = 100.0  # 恢复到100
-		sprite.scale = Vector2(kick_height / 1696.0, kick_height / 1696.0)
-		# 根据dash方向翻转（如果图片默认朝左，向右时需要翻转）
-		sprite.flip_h = dash_direction.x > 0
-		return  # 冲刺时不处理其他动画
-
 	var is_moving = input_dir.length() > 0.1
+	const TARGET_HEIGHT = 100.0
 
 	# 更新动画计时器
 	if is_moving:
 		animation_timer += delta
-		# 60帧=1秒动画周期
-		var animation_cycle = 1.0  # 1秒一个完整循环
+		var animation_cycle = 1.0
 		var progress = fmod(animation_timer, animation_cycle) / animation_cycle
 
-		# 根据方向选择动画
 		var is_moving_up = input_dir.y < -0.5
 		var is_moving_down = input_dir.y > 0.5
 
 		if is_moving_up and mokou_textures.up.size() > 0:
-			# 向上移动（4帧）
 			var frame_index = int(progress * 4) % 4
-			# 原项目使用倒序播放：spriteUp[3 - frame]
 			sprite.texture = mokou_textures.up[3 - frame_index]
 		elif is_moving_down and mokou_textures.down.size() > 0:
-			# 向下移动（17帧）
 			var frame_index = int(progress * 17) % 17
-			# 原项目使用倒序播放：spriteDown[16 - frame]
 			sprite.texture = mokou_textures.down[16 - frame_index]
 		else:
-			# 水平移动（8帧）
 			var frame_index = int(progress * 8) % 8
-			# 原项目使用倒序播放：sprite[(8-1) - frame]
 			sprite.texture = mokou_textures.sprite[7 - frame_index]
 
-		# 水平翻转（朝向移动方向）
 		if input_dir.x != 0:
 			sprite.flip_h = input_dir.x < 0
 
-		# 运动帧：sprite.png, up.png, down.png都是720px高，计算缩放 = 100/720 = 0.139
 		sprite.scale = Vector2(TARGET_HEIGHT / 720.0, TARGET_HEIGHT / 720.0)
 	else:
-		# 停止移动，显示站立
 		animation_timer = 0.0
 		if mokou_textures.stand:
 			sprite.texture = mokou_textures.stand
-			# stand.png: 2048x2048，计算缩放 = 100/2048 = 0.049
 			sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
 			
-	# 同步更新影子 (保持高级投影效果，严格对齐脚底)
+	# 同步更新影子
 	var shadow = get_node_or_null("Shadow")
-	if shadow and sprite.texture:
+	if shadow and sprite and sprite.texture:
 		shadow.texture = sprite.texture
 		shadow.hframes = sprite.hframes
 		shadow.vframes = sprite.vframes
 		shadow.frame = sprite.frame
 		shadow.flip_h = sprite.flip_h
-		
-		# 强制对齐逻辑：
-		# 1. 影子锚点设为底部中心 (Top-Center of inverted sprite)
-		#    这样影子的原点(0,0)就是它的"脚"
 		var tex_size = sprite.texture.get_size() / Vector2(sprite.hframes, sprite.vframes)
 		shadow.centered = false
 		shadow.offset = Vector2(-tex_size.x / 2.0, -tex_size.y)
-		
-		# 2. 将影子移到Sprite的脚底位置
-		#    假设Sprite是Centered，脚底在 +h/2 处
 		var feet_y = tex_size.y / 2.0
-		
-		# 额外向内"吃"一点距离，解决底部凹陷/不规则图形的贴合问题
-		# 妹红模型较大，减少偏移量以贴合脚底
-		var contact_eat_in = 250.0
-
+		var contact_eat_in = 350.0
 		shadow.position = Vector2(0, (feet_y - contact_eat_in) * sprite.scale.y)
-		
-		# 3. 变换
-		shadow.scale = Vector2(sprite.scale.x, sprite.scale.y * -0.5) 
+		shadow.scale = Vector2(sprite.scale.x, sprite.scale.y * -0.5)
 		shadow.skew = 0.5
 
 # ==================== 粒子屏障系统 ====================
@@ -850,3 +890,68 @@ func _create_particle_texture() -> ImageTexture:
 			image.set_pixel(x, y, Color(1, 1, 1, brightness))
 	
 	return ImageTexture.create_from_image(image)
+
+func _spawn_dash_fire_particles():
+	"""生成冲刺火焰粒子"""
+	var particles = CPUParticles2D.new()
+	particles.global_position = global_position
+	particles.emitting = true
+	particles.one_shot = true
+	particles.amount = 10
+	particles.lifetime = 0.5
+	particles.direction = -dash_direction
+	particles.spread = 30.0
+	particles.gravity = Vector2(0, -50)
+	particles.initial_velocity_min = 50.0
+	particles.initial_velocity_max = 100.0
+	particles.scale_amount_min = 2.0
+	particles.scale_amount_max = 4.0
+	particles.color_ramp = Gradient.new()
+	particles.color_ramp.add_point(0.0, Color(1.0, 0.8, 0.2))
+	particles.color_ramp.add_point(1.0, Color(1.0, 0.2, 0.0, 0.0))
+	particles.z_index = 5
+	get_tree().current_scene.add_child(particles)
+	
+	# 自动清理
+	await get_tree().create_timer(1.0).timeout
+	if is_instance_valid(particles):
+		particles.queue_free()
+
+func play_attack_animation(frame_index: int, duration: float):
+	"""播放攻击动画（替换本体贴图）"""
+	current_attack_id += 1
+	var my_id = current_attack_id
+	is_attacking = true
+	
+	# 备份当前缩放 (只在第一次进入攻击状态时备份，防止连续攻击时备份了错误的攻击缩放)
+	# 实际上，只要我们确保恢复逻辑正确，每次备份 sprite.scale 也可以，因为上一帧可能已经被恢复了
+	# 或者我们硬编码恢复值为 Vector2(0.05, 0.05)，这是最安全的
+	var restore_scale = Vector2(0.05, 0.05)
+	
+	if sprite:
+		var attack_tex = load("res://assets/attack.png")
+		if attack_tex:
+			sprite.texture = attack_tex
+			sprite.hframes = 2
+			sprite.vframes = 1
+			sprite.frame = frame_index
+			# 参考之前的 WeaponSystem 代码，攻击图缩放为 0.1
+			sprite.scale = Vector2(0.1, 0.1)
+			
+			# 根据鼠标方向翻转
+			var mouse_pos = get_global_mouse_position()
+			if mouse_pos.x < global_position.x:
+				sprite.flip_h = true
+			else:
+				sprite.flip_h = false
+	
+	# 动画结束后恢复状态
+	await get_tree().create_timer(duration).timeout
+	
+	# 只有当这是最后一次攻击时才恢复
+	if current_attack_id == my_id:
+		is_attacking = false
+		if sprite:
+			sprite.hframes = 1
+			sprite.vframes = 1
+			sprite.scale = restore_scale # 恢复默认缩放

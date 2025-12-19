@@ -1,10 +1,10 @@
 对话的逻辑主要写在以下两个地方：
 
 1.  **`RoomManager.gd`**：
-    *   `_show_dialogue_sequence(dialogue_data: Array)` 函数：这个函数是核心，负责创建、显示和管理对话 UI，包括对话框、立绘、文本和发言人。它也控制着对话的推进（等待玩家按键）。
-    *   `_start_boss_room()` 函数：在这个函数内部，针对不同的 Boss（目前主要是辉夜），会准备好特定的对话数据，然后调用 `_show_dialogue_sequence` 来显示 Boss 入场对话。
+	*   `_show_dialogue_sequence(dialogue_data: Array)` 函数：这个函数是核心，负责创建、显示和管理对话 UI，包括对话框、立绘、文本和发言人。它也控制着对话的推进（等待玩家按键）。
+	*   `_start_boss_room()` 函数：在这个函数内部，针对不同的 Boss（目前主要是辉夜），会准备好特定的对话数据，然后调用 `_show_dialogue_sequence` 来显示 Boss 入场对话。
 
 2.  **`addons/custom_scripts/DialogueInputHandler.gd`**：
-    *   这是一个辅助脚本，专门用于在游戏暂停时捕获玩家的“交互”输入。它作为一个独立的 `Control` 节点，即使在游戏暂停时也能处理输入，并通过信号通知 `_show_dialogue_sequence` 来推进对话，解决了之前对话卡住的问题。
+	*   这是一个辅助脚本，专门用于在游戏暂停时捕获玩家的“交互”输入。它作为一个独立的 `Control` 节点，即使在游戏暂停时也能处理输入，并通过信号通知 `_show_dialogue_sequence` 来推进对话，解决了之前对话卡住的问题。
 
 简而言之，`RoomManager.gd` 负责编排对话内容和流程，而 `DialogueInputHandler.gd` 确保对话能够响应玩家的输入。

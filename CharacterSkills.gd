@@ -15,6 +15,7 @@ var character_id: int = 0
 # 技能冷却系统
 var skill_cooldown: float = 0.0
 var max_cooldown: float = 0.0
+var cost_multiplier: float = 1.0 # 消耗倍率
 
 # 灵梦 - 亚空穴传送标记
 var gap_mark_position: Vector2 = Vector2.ZERO
@@ -107,14 +108,21 @@ var fire_trail_container: Node2D = null
 
 func _ready():
 	# 获取父节点（玩家）
-	player = get_parent() as CharacterBody2D
-	if not player:
-		push_error("CharacterSkills必须作为Player的子节点！")
+	var parent = get_parent()
+	if parent is CharacterBody2D:
+		player = parent
+	else:
+		push_error("CharacterSkills必须作为Player的子节点！父节点类型: " + str(parent.get_class() if parent else "null"))
 		return
 
 	# 获取角色ID
-	character_id = player.character_id
-
+	if player:
+		var id = player.get("character_id")
+		if id != null:
+			character_id = id
+		else:
+			character_id = 0 # Default
+	
 	# 创建可视化容器
 	fire_trail_container = Node2D.new()
 	fire_trail_container.name = "FireTrailContainer"
@@ -163,6 +171,12 @@ func _input(event):
 
 func activate_skill():
 	"""激活当前角色的Space技能"""
+	# 双重保险：确保ID与Player同步
+	if player:
+		var id = player.get("character_id")
+		if id != null:
+			character_id = id
+
 	if skill_cooldown > 0:
 		print("技能冷却中... 剩余: %.1f秒" % skill_cooldown)
 		return
@@ -247,8 +261,8 @@ func _activate_mokou_skill():
 	# 消耗10%当前生命值
 	if player.has_node("HealthComponent"):
 		var health_comp = player.get_node("HealthComponent")
-		var hp_cost = health_comp.current_hp * config.hp_cost_percent
-		health_comp.take_damage(hp_cost)
+		var hp_cost = health_comp.current_hp * config.hp_cost_percent * cost_multiplier
+		health_comp.damage(hp_cost)
 		print("消耗 %.0f HP！" % hp_cost)
 
 	# 获取移动方向
@@ -317,6 +331,7 @@ func spawn_fire_trail(pos: Vector2):
 	var fire_area = Area2D.new()
 	fire_area.global_position = pos
 	fire_area.name = "FireWall"
+	fire_area.add_to_group("fire_wall") # 确保能被RoomManager清理
 
 	# 添加碰撞形状
 	var collision = CollisionShape2D.new()

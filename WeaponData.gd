@@ -123,39 +123,57 @@ static func initialize():
 	star_dust.projectile_lifetime = 1.0
 	WEAPONS["star_dust"] = star_dust
 
-	# 3. 凤凰羽衣 (妹红专属) - 持续存在的火焰光环
-	var phoenix_wings = WeaponConfig.new(
-		"phoenix_wings",
-		"凤凰羽衣",
-		"环绕自身的火焰圆环，持续造成伤害。",
-		8, 0.2, 8.0, GameConstants.WeaponType.ORBITAL
-	)
-	phoenix_wings.exclusive_to = GameConstants.CharacterId.MOKOU
-	phoenix_wings.is_orbital = true
-	phoenix_wings.orbit_radius = 0.0  # 0表示跟随玩家中心
-	phoenix_wings.orbit_speed = 0.0  # 不旋转
-	phoenix_wings.projectile_count = 1  # 只有一个光环
-	phoenix_wings.penetration = 999
-	phoenix_wings.element_type = GameConstants.ElementType.FIRE
-	WEAPONS["phoenix_wings"] = phoenix_wings
+	# 3. 凤凰羽衣 (妹红专属) - 已移除
+	# var phoenix_wings = WeaponConfig.new(
+	# 	"phoenix_wings",
+	# 	"凤凰羽衣",
+	# 	"环绕自身的火焰圆环，持续造成伤害。",
+	# 	8, 0.2, 8.0, GameConstants.WeaponType.ORBITAL
+	# )
+	# phoenix_wings.exclusive_to = GameConstants.CharacterId.MOKOU
+	# phoenix_wings.is_orbital = true
+	# phoenix_wings.orbit_radius = 0.0  # 0表示跟随玩家中心
+	# phoenix_wings.orbit_speed = 0.0  # 不旋转
+	# phoenix_wings.projectile_count = 1  # 只有一个光环
+	# phoenix_wings.penetration = 999
+	# phoenix_wings.element_type = GameConstants.ElementType.FIRE
+	# WEAPONS["phoenix_wings"] = phoenix_wings
 
-	# 3.5 火鸟拳 (妹红基础攻击) - 点击触发的近战火焰踢
-	var phoenix_claws = WeaponConfig.new(
-		"phoenix_claws",
-		"火鸟拳",
-		"点击鼠标向前方踢出火焰，产生燃烧拖尾。",
-		20, 0.3, 50.0, GameConstants.WeaponType.MELEE  # MELEE类型，点击触发
+	# 3.5 火鸟重拳 (妹红重攻击 - 右键)
+	var mokou_kick_heavy = WeaponConfig.new(
+		"mokou_kick_heavy",
+		"火鸟重拳",
+		"右键：向前方踢出强力火焰，击飞敌人。",
+		20, 0.8, 80.0, GameConstants.WeaponType.MELEE
 	)
-	phoenix_claws.exclusive_to = GameConstants.CharacterId.MOKOU
-	phoenix_claws.projectile_count = 1
-	phoenix_claws.projectile_speed = 0.0  # 近战不移动
-	phoenix_claws.projectile_lifetime = 0.25  # 攻击判定时间
-	phoenix_claws.penetration = 999  # 无限穿透
-	phoenix_claws.element_type = GameConstants.ElementType.FIRE
-	phoenix_claws.knockback = 80.0  # 高击退
-	phoenix_claws.projectile_spread = 0.8  # 扇形角度（弧度），约45度
-	phoenix_claws.explosion_radius = 100.0  # 踢腿范围
-	WEAPONS["phoenix_claws"] = phoenix_claws
+	mokou_kick_heavy.exclusive_to = GameConstants.CharacterId.MOKOU
+	mokou_kick_heavy.projectile_count = 1
+	mokou_kick_heavy.projectile_speed = 0.0
+	mokou_kick_heavy.projectile_lifetime = 0.3
+	mokou_kick_heavy.penetration = 999
+	mokou_kick_heavy.element_type = GameConstants.ElementType.FIRE
+	mokou_kick_heavy.knockback = 120.0
+	mokou_kick_heavy.projectile_spread = 0.6
+	mokou_kick_heavy.explosion_radius = 150.0
+	WEAPONS["mokou_kick_heavy"] = mokou_kick_heavy
+
+	# 3.6 火鸟轻拳 (妹红普攻 - 左键)
+	var mokou_kick_light = WeaponConfig.new(
+		"mokou_kick_light",
+		"火鸟连踢",
+		"左键：快速扫腿，产生火焰弧光。",
+		20, 0.2, 15.0, GameConstants.WeaponType.MELEE
+	)
+	mokou_kick_light.exclusive_to = GameConstants.CharacterId.MOKOU
+	mokou_kick_light.projectile_count = 1
+	mokou_kick_light.projectile_speed = 0.0
+	mokou_kick_light.projectile_lifetime = 0.15
+	mokou_kick_light.penetration = 999
+	mokou_kick_light.element_type = GameConstants.ElementType.FIRE
+	mokou_kick_light.knockback = 20.0
+	mokou_kick_light.projectile_spread = 2.0 # 宽弧形
+	mokou_kick_light.explosion_radius = 120.0
+	WEAPONS["mokou_kick_light"] = mokou_kick_light
 
 	# 4. 银制飞刀 (咲夜专属)
 	var knives = WeaponConfig.new(

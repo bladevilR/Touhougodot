@@ -69,6 +69,7 @@ func _create_visual():
 		var texture = ImageTexture.create_from_image(image)
 		sprite.texture = texture
 
+	sprite.z_index = 5 # 确保在草地和地表物体之上
 	add_child(sprite)
 
 	# 添加发光效果（加法混合）

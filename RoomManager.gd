@@ -26,6 +26,7 @@ var is_room_cleared: bool = false
 var current_kills: int = 0  # 当前房间击杀数
 var target_kills: int = 20  # 目标击杀数（默认20）
 var game_start_time: float = 0.0  # 游戏开始时间（用于Boss选择）
+var marisa_spawned: bool = false # 魔理沙是否已生成
 
 # 房间网络结构
 class RoomNode:
@@ -202,10 +203,13 @@ func _generate_room_map():
 
 func _start_room(room_index: int):
 	"""开始一个房间"""
-	# 清理上一个房间的残留物 (弹幕、P点、经验球)
+	# 清理上一个房间的残留物 (全面清理)
 	get_tree().call_group("bullet", "queue_free")
+	get_tree().call_group("enemy_bullet", "queue_free") # 敌人子弹
 	get_tree().call_group("pickup", "queue_free")
 	get_tree().call_group("experience_gem", "queue_free")
+	get_tree().call_group("treasure_chest", "queue_free") # 宝箱
+	get_tree().call_group("fire_wall", "queue_free") # 火墙残留
 	
 	if room_index >= room_map.size():
 		print("警告：房间索引超出范围")
@@ -213,6 +217,10 @@ func _start_room(room_index: int):
 
 	current_room_index = room_index
 	var current_room_node = room_map[room_index]
+	
+	if not current_room_node:
+		print("严重错误：房间节点为空！")
+		return
 	
 	current_kills = 0
 	is_room_cleared = current_room_node.is_cleared
@@ -234,6 +242,11 @@ func _start_room(room_index: int):
 
 	# 发送UI更新信号
 	SignalBus.room_info_updated.emit(_get_room_type_name(current_room_type), room_index)
+
+	# 检查是否应该生成魔理沙 (第一次进入 Depth >= 3 的房间)
+	if current_room_node.depth >= 3 and not marisa_spawned:
+		_spawn_marisa_shop()
+		marisa_spawned = true
 
 	# === 测试模式：立即生成所有门，保持打开 ===
 	_spawn_exit_doors()
@@ -333,11 +346,12 @@ func _spawn_exit_doors():
 		map_height = map_system.MAP_HEIGHT
 
 	# 定义门的位置配置
+	# 留出的空间小一点（80px），形成小凹口
 	var door_positions = {
-		"north": {"pos": Vector2(map_width / 2, 150), "dir": 0},
-		"south": {"pos": Vector2(map_width / 2, map_height - 150), "dir": 1},
-		"east": {"pos": Vector2(map_width - 150, map_height / 2), "dir": 2},
-		"west": {"pos": Vector2(150, map_height / 2), "dir": 3}
+		"north": {"pos": Vector2(map_width / 2, 80), "dir": 0},
+		"south": {"pos": Vector2(map_width / 2, map_height - 80), "dir": 1},
+		"east": {"pos": Vector2(map_width - 80, map_height / 2), "dir": 2},
+		"west": {"pos": Vector2(80, map_height / 2), "dir": 3}
 	}
 
 	# 遍历连接的房间，根据相对方向生成门
@@ -391,15 +405,16 @@ func _on_door_entered(from_direction: int, target_room_id: int):
 	var player = get_tree().get_first_node_in_group("player")
 	if player:
 		# 注意：from_direction 是门的朝向 (NORTH=0, SOUTH=1...)
+		# 玩家出现在对面的位置，离边缘稍微近一点 (200px)
 		match from_direction:
-			0:  # NORTH
-				player.global_position = Vector2(1200, 1800 - 300) # 南侧
-			1:  # SOUTH
-				player.global_position = Vector2(1200, 300) # 北侧
-			2:  # EAST
-				player.global_position = Vector2(300, 900) # 西侧
-			3:  # WEST
-				player.global_position = Vector2(2100, 900) # 东侧
+			0:  # NORTH (进入北门，去往北方房间，出现在新房间南侧)
+				player.global_position = Vector2(1200, 1800 - 200) # 南侧
+			1:  # SOUTH (进入南门，去往南方房间，出现在新房间北侧)
+				player.global_position = Vector2(1200, 200) # 北侧
+			2:  # EAST (进入东门，去往东方房间，出现在新房间西侧)
+				player.global_position = Vector2(200, 900) # 西侧
+			3:  # WEST (进入西门，去往西方房间，出现在新房间东侧)
+				player.global_position = Vector2(2400 - 200, 900) # 东侧
 		print("玩家位置设置为: ", player.global_position)
 
 	# 清理门
@@ -419,16 +434,16 @@ func _on_door_entered(from_direction: int, target_room_id: int):
 # ==================== 特殊房间逻辑 ====================
 
 func _start_shop_room():
-	"""商店房间 - 河童商店"""
-	print("商店房间 - 与河童对话购买道具")
+	"""商店房间 - 河童商店 & 魔理沙魔法店"""
+	print("商店房间 - 商店开业")
 
-	# 生成河童NPC（如果不存在）
+	# 生成河童NPC（右侧）
 	var nitori = get_tree().get_first_node_in_group("npc")
 	if not nitori:
 		var nitori_scene = load("res://NitoriNPC.tscn")
 		if nitori_scene:
 			var npc = nitori_scene.instantiate()
-			npc.position = Vector2(1200, 900)
+			npc.position = Vector2(1600, 900) # 右侧
 			get_parent().add_child(npc)
 
 	# 商店房间直接打开出口
@@ -638,3 +653,18 @@ func _spawn_tutorial_trigger():
 	if world:
 		world.call_deferred("add_child", trigger)
 		print("教程触发器已生成在起始房间")
+
+func _spawn_marisa_shop():
+	"""生成魔理沙附魔店"""
+	print("竹林深处 - 魔理沙出现了！")
+	var enchant_shop_scene = load("res://EnchantShop.tscn")
+	if enchant_shop_scene:
+		var shop = enchant_shop_scene.instantiate()
+		if shop:
+			# 放在房间一侧，避免与门重叠
+			shop.position = Vector2(600, 900) 
+			get_parent().call_deferred("add_child", shop)
+		else:
+			print("错误：无法实例化 EnchantShop")
+	else:
+		print("错误：找不到 EnchantShop.tscn")

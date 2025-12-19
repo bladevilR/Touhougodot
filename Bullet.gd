@@ -122,16 +122,15 @@ var hit_enemies: Array = []  # Track hit enemy IDs to prevent duplicate damage
 var lifetime_timer: float = 0.0
 var bounced_enemies: Array = []  # Track enemies already bounced to
 var is_initialized: bool = false
+var is_enemy_bullet: bool = false
 
 # ==================== INITIALIZATION ====================
 func _ready():
+	add_to_group("bullet") # 确保能被清理
+	
 	# Setup collision detection
 	area_entered.connect(_on_area_entered)
 	body_entered.connect(_on_body_entered)
-
-	# Set collision layers
-	collision_layer = 8  # Player bullet layer (Layer 4)
-	collision_mask = 6   # Detect enemies (Layer 3=4) + walls (Layer 2=2) = 6
 
 	# Initialize velocity from direction and speed
 	if velocity == Vector2.ZERO and direction != Vector2.ZERO:
@@ -166,9 +165,23 @@ func _setup_bullet_visual():
 			base_radius = 240.0
 			should_rotate = true
 		"rice_grain":  # 米粒弹 - 敌人射击用
-			texture_path = "res://assets/map/rice_bullet.png"
-			base_radius = 120.0
-			should_rotate = true
+			var tex = load("res://assets/bullets/rice_bullet.png")
+			if tex:
+				sprite.texture = tex
+				# 强制缩小：米粒弹应该很小
+				# 假设原图可能是64x64或更大，给一个0.1的缩放
+				sprite.scale = Vector2(0.1, 0.1) 
+				sprite.material = CanvasItemMaterial.new()
+				sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+				sprite.modulate = bullet_color
+				if velocity.length() > 0:
+					sprite.rotation = velocity.angle() + PI/2 # 恢复旋转修正
+				return # 直接返回，避免后续逻辑覆盖
+			else:
+				# Fallback
+				texture_path = "res://assets/bullets/rice_bullet.png"
+				base_radius = 120.0
+				should_rotate = true
 		"phoenix_wings":
 			# 为光环创建高级感半透明纹理（火焰能量场效果）
 			var aura_texture = _create_premium_aura_texture(120.0, Color(1.0, 0.5, 0.1, 0.6))
@@ -203,6 +216,12 @@ func _setup_bullet_visual():
 			texture_path = "res://assets/bullets/yinyang.png"
 			base_radius = 150.0
 			should_rotate = false
+			# 阴阳玉是大体积子弹，确保碰撞箱够大
+			if collision_shape and collision_shape.shape:
+				if collision_shape.shape is CircleShape2D:
+					collision_shape.shape.radius = 60.0 # 150 * 0.4 = 60
+				elif collision_shape.shape is RectangleShape2D:
+					collision_shape.shape.size = Vector2(120, 120)
 		_:
 			# 根据半径选择通用弹幕
 			var radius = collision_shape.shape.radius if collision_shape and collision_shape.shape else 10.0
@@ -1132,3 +1151,13 @@ func setup(config: Dictionary):
 	# Element
 	if config.has("element"):
 		element = config.element
+
+	# Enemy bullet config
+	if config.has("is_enemy_bullet"):
+		is_enemy_bullet = config.is_enemy_bullet
+		if is_enemy_bullet:
+			collision_layer = 16 # Layer 5
+			collision_mask = 1 + 2 # Player + Walls
+		else:
+			collision_layer = 8 # Layer 4
+			collision_mask = 4 + 2 # Enemy + Walls
