@@ -380,22 +380,9 @@ static func initialize():
 	_initialize_weapon_recipes()
 
 static func _initialize_upgrade_trees():
-	# --- Reimu (博丽灵梦) Weapons ---
-	WEAPON_UPGRADE_TREES["homing_amulet"] = [
-		# Tier 1
-		WeaponUpgradeChoice.new("amulet_count", "homing_amulet", 1, "散弹符阵", "同时发射数量 +2", "📜"),
-		WeaponUpgradeChoice.new("amulet_homing", "homing_amulet", 1, "完美追踪", "追踪强度 +100%", "🎯"),
-		WeaponUpgradeChoice.new("amulet_bounce", "homing_amulet", 1, "弹跳灵符", "符札可在敌人间弹跳", "↩️"),
-		# Tier 2
-		WeaponUpgradeChoice.new("amulet_split", "homing_amulet", 2, "阴阳裂变", "命中后分裂成两个追踪符", "✨"),
-		WeaponUpgradeChoice.new("amulet_pierce", "homing_amulet", 2, "神灵穿透", "贯穿 +5，伤害 +30%", "💥"),
-		WeaponUpgradeChoice.new("amulet_heal", "homing_amulet", 2, "净化灵符", "命中回复 1 HP", "💚"),
-		# Tier 3
-		WeaponUpgradeChoice.new("amulet_rain", "homing_amulet", 3, "梦想天生", "向所有敌人发射符札", "🌟"),
-		WeaponUpgradeChoice.new("amulet_barrier", "homing_amulet", 3, "常驻结界", "符札环绕身体形成护盾", "🛡️"),
-		WeaponUpgradeChoice.new("amulet_explosion", "homing_amulet", 3, "灵爆符咒", "命中产生小范围爆炸", "💢")
-	]
+	WEAPON_UPGRADE_TREES.clear()
 
+	# --- 阴阳玉 (Yin Yang Orb) - 保留 ---
 	WEAPON_UPGRADE_TREES["yin_yang_orb"] = [
 		# Tier 1
 		WeaponUpgradeChoice.new("orb_size", "yin_yang_orb", 1, "强化阴阳", "伤害 +150%，穿透 +50", "⚫⚪"),
@@ -411,116 +398,40 @@ static func _initialize_upgrade_trees():
 		WeaponUpgradeChoice.new("orb_return", "yin_yang_orb", 3, "回旋阴阳", "落地后飞回玩家", "🔄")
 	]
 
-	WEAPON_UPGRADE_TREES["boundary"] = [
+	# --- 妹红：左键蓄力 (Charged Fire Ring) ---
+	WEAPON_UPGRADE_TREES["charged_fire_ring"] = [
 		# Tier 1
-		WeaponUpgradeChoice.new("boundary_size", "boundary", 1, "扩展结界", "范围 +50%", "📐"),
-		WeaponUpgradeChoice.new("boundary_damage", "boundary", 1, "伤害结界", "伤害 +100%", "⚡"),
-		WeaponUpgradeChoice.new("boundary_duration", "boundary", 1, "常驻结界", "持续时间 +100%", "⏱️"),
+		WeaponUpgradeChoice.new("cfr_quick", "charged_fire_ring", 1, "快速蓄力", "蓄力速度 +30%，点按伤害 +20%", "⚡"),
+		WeaponUpgradeChoice.new("cfr_burn", "charged_fire_ring", 1, "灼热气息", "燃烧伤害 +50%，持续时间 +2秒", "🔥"),
 		# Tier 2
-		WeaponUpgradeChoice.new("boundary_reflect", "boundary", 2, "反射护盾", "反弹敌方弹幕", "🪞"),
-		WeaponUpgradeChoice.new("boundary_heal", "boundary", 2, "治愈结界", "每秒恢复 2 HP", "💚"),
-		WeaponUpgradeChoice.new("boundary_slow", "boundary", 2, "时缓领域", "结界内敌人速度 -70%", "🐌"),
+		WeaponUpgradeChoice.new("cfr_big", "charged_fire_ring", 2, "巨大火球", "满蓄力火球体积 +50%，伤害 +30%", "☄️"),
+		WeaponUpgradeChoice.new("cfr_trail", "charged_fire_ring", 2, "烈焰路径", "火球飞行时留下持续燃烧的路径", "🛤️"),
 		# Tier 3
-		WeaponUpgradeChoice.new("boundary_fantasy", "boundary", 3, "幻想封印", "持续时间内完全无敌", "✨"),
-		WeaponUpgradeChoice.new("boundary_banish", "boundary", 3, "幻想崩坏", "结束时驱逐所有结界内敌人", "💫"),
-		WeaponUpgradeChoice.new("boundary_double", "boundary", 3, "双重结界", "同时展开两层结界", "♾️")
+		WeaponUpgradeChoice.new("cfr_inferno", "charged_fire_ring", 3, "炼狱爆裂", "满蓄力命中产生大爆炸，留下持久火海", "💥")
 	]
 
-	# --- Marisa (雾雨魔理沙) Weapons ---
-	WEAPON_UPGRADE_TREES["star_dust"] = [
+	# --- 妹红：右键重击 (Heavy Kick) ---
+	WEAPON_UPGRADE_TREES["mokou_kick_heavy"] = [
 		# Tier 1
-		WeaponUpgradeChoice.new("star_count", "star_dust", 1, "星河漫天", "发射角度范围扩大", "🌠"),
-		WeaponUpgradeChoice.new("star_speed", "star_dust", 1, "光速星尘", "弹速 +100%，伤害 +30%", "💫"),
-		WeaponUpgradeChoice.new("star_pierce", "star_dust", 1, "穿星之力", "贯穿 +3", "🎯"),
+		WeaponUpgradeChoice.new("mkh_force", "mokou_kick_heavy", 1, "强力踢击", "击飞力度 +50%，伤害 +30%", "🦶"),
+		WeaponUpgradeChoice.new("mkh_cd", "mokou_kick_heavy", 1, "冷却缩减", "重击冷却时间减少 1秒", "⏱️"),
 		# Tier 2
-		WeaponUpgradeChoice.new("star_homing", "star_dust", 2, "追星魔法", "星星获得追踪能力", "🧭"),
-		WeaponUpgradeChoice.new("star_explode", "star_dust", 2, "星爆魔法", "命中产生小爆炸", "💥"),
-		WeaponUpgradeChoice.new("star_rapid", "star_dust", 2, "速射星尘", "冷却时间 -50%", "⚡"),
+		WeaponUpgradeChoice.new("mkh_shockwave", "mokou_kick_heavy", 2, "震荡波", "攻击范围扩大 50%，附带减速", "🌊"),
+		WeaponUpgradeChoice.new("mkh_stun", "mokou_kick_heavy", 2, "粉碎踢", "击飞的敌人眩晕 2秒", "😵"),
 		# Tier 3
-		WeaponUpgradeChoice.new("star_galaxy", "star_dust", 3, "银河狂想", "向所有方向发射 16 颗星星", "🌌"),
-		WeaponUpgradeChoice.new("star_comet", "star_dust", 3, "彗星魔法", "每颗星星留下持续伤害轨迹", "☄️"),
-		WeaponUpgradeChoice.new("star_supernova", "star_dust", 3, "超新星", "星星消失时产生大爆炸", "💫")
+		WeaponUpgradeChoice.new("mkh_chain", "mokou_kick_heavy", 3, "连环爆破", "被击飞的敌人撞到其他单位会产生爆炸", "💣")
 	]
 
-	WEAPON_UPGRADE_TREES["laser"] = [
+	# --- 妹红：空格技能 (Skill Mokou) ---
+	WEAPON_UPGRADE_TREES["skill_mokou"] = [
 		# Tier 1
-		WeaponUpgradeChoice.new("laser_width", "laser", 1, "极宽火花", "激光宽度 +100%", "📏"),
-		WeaponUpgradeChoice.new("laser_duration", "laser", 1, "持久火花", "持续时间 +100%", "⏱️"),
-		WeaponUpgradeChoice.new("laser_damage", "laser", 1, "终极火花", "伤害 +200%", "⚡"),
+		WeaponUpgradeChoice.new("skm_cost", "skill_mokou", 1, "节能模式", "技能生命消耗减少 50%", "💚"),
+		WeaponUpgradeChoice.new("skm_dist", "skill_mokou", 1, "迅捷之鸟", "突进距离 +30%，速度 +30%", "💨"),
 		# Tier 2
-		WeaponUpgradeChoice.new("laser_sweep", "laser", 2, "扫射火花", "激光缓慢旋转扫射", "🌀"),
-		WeaponUpgradeChoice.new("laser_multi", "laser", 2, "三重火花", "同时发射三道激光", "🔱"),
-		WeaponUpgradeChoice.new("laser_burn", "laser", 2, "灼烧火花", "命中施加持续燃烧", "🔥"),
+		WeaponUpgradeChoice.new("skm_wall", "skill_mokou", 2, "烈焰之墙", "火墙持续时间翻倍，伤害 +50%", "🔥"),
+		WeaponUpgradeChoice.new("skm_invul", "skill_mokou", 2, "不死之身", "突进后无敌时间延长 1秒", "🛡️"),
 		# Tier 3
-		WeaponUpgradeChoice.new("laser_rainbow", "laser", 3, "七彩究极火花", "发射 7 道彩虹激光", "🌈"),
-		WeaponUpgradeChoice.new("laser_penetrate", "laser", 3, "贯穿世界", "激光穿透地图边界", "🌍"),
-		WeaponUpgradeChoice.new("laser_charge", "laser", 3, "蓄力火花", "冷却期间蓄力，伤害累加", "⚡")
-	]
-
-	# --- Mokou (藤原妹红) Weapons ---
-	WEAPON_UPGRADE_TREES["phoenix_wings"] = [
-		# Tier 1
-		WeaponUpgradeChoice.new("wings_count", "phoenix_wings", 1, "六翼天使", "火焰羽翼数量 +2", "👼"),
-		WeaponUpgradeChoice.new("wings_damage", "phoenix_wings", 1, "烈焰之翼", "伤害 +50%", "🔥"),
-		WeaponUpgradeChoice.new("wings_range", "phoenix_wings", 1, "展翅高飞", "旋转范围 +50%", "📐"),
-		# Tier 2
-		WeaponUpgradeChoice.new("wings_shoot", "phoenix_wings", 2, "羽翼射击", "定期发射火焰弹", "🎯"),
-		WeaponUpgradeChoice.new("wings_burn", "phoenix_wings", 2, "灼热光环", "接触敌人施加燃烧效果", "♨️"),
-		WeaponUpgradeChoice.new("wings_shield", "phoenix_wings", 2, "火焰护盾", "抵挡敌方弹幕", "🛡️"),
-		# Tier 3
-		WeaponUpgradeChoice.new("wings_double", "phoenix_wings", 3, "双重旋转", "添加反向旋转的第二层", "♾️"),
-		WeaponUpgradeChoice.new("wings_pull", "phoenix_wings", 3, "火焰漩涡", "吸引敌人和宝石", "🌀"),
-		WeaponUpgradeChoice.new("wings_explode", "phoenix_wings", 3, "爆裂之翼", "击杀敌人触发爆炸", "💣")
-	]
-	
-	WEAPON_UPGRADE_TREES["phoenix_claws"] = [] # 移除升级，改为固定技能
-
-	# --- Sakuya (十六夜咲夜) Weapons ---
-	WEAPON_UPGRADE_TREES["knives"] = [
-		# Tier 1
-		WeaponUpgradeChoice.new("knife_count", "knives", 1, "飞刀暴雨", "同时发射 4 把飞刀", "🔪"),
-		WeaponUpgradeChoice.new("knife_bounce", "knives", 1, "完美弹射", "弹射次数 +3", "↩️"),
-		WeaponUpgradeChoice.new("knife_speed", "knives", 1, "光速飞刀", "飞刀速度 +150%", "💨"),
-		# Tier 2
-		WeaponUpgradeChoice.new("knife_explode", "knives", 2, "爆裂飞刀", "命中产生小爆炸", "💥"),
-		WeaponUpgradeChoice.new("knife_poison", "knives", 2, "剧毒涂层", "命中施加持续毒伤", "☠️"),
-		WeaponUpgradeChoice.new("knife_freeze", "knives", 2, "冻结飞刀", "命中冻结敌人 2 秒", "❄️"),
-		# Tier 3
-		WeaponUpgradeChoice.new("knife_danmaku", "knives", 3, "飞刀弹幕", "全屏随机发射飞刀", "🌪️"),
-		WeaponUpgradeChoice.new("knife_time", "knives", 3, "时停飞刀", "飞刀在空中静止 3 秒后同时射出", "⏰"),
-		WeaponUpgradeChoice.new("knife_return", "knives", 3, "回旋飞刀", "飞刀最终返回玩家", "🔄")
-	]
-
-	# --- Yuma (饕餮尤魔) Weapons ---
-	WEAPON_UPGRADE_TREES["spoon"] = [
-		# Tier 1
-		WeaponUpgradeChoice.new("spoon_size", "spoon", 1, "巨大勺子", "大小和伤害 +100%", "🥄"),
-		WeaponUpgradeChoice.new("spoon_speed", "spoon", 1, "快速回收", "飞行和返回速度 +100%", "💨"),
-		WeaponUpgradeChoice.new("spoon_multi", "spoon", 1, "三重勺子", "同时投掷 3 把勺子", "🍴"),
-		# Tier 2
-		WeaponUpgradeChoice.new("spoon_heal", "spoon", 2, "吞噬回复", "命中回复 3 HP", "💚"),
-		WeaponUpgradeChoice.new("spoon_pull", "spoon", 2, "吸引勺子", "飞行时吸引敌人和宝石", "🧲"),
-		WeaponUpgradeChoice.new("spoon_spin", "spoon", 2, "旋转勺子", "勺子高速旋转，伤害 +50%", "🌀"),
-		# Tier 3
-		WeaponUpgradeChoice.new("spoon_gluttony", "spoon", 3, "暴食之勺", "命中吞噬小型敌人", "👹"),
-		WeaponUpgradeChoice.new("spoon_orbit", "spoon", 3, "勺子卫星", "勺子环绕身体后返回", "🛸"),
-		WeaponUpgradeChoice.new("spoon_explosion", "spoon", 3, "爆裂回收", "返回时产生爆炸伤害", "💥")
-	]
-
-	# --- Koishi (古明地恋) Weapons ---
-	WEAPON_UPGRADE_TREES["mines"] = [
-		# Tier 1
-		WeaponUpgradeChoice.new("mine_count", "mines", 1, "心灵陷阱", "每次放置 5 个地雷", "💚"),
-		WeaponUpgradeChoice.new("mine_damage", "mines", 1, "爆炸之心", "爆炸伤害 +150%", "💥"),
-		WeaponUpgradeChoice.new("mine_range", "mines", 1, "扩散地雷", "放置范围 +100%", "📐"),
-		# Tier 2
-		WeaponUpgradeChoice.new("mine_chain", "mines", 2, "连锁爆炸", "爆炸触发附近地雷", "⛓️"),
-		WeaponUpgradeChoice.new("mine_pull", "mines", 2, "吸引地雷", "爆炸前吸引敌人", "🧲"),
-		WeaponUpgradeChoice.new("mine_slow", "mines", 2, "减速陷阱", "爆炸减速敌人 5 秒", "🐌"),
-		# Tier 3
-		WeaponUpgradeChoice.new("mine_field", "mines", 3, "雷区封锁", "同时布置 20 个地雷", "☢️"),
-		WeaponUpgradeChoice.new("mine_stealth", "mines", 3, "隐形地雷", "敌人无法看见地雷", "👻"),
-		WeaponUpgradeChoice.new("mine_nuclear", "mines", 3, "核心爆炸", "超大范围巨额伤害", "☢️")
+		WeaponUpgradeChoice.new("skm_rebirth", "skill_mokou", 3, "凤凰涅槃", "落地爆炸伤害翻倍，并治疗自身 20% 已损生命", "🌟")
 	]
 
 static func _initialize_weapon_recipes():

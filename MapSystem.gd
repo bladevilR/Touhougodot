@@ -812,6 +812,7 @@ func _create_shadow_texture(width: int, height: int) -> ImageTexture:
 # ==================== 阴影系统 (公共接口) ====================
 const SHADOW_DIRECTION = Vector2(5, 0) # 阴影根部微调
 const SHADOW_ANGLE = -0.5 # 配合FlipY，指向右下
+const SHADOW_SKEW = 0.5 # 统一倾斜度
 
 func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), offset: Vector2 = Vector2(0, 0), height_factor: float = 1.0, force_ellipse: bool = false) -> Sprite2D:
 	var source_sprite: Sprite2D = null
@@ -868,7 +869,7 @@ func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), o
 		
 		# 4. Transform: Flip Y (Reflection) + Skew
 		shadow.scale = Vector2(source_sprite.scale.x, source_sprite.scale.y * -0.5) 
-		shadow.skew = 0.5 
+		shadow.skew = SHADOW_SKEW 
 		
 	else:
 		# Fallback: Generic Ellipse
@@ -876,7 +877,7 @@ func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), o
 		shadow.texture = _create_shadow_texture(int(size.x), int(size.y))
 		shadow.position = SHADOW_DIRECTION + offset
 		shadow.rotation = 0.0
-		shadow.skew = 0.6
+		shadow.skew = SHADOW_SKEW
 		shadow.scale = Vector2(1.0, 1.0) 
 		
 	shadow.name = "Shadow"

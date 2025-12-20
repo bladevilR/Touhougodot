@@ -203,6 +203,103 @@ func _setup_bullet_visual():
 			if collision_shape and collision_shape.shape:
 				collision_shape.shape.radius = 120.0  # 光环伤害范围
 			return  # 直接返回，不执行后续通用纹理加载
+		"charged_fire_ring_full":
+			# 满蓄力：真正的火焰特效 (复刻Space技能视觉)
+			sprite.texture = null # 不用贴图
+			
+			# 创建火焰粒子
+			var particles = GPUParticles2D.new()
+			particles.amount = 60
+			particles.lifetime = 0.8
+			particles.explosiveness = 0.2
+			particles.randomness = 0.5
+			particles.fixed_fps = 60
+			particles.local_coords = false # 拖尾效果
+			
+			var mat = ParticleProcessMaterial.new()
+			mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+			mat.emission_sphere_radius = 40.0 * scale_mult
+			mat.direction = Vector3(-1, 0, 0) # 向后喷射 (相对于子弹方向)
+			mat.spread = 30.0
+			mat.gravity = Vector3(0, -100, 0) # 向上飘
+			mat.initial_velocity_min = 50.0
+			mat.initial_velocity_max = 100.0
+			mat.scale_min = 0.1 * scale_mult
+			mat.scale_max = 0.2 * scale_mult
+			
+			# 颜色渐变：亮黄 -> 橙 -> 红 -> 透明
+			var gradient = Gradient.new()
+			gradient.offsets = [0.0, 0.3, 0.7, 1.0]
+			gradient.colors = [
+				Color(1.0, 0.9, 0.5, 1.0), # 核心亮黄
+				Color(1.0, 0.6, 0.1, 0.9), # 橙色
+				Color(0.8, 0.2, 0.0, 0.7), # 红色
+				Color(0.2, 0.0, 0.0, 0.0)  # 透明
+			]
+			var grad_tex = GradientTexture1D.new()
+			grad_tex.gradient = gradient
+			mat.color_ramp = grad_tex
+			
+			particles.process_material = mat
+			
+			# 加载火焰纹理
+			var flame_tex = load("res://assets/map/flame.png")
+			if flame_tex:
+				particles.texture = flame_tex
+			else:
+				# Fallback: create a small circle
+				var img = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+				img.fill(Color.WHITE)
+				particles.texture = ImageTexture.create_from_image(img)
+				
+			particles.material = CanvasItemMaterial.new()
+			particles.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			
+			add_child(particles)
+			
+			# 碰撞半径
+			if collision_shape and collision_shape.shape:
+				collision_shape.shape.radius = 60.0 * scale_mult
+			return
+
+		"charged_fire_ring":
+			# 半蓄力：较小的火焰特效
+			sprite.texture = null
+			
+			var particles = GPUParticles2D.new()
+			particles.amount = 30
+			particles.lifetime = 0.6
+			particles.local_coords = false
+			
+			var mat = ParticleProcessMaterial.new()
+			mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+			mat.emission_sphere_radius = 20.0 * scale_mult
+			mat.gravity = Vector3(0, -80, 0)
+			mat.scale_min = 0.08 * scale_mult
+			mat.scale_max = 0.15 * scale_mult
+			
+			var gradient = Gradient.new()
+			gradient.colors = [Color(1.0, 0.7, 0.2, 1.0), Color(1.0, 0.2, 0.0, 0.0)]
+			var grad_tex = GradientTexture1D.new()
+			grad_tex.gradient = gradient
+			mat.color_ramp = grad_tex
+			
+			particles.process_material = mat
+			
+			# Fallback texture logic same as above
+			var img = Image.create(12, 12, false, Image.FORMAT_RGBA8)
+			img.fill(Color.WHITE)
+			particles.texture = ImageTexture.create_from_image(img)
+			
+			particles.material = CanvasItemMaterial.new()
+			particles.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			
+			add_child(particles)
+			
+			if collision_shape and collision_shape.shape:
+				collision_shape.shape.radius = 30.0 * scale_mult
+			return
+			
 		"phoenix_claws":
 			# 火鸟拳：扇形横扫效果，使用拉长的矩形
 			var sweep_texture = _create_sweep_texture(60.0, 20.0, Color(1.0, 0.3, 0.0, 0.8))  # 橙红色拉长矩形

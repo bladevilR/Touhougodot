@@ -1,24 +1,23 @@
 [gd_scene load_steps=10 format=3 uid="uid://player001"]
 
-[ext_resource type="Script" path="res://Player.gd" id="1"]
-[ext_resource type="Script" path="res://HealthComponent.gd" id="2"]
-[ext_resource type="Script" path="res://WeaponSystem.gd" id="3"]
-[ext_resource type="Texture2D" path="res://assets/marisaF.png" id="4"]
-[ext_resource type="Script" path="res://AimSystem.gd" id="5"]
-[ext_resource type="Script" path="res://BondSystem.gd" id="6"]
-[ext_resource type="Script" path="res://FusionSystem.gd" id="7"]
-[ext_resource type="Script" path="res://NitoriShop.gd" id="8"]
-[ext_resource type="Script" path="res://CharacterSkills.gd" id="9"]
+[ext_resource type="Script" uid="uid://74mhr117ffrn" path="res://Player.gd" id="1"]
+[ext_resource type="Script" uid="uid://13vi052pjy5r" path="res://HealthComponent.gd" id="2"]
+[ext_resource type="Script" uid="uid://ck44cb4vqhidk" path="res://WeaponSystem.gd" id="3"]
+[ext_resource type="Script" uid="uid://cxlnupy18qeb8" path="res://AimSystem.gd" id="5"]
+[ext_resource type="Script" uid="uid://bophg8pwv13l6" path="res://BondSystem.gd" id="6"]
+[ext_resource type="Script" uid="uid://coxn54wrglgrg" path="res://FusionSystem.gd" id="7"]
+[ext_resource type="Script" uid="uid://bf5xvb3sf5y28" path="res://NitoriShop.gd" id="8"]
+[ext_resource type="Script" uid="uid://chnx1ac5kywxq" path="res://CharacterSkills.gd" id="9"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_1"]
 radius = 20.0
 height = 60.0
 
 [node name="Player" type="CharacterBody2D" groups=["player"]]
-collision_layer = 1
 collision_mask = 54
 script = ExtResource("1")
-speed = 200.0
+
+[node name="Shadow" type="Sprite2D" parent="."]
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 visible = false
@@ -29,7 +28,6 @@ shape = SubResource("CapsuleShape2D_1")
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2")
-max_hp = 100.0
 
 [node name="WeaponSystem" type="Node2D" parent="."]
 script = ExtResource("3")
@@ -50,5 +48,3 @@ script = ExtResource("8")
 script = ExtResource("9")
 
 [node name="Camera2D" type="Camera2D" parent="."]
-enabled = true
-zoom = Vector2(1, 1)

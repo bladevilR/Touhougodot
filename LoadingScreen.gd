@@ -1,7 +1,7 @@
 extends Control
 
 # LoadingScreen.gd - 加载界面
-# 播放视频并异步加载游戏场景
+# 播放视频并异步加载游戏场景（无声音）
 
 @onready var video_player = $VideoStreamPlayer
 @onready var progress_bar = $ProgressBar
@@ -25,6 +25,9 @@ func _ready():
 			var video_stream = load(video_path)
 			video_player.stream = video_stream
 
+			# [关键] 静音视频（去掉声音）
+			video_player.volume_db = -80.0  # 大幅降低音量相当于静音
+
 			# 优化视频尺寸适配：保持原始纵横比
 			video_player.expand = false # 禁止拉伸填充
 
@@ -36,7 +39,7 @@ func _ready():
 			# 定位到右下角，留出更多边距（往上移）
 			var margin_x = 50
 			var margin_y = 120 # 增加底部边距，往上移
-			
+
 			# 如果expand=false，size可能无效，需要依赖rect_min_size或手动计算
 			# 这里假设VideoPlayer的大小是原始视频大小，scale会生效
 			# 重新计算位置，确保在右下角
@@ -100,12 +103,12 @@ func _process(delta):
 func _on_load_complete():
 	print("LoadingScreen: 加载完成")
 	set_process(false)
-	
+
 	# 获取加载的资源
 	var new_scene = ResourceLoader.load_threaded_get(target_scene_path)
-	
+
 	# 稍微延迟一下，让玩家看完至少几秒视频（可选）
 	# await get_tree().create_timer(1.0).timeout
-	
+
 	# 切换场景
 	get_tree().change_scene_to_packed(new_scene)

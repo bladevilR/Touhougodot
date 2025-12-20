@@ -27,6 +27,7 @@ var current_kills: int = 0  # 当前房间击杀数
 var target_kills: int = 20  # 目标击杀数（默认20）
 var game_start_time: float = 0.0  # 游戏开始时间（用于Boss选择）
 var marisa_spawned: bool = false # 魔理沙是否已生成
+var entered_room_count: int = 0  # 玩家进入的房间总数计数
 
 # 房间网络结构
 class RoomNode:
@@ -94,11 +95,11 @@ func _generate_room_map():
 	for i in range(3):
 		var room = RoomNode.new()
 		room.id = room_id
-		# 将北边的房间（索引1）设为商店房间，确保在必经之路上
-		room.type = RoomType.SHOP if i == 1 else RoomType.NORMAL
+		# 全部设为普通房间，NPC出现完全由 entered_room_count 控制
+		room.type = RoomType.NORMAL
 		room.position = start_room.position + depth1_offsets[i]
 		room.depth = 1
-		room.is_cleared = false  # 确保需要战斗（商店房会自动清理）
+		room.is_cleared = false
 		start_room.connected_rooms.append(room.id)
 		room.connected_rooms.append(start_room.id)
 		depth1_rooms.append(room)
@@ -210,6 +211,8 @@ func _start_room(room_index: int):
 	get_tree().call_group("experience_gem", "queue_free")
 	get_tree().call_group("treasure_chest", "queue_free") # 宝箱
 	get_tree().call_group("fire_wall", "queue_free") # 火墙残留
+	get_tree().call_group("npc", "queue_free") # 清理NPC (河童)
+	get_tree().call_group("enchant_shop", "queue_free") # 清理附魔店 (魔理沙)
 	
 	if room_index >= room_map.size():
 		print("警告：房间索引超出范围")
@@ -243,10 +246,36 @@ func _start_room(room_index: int):
 	# 发送UI更新信号
 	SignalBus.room_info_updated.emit(_get_room_type_name(current_room_type), room_index)
 
-	# 检查是否应该生成魔理沙 (第一次进入 Depth >= 3 的房间)
-	if current_room_node.depth >= 3 and not marisa_spawned:
-		_spawn_marisa_shop()
+	# 增加进入房间计数
+	entered_room_count += 1
+	print("已进入第 ", entered_room_count, " 个房间")
+
+	var npc_spawned = false
+
+	# 1. 魔理沙只出现在竹林深处的第一个房间 (Depth = 3)
+	if current_room_node.depth == 3 and not marisa_spawned:
+		# 再次检查是否已有附魔店 (防止重复)
+		if get_tree().get_nodes_in_group("enchant_shop").size() == 0:
+			_spawn_marisa_shop()
 		marisa_spawned = true
+		npc_spawned = true
+
+	# 2. 河童只出现在玩家进入的第三个房间 (Count = 3)
+	if entered_room_count == 3:
+		# 再次检查是否已有NPC (防止重复)
+		if get_tree().get_nodes_in_group("npc").size() == 0:
+			_spawn_nitori_shop()
+		npc_spawned = true
+
+	# 如果生成了NPC，该房间变为安全房（直接清理）
+	if npc_spawned:
+		print("重要NPC出现，房间转为安全区")
+		_on_room_cleared()
+		# 确保门已生成
+		if exit_doors.size() == 0:
+			_spawn_exit_doors()
+			door_opened.emit()
+		return # 跳过后续房间类型逻辑（如生成敌人）
 
 	# 根据房间类型执行不同逻辑
 	match current_room_type:
@@ -432,21 +461,27 @@ func _on_door_entered(from_direction: int, target_room_id: int):
 # ==================== 特殊房间逻辑 ====================
 
 func _start_shop_room():
-	"""商店房间 - 河童商店 & 魔理沙魔法店"""
+	"""商店房间 - 商店开业"""
 	print("商店房间 - 商店开业")
-
-	# 生成河童NPC（右侧）
-	var nitori = get_tree().get_first_node_in_group("npc")
-	if not nitori:
-		var nitori_scene = load("res://NitoriNPC.tscn")
-		if nitori_scene:
-			var npc = nitori_scene.instantiate()
-			npc.position = Vector2(1600, 900) # 右侧
-			get_parent().add_child(npc)
-
+	# 注意：河童现在只在第3个房间出现，普通商店房可能只是装饰或空的
+	
 	# 商店房间直接打开出口
 	await get_tree().create_timer(0.5).timeout
 	_on_room_cleared()
+
+func _spawn_nitori_shop():
+	"""生成河童商店"""
+	print("河童出现了！")
+	var nitori_scene = load("res://NitoriNPC.tscn")
+	if nitori_scene:
+		var npc = nitori_scene.instantiate()
+		npc.position = Vector2(1600, 900) # 右侧
+		get_parent().call_deferred("add_child", npc)
+	
+	# 确保不刷怪
+	var spawner = get_tree().get_first_node_in_group("enemy_spawner")
+	if spawner:
+		spawner.room_wave_enemies_to_spawn = 0
 
 func _start_boss_room():
 	"""BOSS房间 - 根据玩家到达时间选择Boss"""

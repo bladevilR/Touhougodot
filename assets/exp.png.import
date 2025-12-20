@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cm0qksue0ab0"
-path="res://.godot/imported/mokuo.png-652b2418f9b525f505c14edca1f0f595.ctex"
+uid="uid://dkhsb2l247nue"
+path="res://.godot/imported/exp.png-f4e9f21867d10702ff8208705bd5434c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/mokuo.png"
-dest_files=["res://.godot/imported/mokuo.png-652b2418f9b525f505c14edca1f0f595.ctex"]
+source_file="res://assets/exp.png"
+dest_files=["res://.godot/imported/exp.png-f4e9f21867d10702ff8208705bd5434c.ctex"]
 
 [params]
 

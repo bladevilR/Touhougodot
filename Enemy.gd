@@ -89,6 +89,8 @@ var active_status_effects = {
 	"slow": null,       # {amount: float, duration: float, timer: float} or null
 }
 
+var is_dying: bool = false # 是否正在死亡（播放尸体动画）
+
 # ==================== ELEMENT SYSTEM ====================
 # 元素叠加追踪
 var element_stacks = {}  # {ElementType: stack_count}
@@ -172,8 +174,9 @@ func _ready():
 		
 		# [修复] 毛玉影子巨大问题：毛玉这种圆形且缩放极大的单位，强行使用椭圆影子而非反转影子
 		if enemy_type == GameConstants.EnemyType.KEDAMA:
-			var fixed_shadow_size = Vector2(40, 15) 
-			shadow_sprite = map_system.create_shadow_for_entity(self, fixed_shadow_size, Vector2(0, 0), 0.5, true)
+			var fixed_shadow_size = Vector2(70, 25) # 调整尺寸 (70x25)
+			# 偏移量 (0, 25) 确保贴地
+			shadow_sprite = map_system.create_shadow_for_entity(self, fixed_shadow_size, Vector2(0, 25), 0.6, true)
 			if shadow_sprite:
 				shadow_sprite.scale = Vector2(1.0, 1.0) # 确保缩放比例正确
 		else:
@@ -310,6 +313,18 @@ func setup_as_boss(boss_config):
 	print("[Enemy] Boss设置完成: ", boss_config.enemy_name, " HP=", max_hp)
 
 func _physics_process(delta):
+	# 死亡物理效果（尸体飞出）
+	if is_dying:
+		# 仅应用击退物理
+		if knockback_target_velocity.length() > 0:
+			knockback_velocity = knockback_velocity.lerp(knockback_target_velocity, 10.0 * delta)
+		else:
+			knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, KNOCKBACK_DECAY * delta)
+		
+		velocity = knockback_velocity
+		move_and_slide()
+		return
+
 	# ==================== STATUS EFFECT UPDATES ====================
 	_update_status_effects(delta)
 	_update_status_visuals(delta)
@@ -556,7 +571,7 @@ func _process_boss_attacks(delta: float):
 		if enemy_data:
 			var e_name = enemy_data.get("enemy_name")
 			if e_name == "boss3" or e_name == "蓬莱山辉夜" or e_name == "Kaguya":
-				patterns = ["impossible_bullet_hell", "time_stop"]
+				patterns = ["impossible_bullet_hell", "circle_big_bullet", "time_stop"]
 				
 	if patterns == null or patterns.size() == 0:
 		# print("[Boss] No attack_patterns found or empty!")
@@ -580,14 +595,199 @@ func _execute_boss_attack_by_name(pattern_name: String):
 		"freeze_circle": _attack_freeze_circle()
 		"sword_dash": _attack_sword_dash()
 		"spirit_split": _attack_spirit_split()
-		"impossible_bullet_hell": 
-			print("[Boss] Executing impossible_bullet_hell")
-			_attack_impossible_bullet_hell()
-		"time_stop": 
-			print("[Boss] Executing time_stop")
-			_attack_time_stop()
+		"impossible_bullet_hell": _attack_impossible_bullet_hell()
+		"circle_big_bullet": _attack_circle_big_bullet()
+		"time_stop": _attack_time_stop()
 		_:
 			print("[Boss] Unknown attack pattern: ", pattern_name)
+
+func _spawn_boss_bullet(pos: Vector2, dir: Vector2, speed_val: float, weapon_id: String, color: Color, props: Dictionary = {}):
+	var bullet_scene = load("res://Bullet.tscn")
+	if not bullet_scene: return
+	
+	var bullet = bullet_scene.instantiate()
+	# Configure bullet
+	var config = {
+		"weapon_id": weapon_id,
+		"color": color,
+		"damage": enemy_data.damage,
+		"speed": speed_val,
+		"direction": dir,
+		"lifetime": 5.0,
+		"knockback": 0.0, # Boss bullets usually don't knockback player too much
+		"is_enemy_bullet": true # Mark as enemy bullet for collision detection
+	}
+	config.merge(props)
+	
+	if bullet.has_method("setup"):
+		bullet.setup(config)
+	
+	bullet.global_position = pos
+	
+	# Add to bullet layer (usually parent of enemy)
+	get_parent().add_child(bullet)
+
+# --- Cirno Attacks ---
+func _attack_ice_spread():
+	# 360 degree spread of ice crystals
+	var count = 36
+	for i in range(count):
+		var angle = i * (TAU / count)
+		var dir = Vector2(cos(angle), sin(angle))
+		_spawn_boss_bullet(global_position, dir, 300.0, "star_dust", Color.CYAN, {"element": "ice", "freeze_duration": 1.0})
+
+func _attack_freeze_circle():
+	# Barrier field that freezes
+	var bullet_scene = load("res://Bullet.tscn")
+	if bullet_scene:
+		var barrier = bullet_scene.instantiate()
+		barrier.setup({
+			"weapon_id": "phoenix_wings", # Use aura visual
+			"color": Color(0.5, 0.8, 1.0, 0.5),
+			"damage": 5.0,
+			"is_barrier_field": true,
+			"damage_interval": 0.5,
+			"slow_effect": 0.2, # Extreme slow
+			"lifetime": 3.0,
+			"orbit_radius": 0.0, # Center on boss
+			"element": "ice"
+		})
+		barrier.global_position = global_position
+		# Attach to boss? No, create at position.
+		get_parent().add_child(barrier)
+
+# --- Youmu Attacks ---
+func _attack_sword_dash():
+	# Dash towards player
+	if is_instance_valid(target):
+		var dash_dir = global_position.direction_to(target.global_position)
+		knockback_target_velocity = dash_dir * 800.0 # Use knockback system for dash movement
+		
+		# Spawn sword projectiles along the path (delayed)
+		for i in range(5):
+			await get_tree().create_timer(0.1 * i).timeout
+			_spawn_boss_bullet(global_position, dash_dir, 500.0, "knives", Color.WHITE, {"penetration": 5})
+
+func _attack_spirit_split():
+	# Spawn phantom bullets
+	var count = 8
+	for i in range(count):
+		var angle = randf() * TAU
+		var dir = Vector2(cos(angle), sin(angle))
+		_spawn_boss_bullet(global_position + dir * 50, dir, 200.0, "homing_amulet", Color.WHITE, {"homing_strength": 0.05})
+
+# --- Kaguya Attacks ---
+func _attack_impossible_bullet_hell():
+	# 东方风格：七彩扩散弹幕
+	# 从Boss位置向四周发射彩虹色弹幕
+	var wave_count = 5  # 5波弹幕
+	var bullets_per_wave = 36  # 每波36颗子弹（10度间隔）
+
+	for wave in range(wave_count):
+		# 彩虹色渐变
+		var colors = [
+			Color("#ff0000"),  # 红
+			Color("#ff7f00"),  # 橙
+			Color("#ffff00"),  # 黄
+			Color("#00ff00"),  # 绿
+			Color("#0000ff"),  # 蓝
+			Color("#4b0082"),  # 靛
+			Color("#9400d3")   # 紫
+		]
+
+		for i in range(bullets_per_wave):
+			var angle = i * (TAU / bullets_per_wave) + wave * 0.1  # 每波稍微旋转
+			var dir = Vector2(cos(angle), sin(angle))
+			var color = colors[i % colors.size()]
+
+			_spawn_boss_bullet(
+				global_position,
+				dir,
+				200.0 + wave * 20.0,  # 速度逐波递增
+				"rice_grain",  # 使用米粒弹
+				color,
+				{
+					"bounce_count": 1, 
+					"scale_mult": 1.2, 
+					"radius": 10.0, 
+					"on_hit_effect": "burn" # 增加一点特效
+				}
+			)
+
+		# 波次间隔
+		await get_tree().create_timer(0.3).timeout
+
+func _attack_circle_big_bullet():
+	# 顺时针依次释放大玉攻击
+	# 总共发射36个，每隔0.05秒发射一个
+	var total_bullets = 36
+	var delay = 0.05
+	
+	for i in range(total_bullets):
+		var angle = i * (TAU / total_bullets)
+		var dir = Vector2(cos(angle), sin(angle))
+		
+		_spawn_boss_bullet(
+			global_position,
+			dir,
+			300.0,
+			"big_bullet", # 大玉
+			Color.MAGENTA, # 品红色
+			{
+				"scale_mult": 1.5,
+				"radius": 20.0
+			}
+		)
+		
+		# 等待下一个发射
+		await get_tree().create_timer(delay).timeout
+
+func _attack_time_stop():
+	# 东方风格：延迟直线弹幕
+	# 先生成静止的弹幕，然后同时激活向玩家射去
+	var count = 24  # 24颗子弹围成一圈
+	var bullets = []
+
+	# 第一阶段：生成静止弹幕（圆形阵列）
+	for i in range(count):
+		var angle = i * (TAU / count)
+		var offset = Vector2(cos(angle), sin(angle)) * 250  # 距离Boss 250像素
+		var bullet_scene = load("res://Bullet.tscn")
+
+		if bullet_scene:
+			var bullet = bullet_scene.instantiate()
+			bullet.setup({
+				"weapon_id": "star_dust",
+				"color": Color.MAGENTA,
+				"damage": 25.0,
+				"speed": 0.0,  # 初始静止
+				"lifetime": 8.0,
+				"radius": 12.0, # 确保星星大小合适
+				"is_enemy_bullet": true
+			})
+			bullet.global_position = global_position + offset
+			get_parent().add_child(bullet)
+			bullets.append(bullet)
+
+	# 等待1.5秒（给玩家反应时间）
+	await get_tree().create_timer(1.5).timeout
+
+	# 第二阶段：同时激活，向玩家位置射去
+	if is_instance_valid(target):
+		var target_pos = target.global_position
+		for bullet in bullets:
+			if is_instance_valid(bullet):
+				var dir = (target_pos - bullet.global_position).normalized()
+				# 重新配置子弹，使其移动
+				bullet.setup({
+					"weapon_id": "star_dust",
+					"color": Color.MAGENTA,
+					"damage": 25.0,
+					"speed": 350.0,  # 快速射出
+					"direction": dir,
+					"lifetime": 5.0,
+					"is_enemy_bullet": true
+				})
 
 # ==================== KEDAMA CHARGE ATTACK ====================
 func _process_kedama_charge_attack(delta: float) -> bool:
@@ -717,206 +917,6 @@ func _check_dash_hit_player():
 			# 击退玩家
 			if player.has_method("apply_knockback"):
 				player.apply_knockback(charge_direction, 600.0)
-
-# ==================== BOSS ATTACK LOGIC (continued) ====================
-
-func _execute_next_boss_attack():
-	if not enemy_data:
-		print("[Boss] ERROR: No enemy_data!")
-		return
-
-	# 尝试获取攻击模式
-	var patterns = []
-	if enemy_data.get("attack_patterns") != null:
-		patterns = enemy_data.attack_patterns
-	elif "attack_patterns" in enemy_data:
-		patterns = enemy_data.attack_patterns
-		
-	if patterns.size() == 0:
-		# 再次尝试直接访问
-		patterns = enemy_data.attack_patterns
-
-	if patterns.size() == 0:
-		print("[Boss] ERROR: attack_patterns is empty! Boss type: ", enemy_data.boss_type if enemy_data.get("boss_type") != null else "unknown")
-		return
-
-	var pattern_name = patterns[current_attack_index % patterns.size()]
-	current_attack_index += 1
-
-	print("[Boss] Executing attack: ", pattern_name)
-
-	match pattern_name:
-		"ice_spread": _attack_ice_spread()
-		"freeze_circle": _attack_freeze_circle()
-		"sword_dash": _attack_sword_dash()
-		"spirit_split": _attack_spirit_split()
-		"impossible_bullet_hell": _attack_impossible_bullet_hell()
-		"time_stop": _attack_time_stop()
-		_:
-			print("[Boss] Unknown attack pattern: ", pattern_name)
-
-func _spawn_boss_bullet(pos: Vector2, dir: Vector2, speed_val: float, weapon_id: String, color: Color, props: Dictionary = {}):
-	var bullet_scene = load("res://Bullet.tscn")
-	if not bullet_scene: return
-	
-	var bullet = bullet_scene.instantiate()
-	# Configure bullet
-	var config = {
-		"weapon_id": weapon_id,
-		"color": color,
-		"damage": enemy_data.damage,
-		"speed": speed_val,
-		"direction": dir,
-		"lifetime": 5.0,
-		"knockback": 0.0, # Boss bullets usually don't knockback player too much
-		"is_enemy_bullet": true # Mark as enemy bullet for collision detection
-	}
-	config.merge(props)
-	
-	if bullet.has_method("setup"):
-		bullet.setup(config)
-	
-	bullet.global_position = pos
-	
-	# Add to bullet layer (usually parent of enemy)
-	get_parent().add_child(bullet)
-
-# --- Cirno Attacks ---
-func _attack_ice_spread():
-	# 360 degree spread of ice crystals
-	var count = 36
-	for i in range(count):
-		var angle = i * (TAU / count)
-		var dir = Vector2(cos(angle), sin(angle))
-		_spawn_boss_bullet(global_position, dir, 300.0, "star_dust", Color.CYAN, {"element": "ice", "freeze_duration": 1.0})
-
-func _attack_freeze_circle():
-	# Barrier field that freezes
-	var bullet_scene = load("res://Bullet.tscn")
-	if bullet_scene:
-		var barrier = bullet_scene.instantiate()
-		barrier.setup({
-			"weapon_id": "phoenix_wings", # Use aura visual
-			"color": Color(0.5, 0.8, 1.0, 0.5),
-			"damage": 5.0,
-			"is_barrier_field": true,
-			"damage_interval": 0.5,
-			"slow_effect": 0.2, # Extreme slow
-			"lifetime": 3.0,
-			"orbit_radius": 0.0, # Center on boss
-			"element": "ice"
-		})
-		barrier.global_position = global_position
-		# Attach to boss? No, create at position.
-		get_parent().add_child(barrier)
-
-# --- Youmu Attacks ---
-func _attack_sword_dash():
-	# Dash towards player
-	if is_instance_valid(target):
-		var dash_dir = global_position.direction_to(target.global_position)
-		knockback_target_velocity = dash_dir * 800.0 # Use knockback system for dash movement
-		
-		# Spawn sword projectiles along the path (delayed)
-		for i in range(5):
-			await get_tree().create_timer(0.1 * i).timeout
-			_spawn_boss_bullet(global_position, dash_dir, 500.0, "knives", Color.WHITE, {"penetration": 5})
-
-func _attack_spirit_split():
-	# Spawn phantom bullets
-	var count = 8
-	for i in range(count):
-		var angle = randf() * TAU
-		var dir = Vector2(cos(angle), sin(angle))
-		_spawn_boss_bullet(global_position + dir * 50, dir, 200.0, "homing_amulet", Color.WHITE, {"homing_strength": 0.05})
-
-# --- Kaguya Attacks ---
-func _attack_impossible_bullet_hell():
-	# 东方风格：七彩扩散弹幕
-	# 从Boss位置向四周发射彩虹色弹幕
-	var wave_count = 5  # 5波弹幕
-	var bullets_per_wave = 36  # 每波36颗子弹（10度间隔）
-
-	for wave in range(wave_count):
-		# 彩虹色渐变
-		var colors = [
-			Color("#ff0000"),  # 红
-			Color("#ff7f00"),  # 橙
-			Color("#ffff00"),  # 黄
-			Color("#00ff00"),  # 绿
-			Color("#0000ff"),  # 蓝
-			Color("#4b0082"),  # 靛
-			Color("#9400d3")   # 紫
-		]
-
-		for i in range(bullets_per_wave):
-			var angle = i * (TAU / bullets_per_wave) + wave * 0.1  # 每波稍微旋转
-			var dir = Vector2(cos(angle), sin(angle))
-			var color = colors[i % colors.size()]
-
-			_spawn_boss_bullet(
-				global_position,
-				dir,
-				200.0 + wave * 20.0,  # 速度逐波递增
-				"big_bullet",  # 使用大号圆弹
-				color,
-				{
-					"bounce_count": 1, 
-					"scale_mult": 1.2, 
-					"radius": 15.0, # 增大碰撞半径
-					"on_hit_effect": "burn" # 增加一点特效
-				}
-			)
-
-		# 波次间隔
-		await get_tree().create_timer(0.3).timeout
-
-func _attack_time_stop():
-	# 东方风格：延迟直线弹幕
-	# 先生成静止的弹幕，然后同时激活向玩家射去
-	var count = 24  # 24颗子弹围成一圈
-	var bullets = []
-
-	# 第一阶段：生成静止弹幕（圆形阵列）
-	for i in range(count):
-		var angle = i * (TAU / count)
-		var offset = Vector2(cos(angle), sin(angle)) * 250  # 距离Boss 250像素
-		var bullet_scene = load("res://Bullet.tscn")
-
-		if bullet_scene:
-			var bullet = bullet_scene.instantiate()
-			bullet.setup({
-				"weapon_id": "star_dust",
-				"color": Color.MAGENTA,
-				"damage": 25.0,
-				"speed": 0.0,  # 初始静止
-				"lifetime": 8.0,
-				"radius": 12.0, # 确保星星大小合适
-				"is_enemy_bullet": true
-			})
-			bullet.global_position = global_position + offset
-			get_parent().add_child(bullet)
-			bullets.append(bullet)
-
-	# 等待1.5秒（给玩家反应时间）
-	await get_tree().create_timer(1.5).timeout
-
-	# 第二阶段：同时激活，向玩家位置射去
-	if is_instance_valid(target):
-		var target_pos = target.global_position
-		for bullet in bullets:
-			if is_instance_valid(bullet):
-				var dir = (target_pos - bullet.global_position).normalized()
-				# 重新配置子弹，使其移动
-				bullet.setup({
-					"weapon_id": "star_dust",
-					"color": Color.MAGENTA,
-					"damage": 25.0,
-					"speed": 350.0,  # 快速射出
-					"direction": dir,
-					"lifetime": 5.0,
-					"is_enemy_bullet": true
-				})
 
 # ==================== PHYSICS METHODS ====================
 
@@ -1073,6 +1073,10 @@ func take_damage(amount, weapon_id: String = ""):
 				sprite.modulate = Color.RED
 
 func die():
+	# 防止重复调用
+	if is_dying: return
+	is_dying = true
+
 	# 发射死亡粒子效果 - 爆开效果
 	var particle_color = original_color if original_color != Color.RED else Color.WHITE
 	
@@ -1104,6 +1108,23 @@ func die():
 		print("[Enemy] Boss defeated! Emitting boss_defeated signal...")
 		SignalBus.boss_defeated.emit()
 
+	# 禁用碰撞和AI，但保留物理移动以便播放击飞效果
+	if collision_shape: collision_shape.set_deferred("disabled", true)
+	if health_bar: health_bar.visible = false
+	if shadow_sprite: shadow_sprite.visible = false
+	
+	# 如果有较大的击退速度，延迟销毁以展示物理效果（如旋转飞出）
+	if knockback_velocity.length() > 500.0 or knockback_target_velocity.length() > 500.0:
+		# 这是一个"击飞处决"，让尸体飞一会儿
+		var flight_time = 0.6
+		if knockback_velocity.length() > 2000.0: flight_time = 0.8 # 超级击飞飞久一点
+		
+		# 尸体淡出
+		var tween = get_tree().create_tween()
+		tween.tween_property(self, "modulate:a", 0.0, flight_time).set_ease(Tween.EASE_IN)
+		
+		await get_tree().create_timer(flight_time).timeout
+	
 	queue_free()
 
 # 从波次配置设置敌人（新接口，用于波次系统）
@@ -1271,6 +1292,12 @@ func _create_enemy_shadow():
 	var enemy_scale = sprite.scale.x if sprite else 1.0
 	var width = int(40 * enemy_scale)
 	var height = int(10 * enemy_scale)
+	
+	# 毛玉特化影子尺寸
+	if enemy_type == GameConstants.EnemyType.KEDAMA:
+		width = 100
+		height = 30
+	
 	width = max(width, 2)
 	height = max(height, 2)
 

@@ -11,6 +11,7 @@ var weapon_system = null
 var collision_shape = null
 var character_skills = null
 var bond_system = null
+var shadow_sprite: Sprite2D = null # 影子引用
 
 # 角色数据
 var character_data = null
@@ -48,6 +49,10 @@ var current_attack_id: int = 0 # 攻击动画实例ID
 var animation_frame: int = 0
 var animation_timer: float = 0.0
 const ANIMATION_SPEED: float = 0.08  # 每帧持续时间
+
+# 蓄力攻击变量
+var charge_start_time: float = 0.0
+var is_weapon_charging: bool = false # 是否正在蓄力
 
 # ==================== PHYSICS SYSTEM ====================
 # Physics properties from CharacterData
@@ -108,6 +113,9 @@ func _ready():
 	# [修复] 延迟添加影子，确保 MapSystem 已就绪
 	call_deferred("_initialize_shadow")
 
+	# 创建蓄力条
+	_create_charge_bar()
+
 	# 显示精灵（角色数据已加载）
 	if sprite:
 		sprite.visible = true
@@ -126,11 +134,68 @@ func _ready():
 			collision_shape.position = Vector2(0, 45)
 
 func _initialize_shadow():
+	# 使用 MapSystem 的高级投影影子
 	var map_system = get_tree().get_first_node_in_group("map_system")
-	if map_system and map_system.has_method("add_dynamic_shadow"):
-		map_system.add_dynamic_shadow(self, 1.2)
+	if map_system and map_system.has_method("create_shadow_for_entity"):
+		# 强制清理旧影子
+		if has_node("Shadow"):
+			get_node("Shadow").queue_free()
+			
+		# 创建新影子，偏移量设为 (0, -10) 以贴合脚底
+		# 60x20 的尺寸是根据角色比例预估的
+		shadow_sprite = map_system.create_shadow_for_entity(self, Vector2(60, 20), Vector2(0, -10))
+		if shadow_sprite:
+			print("Player Shadow Created Successfully via MapSystem")
 	else:
-		_create_player_shadow()
+		print("Warning: MapSystem not found, player shadow creation skipped.")
+
+func _sync_shadow_visuals():
+	"""每一帧同步影子的纹理和状态"""
+	if not shadow_sprite or not is_instance_valid(shadow_sprite):
+		shadow_sprite = get_node_or_null("Shadow")
+		if not shadow_sprite: return
+		
+	if not sprite or not sprite.texture: return
+	
+	# 同步纹理属性
+	if shadow_sprite.texture != sprite.texture:
+		shadow_sprite.texture = sprite.texture
+	
+	shadow_sprite.hframes = sprite.hframes
+	shadow_sprite.vframes = sprite.vframes
+	shadow_sprite.frame = sprite.frame
+	
+	# 计算尺寸
+	var frame_height = sprite.texture.get_height() / sprite.vframes
+	var frame_width = sprite.texture.get_width() / sprite.hframes
+	
+	# 关键修正：将锚点设为底部中心，确保翻转后从脚底延伸
+	shadow_sprite.centered = false
+	shadow_sprite.offset = Vector2(-frame_width / 2.0, -frame_height)
+	
+	# 计算脚底位置 (假设Sprite中心在0,0)
+	var player_scale_y = abs(sprite.scale.y)
+	# [修复] 之前减去的是纹理像素，乘缩放后几乎为0。
+	# 现在改为减去 15.0 屏幕像素，强行向上提，消除缝隙。
+	var feet_y = (frame_height * player_scale_y) / 2.0 - 15.0
+	
+	# 将影子节点定位到脚底
+	shadow_sprite.position = Vector2(0, feet_y)
+	
+	# 垂直翻转缩放 (向下投影)
+	shadow_sprite.scale = Vector2(abs(sprite.scale.x), -player_scale_y * 0.5)
+	
+	# 同步水平翻转
+	shadow_sprite.flip_h = sprite.flip_h or (sprite.scale.x < 0)
+	
+	# 获取环境倾斜值
+	var map_skew = 0.5
+	var map_system = get_tree().get_first_node_in_group("map_system")
+	if map_system and "SHADOW_SKEW" in map_system:
+		map_skew = map_system.SHADOW_SKEW
+		
+	# 应用倾斜 (与环境保持一致，不再取反)
+	shadow_sprite.skew = map_skew
 
 func _on_character_selected(selected_id: int):
 	"""角色选择信号回调"""
@@ -223,20 +288,75 @@ func _input(event):
 	# 妹红攻击输入处理
 	if character_id == GameConstants.CharacterId.MOKOU and weapon_system:
 		# 鼠标输入
-		if event is InputEventMouseButton and event.pressed:
+		if event is InputEventMouseButton:
 			if event.button_index == MOUSE_BUTTON_LEFT:
-				weapon_system.try_fire_weapon("mokou_kick_light")
-			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				if event.pressed:
+					# 开始蓄力
+					if not is_weapon_charging:
+						charge_start_time = Time.get_ticks_msec() / 1000.0
+						is_weapon_charging = true
+				else:
+					# 释放蓄力攻击
+					if is_weapon_charging:
+						var current_time = Time.get_ticks_msec() / 1000.0
+						var charge_duration = current_time - charge_start_time
+						
+						# 只要蓄力超过 0.1 秒，就触发效果
+						if charge_duration > 0.1:
+							var intensity = clamp(charge_duration / 1.5, 0.2, 1.0)
+							# 触发释放爆发特效
+							_spawn_release_burst(intensity)
+
+						# 根据输入方式决定方向
+						var fire_dir = Vector2.ZERO
+						fire_dir = (get_global_mouse_position() - global_position).normalized()
+
+						weapon_system.fire_charged_flame_ring(charge_duration, fire_dir)
+
+						is_weapon_charging = false
+						if sprite: sprite.modulate = Color.WHITE # 复位颜色
+			elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+				# 右键重击
 				weapon_system.try_fire_weapon("mokou_kick_heavy")
-		
+
 		# 键盘输入 (J/K)
-		if event is InputEventKey and event.pressed:
+		if event is InputEventKey:
 			if event.keycode == KEY_J:
-				weapon_system.try_fire_weapon("mokou_kick_light")
-			elif event.keycode == KEY_K:
+				if event.pressed:
+					if not is_weapon_charging:
+						charge_start_time = Time.get_ticks_msec() / 1000.0
+						is_weapon_charging = true
+				else:
+					if is_weapon_charging:
+						var current_time = Time.get_ticks_msec() / 1000.0
+						var charge_duration = current_time - charge_start_time
+						
+						# 键盘释放逻辑同上
+						if charge_duration > 0.1:
+							var intensity = clamp(charge_duration / 1.5, 0.2, 1.0)
+							_spawn_release_burst(intensity)
+						
+						# 键盘释放，使用键盘方向
+						var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+						if input_dir.length() < 0.1:
+							if sprite and sprite.flip_h: input_dir = Vector2.LEFT
+							else: input_dir = Vector2.RIGHT
+						else:
+							input_dir = input_dir.normalized()
+							
+						weapon_system.fire_charged_flame_ring(charge_duration, input_dir)
+						
+						is_weapon_charging = false
+						if sprite: sprite.modulate = Color.WHITE
+						
+			elif event.keycode == KEY_K and event.pressed:
+				# 键盘右键映射
 				weapon_system.try_fire_weapon("mokou_kick_heavy")
 
 func _physics_process(delta):
+	# 同步影子视觉 (每帧更新)
+	_sync_shadow_visuals()
+
 	# 更新无敌计时器
 	if invulnerable_timer > 0:
 		invulnerable_timer -= delta
@@ -245,6 +365,43 @@ func _physics_process(delta):
 	# 更新接触伤害冷却
 	if contact_damage_cooldown > 0:
 		contact_damage_cooldown -= delta
+
+	# ==================== 蓄力视觉反馈 ====================
+	var charge_bar = get_node_or_null("ChargeBar")
+	
+	if is_weapon_charging and sprite:
+		var current_time = Time.get_ticks_msec() / 1000.0
+		var duration = current_time - charge_start_time
+		# 变红变亮：从白色渐变到高亮红
+		var t = clamp(duration / 1.5, 0.0, 1.0)
+		sprite.modulate = Color.WHITE.lerp(Color(3.0, 0.5, 0.2), t)
+		
+		# 更新蓄力条
+		if charge_bar:
+			charge_bar.visible = true
+			# 直接赋值，配合 step=0.01 实现平滑
+			charge_bar.value = duration
+			
+			# 蓄力快满时颤抖 (t > 0.7)
+			if t > 0.7:
+				var s = (t - 0.7) / 0.3 * 2.5 
+				charge_bar.position = Vector2(35, -40) + Vector2(randf_range(-s, s), randf_range(-s, s))
+			else:
+				charge_bar.position = Vector2(35, -40)
+			
+			# 满蓄力时变红
+			if duration >= 1.5:
+				charge_bar.modulate = Color(2.0, 0.2, 0.2) # 发光红
+			else:
+				charge_bar.modulate = Color.WHITE
+		
+		# 聚气粒子 (每0.1秒生成一次)
+		if Engine.get_physics_frames() % 6 == 0:
+			_spawn_charging_particles(t)
+	else:
+		if charge_bar: 
+			charge_bar.visible = false
+			charge_bar.value = 0 # 重置
 
 	# 如果正在执行技能，跳过普通移动逻辑 (包括Dash)
 	if character_skills and character_skills.is_skill_active():
@@ -745,126 +902,118 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 			sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
 
 	# [实现] 动态阴影系统：妹红的影子根据跑步方向变化
-	_update_mokou_shadow(input_dir)
+	# _update_mokou_animation 不再调用 shadow 更新，避免冲突
 
-func _update_mokou_shadow(input_dir: Vector2):
-	"""更新妹红的动态阴影效果 - 雪碧图阴影系统"""
-	var shadow = get_node_or_null("Shadow")
-	if not shadow:
-		return
+func _create_charge_bar():
+	var bar = TextureProgressBar.new()
+	bar.name = "ChargeBar"
+	# 使用垂直进度条
+	bar.fill_mode = TextureProgressBar.FILL_BOTTOM_TO_TOP
+	bar.value = 0
+	bar.max_value = 1.5 # 满蓄力时间
+	bar.step = 0.01 # 允许平滑的小数变化
+	bar.visible = false
+	
+	# 创建纯色纹理 (竖向)
+	var w = 12
+	var h = 60
+	var img_bg = Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img_bg.fill(Color(0, 0, 0, 0.5))
+	var img_fill = Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img_fill.fill(Color(1.0, 0.5, 0.0)) # 橙色
+	
+	bar.texture_under = ImageTexture.create_from_image(img_bg)
+	bar.texture_progress = ImageTexture.create_from_image(img_fill)
+	
+	# 位置：右侧身边
+	bar.position = Vector2(35, -40)
+	add_child(bar)
 
-	# 加载阴影雪碧图（如果还没加载）
-	if not shadow.has_meta("shadow_textures"):
-		var textures = []
-		# 创建4帧阴影纹理：站立、水平、垂直、斜向
-		textures.append(_create_shadow_frame(0))  # 站立
-		textures.append(_create_shadow_frame(1))  # 水平
-		textures.append(_create_shadow_frame(2))  # 垂直
-		textures.append(_create_shadow_frame(3))  # 斜向
-		shadow.set_meta("shadow_textures", textures)
-
-	# 根据移动方向选择阴影帧
-	var textures = shadow.get_meta("shadow_textures")
-	if textures and textures.size() > 0:
-		var frame_index = 0
-		if input_dir.length() < 0.1:
-			frame_index = 0  # 站立帧
-		elif abs(input_dir.x) > abs(input_dir.y):
-			frame_index = 1  # 水平移动帧
-		elif abs(input_dir.y) > abs(input_dir.x):
-			frame_index = 2  # 垂直移动帧
-		else:
-			frame_index = 3  # 斜向移动帧
-
-		shadow.texture = textures[frame_index]
-		# 修复：缩放不能太小，否则看不见。1.0 对于 80x40 的纹理是合适的
-		shadow.scale = Vector2(1.0, 1.0) 
-
-func _create_shadow_frame(frame_type: int) -> ImageTexture:
-	"""创建特定类型的阴影帧"""
-	var width = 80
-	var height = 40
-	var image = Image.create(width, height, false, Image.FORMAT_RGBA8)
-
-	for x in range(width):
-		for y in range(height):
-			image.set_pixel(x, y, Color(0, 0, 0, 0))
-
-	var center_x = width / 2.0
-	var center_y = height / 2.0
-
-	for x in range(width):
-		for y in range(height):
-			var dx = (x - center_x) / (width / 2.0)
-			var dy = (y - center_y) / (height / 2.0)
-			var dist_sq = dx * dx + dy * dy
-
-			if dist_sq <= 1.0:
-				var dist = sqrt(dist_sq)
-				var alpha = (1.0 - dist) * 0.35
-				alpha = pow(alpha, 1.5)
-
-				# 根据帧类型调整阴影形状
-				if frame_type == 1:  # 水平 - 拉长X轴
-					dx = (x - center_x) / (width / 1.5)
-					dy = (y - center_y) / (height / 2.0)
-					dist_sq = dx * dx + dy * dy
-					if dist_sq <= 1.0:
-						dist = sqrt(dist_sq)
-						alpha = (1.0 - dist) * 0.35
-						alpha = pow(alpha, 1.5)
-						image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
-				elif frame_type == 2:  # 垂直 - 拉长Y轴
-					dx = (x - center_x) / (width / 2.0)
-					dy = (y - center_y) / (height / 1.5)
-					dist_sq = dx * dx + dy * dy
-					if dist_sq <= 1.0:
-						dist = sqrt(dist_sq)
-						alpha = (1.0 - dist) * 0.35
-						alpha = pow(alpha, 1.5)
-						image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
-				elif frame_type == 3:  # 斜向
-					dx = (x - center_x) / (width / 1.8)
-					dy = (y - center_y) / (height / 1.8)
-					dist_sq = dx * dx + dy * dy
-					if dist_sq <= 1.0:
-						dist = sqrt(dist_sq)
-						alpha = (1.0 - dist) * 0.35
-						alpha = pow(alpha, 1.5)
-						image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
-				else:  # 站立 - 圆形
-					image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
-
+func _create_soft_circle_texture(size: int) -> ImageTexture:
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var center = Vector2(size / 2.0, size / 2.0)
+	for x in range(size):
+		for y in range(size):
+			var dist = Vector2(x, y).distance_to(center) / (size / 2.0)
+			# 使用平滑衰减公式，消除硬边缘
+			var alpha = clamp(1.0 - pow(dist, 2.0), 0.0, 1.0)
+			image.set_pixel(x, y, Color(1, 1, 1, alpha))
 	return ImageTexture.create_from_image(image)
 
-func _create_player_shadow():
-	"""创建玩家阴影保底逻辑"""
-	var shadow = Sprite2D.new()
-	shadow.name = "Shadow"
+func _spawn_charging_particles(intensity: float):
+	"""生成蓄力聚气粒子 - 强度随 intensity 增加"""
+	var p = CPUParticles2D.new()
+	# 设置材质为叠加模式，产生高亮发光感
+	var mat = CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	p.material = mat
+	# 设置平滑纹理，告别像素方块
+	p.texture = _create_soft_circle_texture(32)
 	
-	var width = 60
-	var height = 30
-	var image = Image.create(width, height, false, Image.FORMAT_RGBA8)
-	var center_x = width / 2.0
-	var center_y = height / 2.0
+	p.emitting = true
+	p.one_shot = true
+	p.amount = int(8 + 25 * intensity)
+	p.lifetime = 0.5
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 40.0
+	p.gravity = Vector2(0, -20)
+	p.radial_accel_min = -100.0 * (1.0 + intensity)
+	p.radial_accel_max = -150.0 * (1.0 + intensity)
 	
-	for x in range(width):
-		for y in range(height):
-			var dx = (x - center_x) / (width / 2.0)
-			var dy = (y - center_y) / (height / 2.0)
-			var dist_sq = dx * dx + dy * dy
-			if dist_sq <= 1.0:
-				var dist = sqrt(dist_sq)
-				var alpha = (1.0 - dist) * 0.35 * pow(1.0 - dist, 0.5)
-				image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
-			else:
-				image.set_pixel(x, y, Color(0, 0, 0, 0))
-				
-	shadow.texture = ImageTexture.create_from_image(image)
-	shadow.position = Vector2(0, 5)
-	shadow.z_index = -10
-	shadow.centered = true
-	add_child(shadow)
+	# 动态大小
+	p.scale_amount_min = 0.05 + (0.1 * intensity)
+	p.scale_amount_max = 0.15 + (0.2 * intensity)
+	
+	var grad = Gradient.new()
+	grad.add_point(0.0, Color(1.0, 0.9, 0.3, 0.8)) # 亮黄
+	grad.add_point(1.0, Color(1.0, 0.2, 0.0, 0.0)) # 深红透明
+	p.color_ramp = grad
+	
+	p.position = Vector2(0, -20)
+	p.z_index = 1
+	add_child(p)
+	
+	await get_tree().create_timer(0.6).timeout
+	if is_instance_valid(p): p.queue_free()
+
+func _spawn_release_burst(intensity: float):
+	"""释放瞬间的巨大火焰冲击波"""
+	var burst = CPUParticles2D.new()
+	var mat = CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	burst.material = mat
+	burst.texture = _create_soft_circle_texture(64) # 更大的爆发粒子纹理
+	add_child(burst)
+	
+	burst.amount = int(30 + 70 * intensity)
+	burst.one_shot = true
+	burst.explosiveness = 0.9
+	burst.lifetime = 0.6
+	burst.spread = 180.0
+	burst.gravity = Vector2.ZERO
+	burst.initial_velocity_min = 150 * intensity
+	burst.initial_velocity_max = 500 * intensity
+	
+	# 随蓄力变大
+	burst.scale_amount_min = 0.2 * intensity
+	burst.scale_amount_max = 0.6 * intensity
+	
+	var grad = Gradient.new()
+	# 满蓄力时核心发白
+	if intensity > 0.9:
+		grad.add_point(0.0, Color(4.0, 4.0, 2.0, 1.0)) # HDR 强度白光
+	else:
+		grad.add_point(0.0, Color(1.5, 0.8, 0.2, 1.0))
+	grad.add_point(1.0, Color(0.8, 0.1, 0.0, 0.0))
+	burst.color_ramp = grad
+	
+	# 反馈：震动强度随时间增加
+	SignalBus.screen_shake.emit(0.2 * intensity, 20.0 * intensity)
+	
+	await get_tree().create_timer(0.7).timeout
+	if is_instance_valid(burst): burst.queue_free()
+
+
 
 # ==================== 粒子屏障系统 ====================
 func _create_particle_barrier():
