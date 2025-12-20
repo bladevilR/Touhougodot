@@ -1258,39 +1258,39 @@ func _fire_melee_light(weapon_id: String, config: WeaponData.WeaponConfig, stats
 	var arc_particles = GPUParticles2D.new()
 	var mat = ParticleProcessMaterial.new()
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
-	mat.emission_ring_radius = 50.0 
+	mat.emission_ring_radius = 50.0
 	mat.emission_ring_inner_radius = 45.0
 	mat.emission_ring_axis = Vector3(0, 0, 1)
 	mat.gravity = Vector3(0, -150, 0) # 更快向上飘
-	mat.scale_min = 0.3 # 更大的粒子
-	mat.scale_max = 0.5
-	
+	mat.scale_min = 0.4 # 增大粒子尺寸（原0.3）
+	mat.scale_max = 0.7 # 增大粒子尺寸（原0.5）
+
 	# 修复渐变纹理创建逻辑
 	var gradient = Gradient.new()
 	# 清除默认点（如果有）或直接覆盖
 	gradient.offsets = [0.0, 0.5, 1.0]
 	gradient.colors = [Color(1.0, 1.0, 0.5), Color(1.0, 0.5, 0.0), Color(1.0, 0.0, 0.0, 0.0)]
-	
+
 	var gradient_tex = GradientTexture1D.new()
 	gradient_tex.gradient = gradient
 	mat.color_ramp = gradient_tex
-	
+
 	mat.initial_velocity_min = 80.0
 	mat.initial_velocity_max = 150.0
 	mat.direction = Vector3(direction.x, direction.y, 0)
-	mat.spread = 20.0 
-	
+	mat.spread = 20.0
+
 	arc_particles.process_material = mat
-	
+
 	var img = Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	img.fill(Color.WHITE)
 	arc_particles.texture = ImageTexture.create_from_image(img)
-	
+
 	arc_particles.emitting = true
 	arc_particles.one_shot = true
 	arc_particles.explosiveness = 0.8 # 爆发感
-	arc_particles.amount = 60 # 更多粒子
-	arc_particles.lifetime = 0.4
+	arc_particles.amount = 80 # 增加粒子数量（原60）
+	arc_particles.lifetime = 0.5 # 增加持续时间（原0.4）
 	arc_particles.global_position = player.global_position + direction * 30
 	arc_particles.z_index = 5 # 确保在最上层
 	
@@ -1326,10 +1326,17 @@ func _fire_melee_light(weapon_id: String, config: WeaponData.WeaponConfig, stats
 	# 如果打中任何东西，顿帧 + 震动
 	if hit_count > 0:
 		SignalBus.screen_shake.emit(0.1, 5.0)
-		# 轻微顿帧
-		if Engine.time_scale > 0.9:
-			Engine.time_scale = 0.1
-			get_tree().create_timer(0.05, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+		_apply_hit_stop(0.05) # 使用统一方法处理定帧
+
+func _apply_hit_stop(duration: float):
+	"""应用定帧效果 - 增强打击感"""
+	if Engine.time_scale > 0.9:
+		Engine.time_scale = 0.1
+		# 使用独立计时器，确保定帧时间准确
+		var timer = get_tree().create_timer(duration, true, false, true)
+		timer.timeout.connect(func():
+			Engine.time_scale = 1.0
+		)
 
 func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary):
 	"""近战攻击 - 强力踢击 (范围击退 + 最近敌人旋转击飞)"""
@@ -1401,7 +1408,9 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 		# 第一层：面前大范围（距离<250，角度<60度）- 被踢开
 		# 0.5 dot product 约为 60 度扇形
 		if dist < 250.0 and direction.dot(enemy_dir) > 0.5:
-			nearby_enemies.append(enemy)
+			# 排除最近的敌人（它是重击目标）
+			if enemy != nearest_enemy:
+				nearby_enemies.append(enemy)
 
 		# 找最近的敌人（重点击飞目标），且必须在前方一定范围内
 		if dist < min_dist and dist < 300.0 and direction.dot(enemy_dir) > 0.3:
@@ -1411,13 +1420,15 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 	# === 4. 第一波：大范围敌人被猛烈踢开 ===
 	if nearby_enemies.size() > 0:
 		SignalBus.screen_shake.emit(0.2, 10.0) # 轻微震动
+		_apply_hit_stop(0.08) # 中等定帧
+
 		for enemy in nearby_enemies:
 			var to_enemy = enemy.global_position - player.global_position
 			var enemy_dir = to_enemy.normalized()
 
 			# 踢开（强力击退）
 			if enemy.has_method("apply_knockback"):
-				# 击退方向稍微向两侧偏一点，形成“破开”的效果
+				# 击退方向稍微向两侧偏一点，形成"破开"的效果
 				enemy.apply_knockback(enemy_dir, 1500.0)
 
 			# 造成伤害
@@ -1428,6 +1439,7 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 	if nearest_enemy:
 		# 强烈震动
 		SignalBus.screen_shake.emit(0.5, 30.0)
+		_apply_hit_stop(0.12) # 强力定帧
 
 		# 击飞（极大力度）
 		if nearest_enemy.has_method("apply_knockback"):

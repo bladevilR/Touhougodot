@@ -45,13 +45,13 @@ func _create_flash_layer():
 
 func _process(delta):
 	var final_offset = Vector2.ZERO
-	
+
 	# 1. Random Shake (Noise)
 	if shake_timer > 0:
 		shake_timer -= delta
 		var progress = shake_timer / shake_duration
 		var current_intensity = shake_intensity * progress
-		
+
 		# High frequency jitter
 		final_offset += Vector2(
 			randf_range(-current_intensity, current_intensity),
@@ -63,11 +63,11 @@ func _process(delta):
 		# Decay back to zero
 		directional_offset = directional_offset.lerp(Vector2.ZERO, directional_decay * delta)
 		final_offset += directional_offset
-		
+
 	# Apply to camera
 	if camera:
 		camera.offset = final_offset
-		
+
 	# 3. Screen Flash
 	if flash_timer > 0:
 		flash_timer -= delta
@@ -80,9 +80,18 @@ func _process(delta):
 			flash_rect.color = Color(0,0,0,0)
 
 func _on_screen_shake(duration: float, intensity: float):
-	"""触发随机震动 (受击/爆炸)"""
-	shake_duration = max(shake_duration, duration)
-	shake_intensity = max(shake_intensity, intensity)
+	"""触发随机震动 (受击/爆炸) - 行业成熟的打击感方案"""
+	# 如果正在震动，叠加新的震动（不覆盖）
+	if shake_timer > 0.0:
+		# 计算叠加权重：新震动占70%，旧震动占30%
+		var weight_new = 0.7
+		var weight_old = 0.3
+		shake_duration = max(shake_duration * weight_old + duration * weight_new, 0.1)
+		shake_intensity = max(shake_intensity * weight_old + intensity * weight_new, 0.1)
+	else:
+		shake_duration = max(duration, 0.05)  # 最小震动时间
+		shake_intensity = max(intensity, 0.5)  # 最小震动强度
+
 	shake_timer = shake_duration
 
 func _on_directional_shake(direction: Vector2, force: float, duration: float):

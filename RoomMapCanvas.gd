@@ -1,4 +1,5 @@
 extends Control
+class_name RoomMapCanvas
 
 # RoomMapCanvas - 房间地图绘制画布（方格布局，类似以撒的结合）
 

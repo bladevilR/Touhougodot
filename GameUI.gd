@@ -74,20 +74,51 @@ const ELEMENT_NAMES = {
 }
 
 func _load_character_portrait():
-	"""加载角色头像（1C.png）"""
-	if character_portrait:
-		var portrait_path = "res://assets/characters/1C.png"
-		if ResourceLoader.exists(portrait_path):
-			character_portrait.texture = load(portrait_path)
-			print("[GameUI] 角色头像加载成功: 1C.png")
+	"""根据选择的角色加载头像"""
+	if not character_portrait:
+		return
+		
+	var char_id = SignalBus.selected_character_id
+	var portrait_path = ""
+	
+	# 根据角色ID选择对应的头像文件
+	match char_id:
+		GameConstants.CharacterId.REIMU:
+			portrait_path = "res://assets/leimuF.png" # 灵梦使用立绘作为头像（或寻找专门的1C）
+		GameConstants.CharacterId.MOKOU:
+			portrait_path = "res://assets/characters/1C.png" # 妹红对应1C
+		GameConstants.CharacterId.MARISA:
+			portrait_path = "res://assets/characters/2C.png" # 魔理沙对应2C
+		GameConstants.CharacterId.SAKUYA:
+			portrait_path = "res://assets/characters/3C.png" # 咲夜对应3C
+		_:
+			# 默认尝试使用 ID+1 的规律
+			portrait_path = "res://assets/characters/" + str(char_id + 1) + "C.png"
+
+	if ResourceLoader.exists(portrait_path):
+		character_portrait.texture = load(portrait_path)
+		print("[GameUI] 角色头像加载成功: ", portrait_path)
+	else:
+		# 最后的保底
+		if ResourceLoader.exists("res://assets/characters/1C.png"):
+			character_portrait.texture = load("res://assets/characters/1C.png")
+			print("[GameUI] 警告: 找不到指定头像，使用保底 1C.png")
 		else:
-			print("[GameUI] 警告: 找不到角色头像: ", portrait_path)
+			print("[GameUI] 严重警告: 找不到任何角色头像文件")
 
 func _ready():
 	add_to_group("ui")
 
 	# 加载角色头像
 	_load_character_portrait()
+	
+	# 进一步放大并美化头像显示
+	if character_portrait:
+		character_portrait.size = Vector2(350, 350)
+		character_portrait.position = Vector2(10, 710) # 进一步提亮位置
+		character_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		character_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		character_portrait.modulate = Color(1.1, 1.1, 1.1, 1.0)
 
 	# UI 只监听总线，完全不知道 Player 的存在
 	SignalBus.player_health_changed.connect(update_hp)
@@ -406,8 +437,16 @@ func _create_boss_ui():
 
 	# Boss血条背景
 	var bar_bg = ColorRect.new()
-	bar_bg.color = Color(0.2, 0.2, 0.2, 0.8)
+	bar_bg.color = Color(0.1, 0.1, 0.1, 0.85)
 	bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# 添加圆角效果
+	var bg_style = StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.1, 0.1, 0.1, 0.85)
+	bg_style.corner_radius_top_left = 12
+	bg_style.corner_radius_top_right = 12
+	bg_style.corner_radius_bottom_left = 12
+	bg_style.corner_radius_bottom_right = 12
+	bar_bg.add_theme_stylebox_override("panel", bg_style)
 	bar_container.add_child(bar_bg)
 
 	# Boss血条
@@ -415,9 +454,19 @@ func _create_boss_ui():
 	boss_hp_bar.set_anchors_preset(Control.PRESET_FULL_RECT)
 	boss_hp_bar.show_percentage = false
 	boss_hp_bar.value = 100
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color("#ff0000")
-	boss_hp_bar.add_theme_stylebox_override("fill", style)
+	# 美化血条样式
+	var fill_style = StyleBoxFlat.new()
+	fill_style.bg_color = Color(1.0, 0.2, 0.2, 0.9)  # 更鲜艳的红色
+	fill_style.corner_radius_top_left = 10
+	fill_style.corner_radius_top_right = 10
+	fill_style.corner_radius_bottom_left = 10
+	fill_style.corner_radius_bottom_right = 10
+	# 添加渐变效果
+	var gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 0.3, 0.3, 1.0))
+	gradient.add_point(0.5, Color(1.0, 0.15, 0.15, 0.95))
+	gradient.add_point(1.0, Color(0.9, 0.1, 0.1, 0.9))
+	boss_hp_bar.add_theme_stylebox_override("fill", fill_style)
 	bar_container.add_child(boss_hp_bar)
 
 func _on_boss_spawned(boss_name: String, _boss_hp: float, _boss_max_hp: float):
@@ -871,7 +920,6 @@ func _on_boss_dialogue(boss_name: String, dialogue: String):
 	var dialogue_system = get_node_or_null("DialoguePortrait")
 	if not dialogue_system:
 		# 创建对话系统
-		# 使用动态加载避免循环依赖
 		var DialoguePortraitScript = load("res://DialoguePortrait.gd")
 		if DialoguePortraitScript:
 			dialogue_system = DialoguePortraitScript.new()
@@ -880,18 +928,17 @@ func _on_boss_dialogue(boss_name: String, dialogue: String):
 
 	if dialogue_system:
 		# 根据Boss名字选择立绘
-		var DPScript = load("res://DialoguePortrait.gd")
-		var character_portrait = DPScript.CharacterPortrait.MOKOU  # 默认
+		var character_portrait = DialoguePortrait.CharacterPortrait.MOKOU  # 默认
 		match boss_name:
 			"蓬莱山辉夜", "辉夜":
-				character_portrait = DPScript.CharacterPortrait.KAGUYA
+				character_portrait = DialoguePortrait.CharacterPortrait.KAGUYA
 			"魂魄妖梦", "妖梦":
-				character_portrait = DPScript.CharacterPortrait.YOUMU
+				character_portrait = DialoguePortrait.CharacterPortrait.YOUMU
 			"琪露诺":
-				character_portrait = DPScript.CharacterPortrait.CIRNO
+				character_portrait = DialoguePortrait.CharacterPortrait.CIRNO
 			_:
 				# 默认使用琪露诺
-				character_portrait = DPScript.CharacterPortrait.CIRNO
+				character_portrait = DialoguePortrait.CharacterPortrait.CIRNO
 
 		dialogue_system.show_dialogue(character_portrait, dialogue)
 

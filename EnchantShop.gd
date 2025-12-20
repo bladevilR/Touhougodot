@@ -103,9 +103,9 @@ func _process(delta):
 			_start_interaction()
 
 func _start_interaction():
-	"""开始交互 - 打招呼"""
+	"""开始交互 - 完整对话版本"""
 	is_dialogue_active = true
-	
+
 	var dialogue_data = [
 		{
 			"speaker": "妹红",
@@ -118,7 +118,7 @@ func _start_interaction():
 			"portrait": "res://assets/characters/3C.png"
 		}
 	]
-	
+
 	await _play_dialogue(dialogue_data)
 	is_dialogue_active = false
 	_open_shop()
@@ -136,26 +136,27 @@ func _get_dialogue_manager() -> Node:
 	var existing_layer = get_tree().root.get_node_or_null("DialogueLayer")
 	if existing_layer:
 		return existing_layer.get_node_or_null("DialogueManager")
-	
+
 	# 创建新的 Layer 和 Manager
 	var layer = CanvasLayer.new()
 	layer.layer = 128 # 确保在最上层
 	layer.name = "DialogueLayer"
 	get_tree().root.add_child(layer)
-	
-	var DialoguePortraitScript = load("res://DialoguePortrait.gd")
-	var dm = null
-	if DialoguePortraitScript:
-		dm = DialoguePortraitScript.new()
-		dm.name = "DialogueManager"
-		layer.add_child(dm)
-	
-	return dm
 
+	var DialoguePortraitScript = load("res://DialoguePortrait.gd")
+	var dm = DialoguePortraitScript.new()
+	dm.name = "DialogueManager"
+	layer.add_child(dm)
+
+	return dm
+	
 func _on_body_entered(body):
 	if body.is_in_group("player"):
 		player_in_range = true
 		_show_interaction_hint(true)
+
+		# 显示简短对话（简化版本）
+		print("Enchantress: 欢迎来到附魔商店！")
 
 func _on_body_exited(body):
 	if body.is_in_group("player"):

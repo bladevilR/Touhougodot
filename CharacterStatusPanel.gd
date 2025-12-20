@@ -29,9 +29,11 @@ func _ready():
 	# 默认隐藏
 	overlay.visible = false
 
-func _input(event):
+func _unhandled_input(event):
 	# Tab键切换显示/隐藏
 	if event is InputEventKey and event.pressed and event.keycode == KEY_TAB:
+		print("[StatusPanel] Tab pressed, toggling...")
+		get_viewport().set_input_as_handled() # 消耗事件
 		toggle_panel()
 
 func toggle_panel():
@@ -193,10 +195,36 @@ func _update_info():
 		portrait.custom_minimum_size = Vector2(675, 1012) 
 		portrait.size = Vector2(675, 1012)
 		portrait.position = Vector2(20, 50)
-		portrait.set_size(Vector2(675, 1012))
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		print("DEBUG: Portrait size forced to ", portrait.size)
 
 	var player = get_tree().get_first_node_in_group("player")
+	var char_id = SignalBus.selected_character_id
+	if player and "character_id" in player:
+		char_id = player.character_id
+		
+	var char_data = CharacterData.CHARACTERS.get(char_id)
+	if char_data:
+		if name_label:
+			name_label.text = char_data.char_name
+			name_label.add_theme_color_override("font_color", char_data.color.lightened(0.2))
+		
+		# 更新立绘
+		var sprite_paths = [
+			"res://assets/leimuF.png",              # Reimu
+			"res://assets/characters/1.png",        # Mokou
+			"res://assets/marisaF.png",             # Marisa
+			"res://assets/sakuyaF.png",             # Sakuya
+			"res://assets/taotie.png",              # Yuma
+			"res://assets/koyiF.png"                # Koishi
+		]
+		if char_id < sprite_paths.size() and portrait:
+			var portrait_path = sprite_paths[char_id]
+			if ResourceLoader.exists(portrait_path):
+				portrait.texture = load(portrait_path)
+				print("[StatusPanel] Portrait updated to: ", portrait_path)
+
 	if not player:
 		return
 

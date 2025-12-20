@@ -13,13 +13,15 @@ func _ready():
 	initialize_game()
 
 	# 实例化RoomLayoutManager（随机地图系统）
-	var room_layout_manager = preload("res://RoomLayoutManager.gd").new()
-	room_layout_manager.name = "RoomLayoutManager"
-	add_child(room_layout_manager)
-	print("[World] RoomLayoutManager 已实例化")
+	var RoomLayoutManagerScript = load("res://RoomLayoutManager.gd")
+	if RoomLayoutManagerScript:
+		var room_layout_manager = RoomLayoutManagerScript.new()
+		room_layout_manager.name = "RoomLayoutManager"
+		add_child(room_layout_manager)
+		print("[World] RoomLayoutManager 已实例化")
 
 	# 实例化VictoryScreen
-	var VictoryScreenScript = preload("res://VictoryScreen.gd")
+	var VictoryScreenScript = load("res://VictoryScreen.gd")
 	if VictoryScreenScript:
 		# VictoryScreen 继承自 Control，直接实例化脚本
 		var victory_screen = VictoryScreenScript.new()
@@ -71,10 +73,9 @@ func _show_opening_dialogue():
 	if dialogue_system and dialogue_system.has_method("show_dialogue"):
 		print("[World] 调用show_dialogue...")
 		# 显示妹红的开场白
-		var CharacterPortrait = load("res://DialoguePortrait.gd").CharacterPortrait
 		dialogue_system.show_dialogue(
-			CharacterPortrait.MOKOU,
-			"希望这次来的及"
+			DialoguePortrait.CharacterPortrait.MOKOU,
+			"希望这次来得及"
 		)
 		print("[World] 开场对话调用完成")
 	else:

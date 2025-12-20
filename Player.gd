@@ -105,11 +105,8 @@ func _ready():
 	# 监听升级事件
 	SignalBus.level_up.connect(on_level_up)
 
-	# 尝试添加高级投影阴影
-	_try_add_shadow()
-
-	# 创建圆形粒子屏障效果
-	# _create_particle_barrier()  # 暂时关闭粒子屏障
+	# [修复] 延迟添加影子，确保 MapSystem 已就绪
+	call_deferred("_initialize_shadow")
 
 	# 显示精灵（角色数据已加载）
 	if sprite:
@@ -117,10 +114,7 @@ func _ready():
 		# 复位 Sprite，不再尝试上移
 		sprite.position = Vector2.ZERO
 
-	# 阴影下移找脚
-	var shadow = get_node_or_null("Shadow")
-	if shadow:
-		shadow.position = Vector2(0, 45)
+	# 阴影位置在_try_add_shadow中已经设置，无需重复调整
 
 	# 碰撞箱下移找脚
 	if collision_shape and collision_shape.shape:
@@ -130,12 +124,12 @@ func _ready():
 		elif collision_shape.shape is RectangleShape2D:
 			collision_shape.shape.size = Vector2(30, 20)
 			collision_shape.position = Vector2(0, 45)
-func _try_add_shadow():
+
+func _initialize_shadow():
 	var map_system = get_tree().get_first_node_in_group("map_system")
-	if map_system and map_system.has_method("ensure_entity_shadow"):
-		map_system.ensure_entity_shadow(self)
+	if map_system and map_system.has_method("add_dynamic_shadow"):
+		map_system.add_dynamic_shadow(self, 1.2)
 	else:
-		# 实在找不到MapSystem，才用旧方法
 		_create_player_shadow()
 
 func _on_character_selected(selected_id: int):
@@ -572,41 +566,6 @@ func set_invulnerable(duration: float):
 	invulnerable_timer = duration
 	is_invulnerable = true
 
-func _create_player_shadow():
-	"""创建玩家阴影 - 椭圆形，模拟下午斜阳"""
-	var shadow = Sprite2D.new()
-	shadow.name = "Shadow"
-
-	# 创建椭圆形阴影纹理
-	var width = 45
-	var height = 12
-	var image = Image.create(width, height, false, Image.FORMAT_RGBA8)
-	var center_x = width / 2.0
-	var center_y = height / 2.0
-
-	for x in range(width):
-		for y in range(height):
-			var dx = (x - center_x) / (width / 2.0)
-			var dy = (y - center_y) / (height / 2.0)
-			var dist_sq = dx * dx + dy * dy
-
-			if dist_sq <= 1.0:
-				var dist = sqrt(dist_sq)
-				var alpha = (1.0 - dist) * 0.35
-				alpha = pow(alpha, 1.5)
-				image.set_pixel(x, y, Color(0, 0, 0, alpha))
-			else:
-				image.set_pixel(x, y, Color(0, 0, 0, 0))
-
-	shadow.texture = ImageTexture.create_from_image(image)
-	shadow.position = Vector2(0, -15)  # 修正位置，往里吃进
-	shadow.rotation = 0.0
-	shadow.skew = 0.5
-	shadow.z_index = -10
-	shadow.centered = true
-
-	add_child(shadow)
-
 func _spawn_dash_landing_effect():
 	"""生成飞踢落地视觉效果（火焰爆炸） + 范围伤害"""
 	# 发射橙红色火焰粒子
@@ -784,9 +743,128 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 		if mokou_textures.stand:
 			sprite.texture = mokou_textures.stand
 			sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
-			
-	# [修复] 移除此处同步更新影子的逻辑
-	# 影子应该保持在 _ready 中创建的固定椭圆状态，不随人物翻转或改变贴图
+
+	# [实现] 动态阴影系统：妹红的影子根据跑步方向变化
+	_update_mokou_shadow(input_dir)
+
+func _update_mokou_shadow(input_dir: Vector2):
+	"""更新妹红的动态阴影效果 - 雪碧图阴影系统"""
+	var shadow = get_node_or_null("Shadow")
+	if not shadow:
+		return
+
+	# 加载阴影雪碧图（如果还没加载）
+	if not shadow.has_meta("shadow_textures"):
+		var textures = []
+		# 创建4帧阴影纹理：站立、水平、垂直、斜向
+		textures.append(_create_shadow_frame(0))  # 站立
+		textures.append(_create_shadow_frame(1))  # 水平
+		textures.append(_create_shadow_frame(2))  # 垂直
+		textures.append(_create_shadow_frame(3))  # 斜向
+		shadow.set_meta("shadow_textures", textures)
+
+	# 根据移动方向选择阴影帧
+	var textures = shadow.get_meta("shadow_textures")
+	if textures and textures.size() > 0:
+		var frame_index = 0
+		if input_dir.length() < 0.1:
+			frame_index = 0  # 站立帧
+		elif abs(input_dir.x) > abs(input_dir.y):
+			frame_index = 1  # 水平移动帧
+		elif abs(input_dir.y) > abs(input_dir.x):
+			frame_index = 2  # 垂直移动帧
+		else:
+			frame_index = 3  # 斜向移动帧
+
+		shadow.texture = textures[frame_index]
+		# 修复：缩放不能太小，否则看不见。1.0 对于 80x40 的纹理是合适的
+		shadow.scale = Vector2(1.0, 1.0) 
+
+func _create_shadow_frame(frame_type: int) -> ImageTexture:
+	"""创建特定类型的阴影帧"""
+	var width = 80
+	var height = 40
+	var image = Image.create(width, height, false, Image.FORMAT_RGBA8)
+
+	for x in range(width):
+		for y in range(height):
+			image.set_pixel(x, y, Color(0, 0, 0, 0))
+
+	var center_x = width / 2.0
+	var center_y = height / 2.0
+
+	for x in range(width):
+		for y in range(height):
+			var dx = (x - center_x) / (width / 2.0)
+			var dy = (y - center_y) / (height / 2.0)
+			var dist_sq = dx * dx + dy * dy
+
+			if dist_sq <= 1.0:
+				var dist = sqrt(dist_sq)
+				var alpha = (1.0 - dist) * 0.35
+				alpha = pow(alpha, 1.5)
+
+				# 根据帧类型调整阴影形状
+				if frame_type == 1:  # 水平 - 拉长X轴
+					dx = (x - center_x) / (width / 1.5)
+					dy = (y - center_y) / (height / 2.0)
+					dist_sq = dx * dx + dy * dy
+					if dist_sq <= 1.0:
+						dist = sqrt(dist_sq)
+						alpha = (1.0 - dist) * 0.35
+						alpha = pow(alpha, 1.5)
+						image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
+				elif frame_type == 2:  # 垂直 - 拉长Y轴
+					dx = (x - center_x) / (width / 2.0)
+					dy = (y - center_y) / (height / 1.5)
+					dist_sq = dx * dx + dy * dy
+					if dist_sq <= 1.0:
+						dist = sqrt(dist_sq)
+						alpha = (1.0 - dist) * 0.35
+						alpha = pow(alpha, 1.5)
+						image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
+				elif frame_type == 3:  # 斜向
+					dx = (x - center_x) / (width / 1.8)
+					dy = (y - center_y) / (height / 1.8)
+					dist_sq = dx * dx + dy * dy
+					if dist_sq <= 1.0:
+						dist = sqrt(dist_sq)
+						alpha = (1.0 - dist) * 0.35
+						alpha = pow(alpha, 1.5)
+						image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
+				else:  # 站立 - 圆形
+					image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
+
+	return ImageTexture.create_from_image(image)
+
+func _create_player_shadow():
+	"""创建玩家阴影保底逻辑"""
+	var shadow = Sprite2D.new()
+	shadow.name = "Shadow"
+	
+	var width = 60
+	var height = 30
+	var image = Image.create(width, height, false, Image.FORMAT_RGBA8)
+	var center_x = width / 2.0
+	var center_y = height / 2.0
+	
+	for x in range(width):
+		for y in range(height):
+			var dx = (x - center_x) / (width / 2.0)
+			var dy = (y - center_y) / (height / 2.0)
+			var dist_sq = dx * dx + dy * dy
+			if dist_sq <= 1.0:
+				var dist = sqrt(dist_sq)
+				var alpha = (1.0 - dist) * 0.35 * pow(1.0 - dist, 0.5)
+				image.set_pixel(x, y, Color(0.1, 0.1, 0.2, alpha))
+			else:
+				image.set_pixel(x, y, Color(0, 0, 0, 0))
+				
+	shadow.texture = ImageTexture.create_from_image(image)
+	shadow.position = Vector2(0, 5)
+	shadow.z_index = -10
+	shadow.centered = true
+	add_child(shadow)
 
 # ==================== 粒子屏障系统 ====================
 func _create_particle_barrier():

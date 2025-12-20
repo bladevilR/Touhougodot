@@ -1,4 +1,5 @@
 extends Control
+class_name DialoguePortrait
 
 # DialoguePortrait - 通用对话管理器 (Unified Dialogue System)
 # 支持播放对话序列，处理输入，管理暂停

@@ -248,15 +248,6 @@ func _start_room(room_index: int):
 		_spawn_marisa_shop()
 		marisa_spawned = true
 
-	# === 测试模式：立即生成所有门，保持打开 ===
-	_spawn_exit_doors()
-	door_opened.emit()
-
-	# 如果房间已清理，直接开门，跳过生成敌人
-	if is_room_cleared:
-		print("房间已清理，跳过战斗")
-		return
-
 	# 根据房间类型执行不同逻辑
 	match current_room_type:
 		RoomType.NORMAL:
@@ -271,6 +262,17 @@ func _start_room(room_index: int):
 			_start_treasure_room()
 		RoomType.REST:
 			_start_rest_room()
+
+	# 如果房间已清理，生成门
+	if is_room_cleared:
+		_spawn_exit_doors()
+		door_opened.emit()
+		print("房间已清理，生成门")
+	else:
+		# 用户要求：所有门始终开启
+		_spawn_exit_doors()
+		door_opened.emit()
+		print("所有门已开启")
 
 	# 在起始房间生成教程触发器
 	if room_index == 0:
@@ -317,10 +319,6 @@ func _on_room_cleared():
 
 	room_cleared.emit()
 	print("房间清理完成!")
-
-	# === 测试模式：门已在_start_room中生成，这里不再重复生成 ===
-	# _spawn_exit_doors()
-	# door_opened.emit()
 
 func _spawn_exit_doors():
 	"""生成出口门/传送门 - 根据连接房间的相对位置 (修复拓扑)"""
@@ -578,27 +576,22 @@ func _get_dialogue_manager() -> Node:
 	# 检查是否存在 DialogueLayer/DialogueManager (在当前场景中查找)
 	var world = get_tree().current_scene
 	if not world: return null
-	
+
 	var existing_layer = world.get_node_or_null("DialogueLayer")
 	if existing_layer:
 		return existing_layer.get_node_or_null("DialogueManager")
-	
+
 	# 创建新的 Layer 和 Manager
 	var layer = CanvasLayer.new()
 	layer.layer = 128 # 确保在最上层
 	layer.name = "DialogueLayer"
 	world.add_child(layer)
-	
-	var dm = null
+
 	var DialoguePortraitScript = load("res://DialoguePortrait.gd")
-	if DialoguePortraitScript:
-		dm = DialoguePortraitScript.new()
-	else:
-		print("Error: Could not load DialoguePortrait.gd")
-		return null
+	var dm = DialoguePortraitScript.new()
 	dm.name = "DialogueManager"
 	layer.add_child(dm)
-	
+
 	return dm
 
 func _get_room_type_name(room_type: int) -> String:

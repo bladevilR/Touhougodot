@@ -21,13 +21,14 @@ func _ready():
 	# 监听武器升级信号
 	SignalBus.weapon_upgraded.connect(_on_weapon_upgraded)
 
-func _input(event):
+func _unhandled_input(event):
 	# Tab键打开融合界面（如果有可用融合）
 	if event is InputEventKey:
 		if event.keycode == KEY_TAB and event.pressed and not event.echo:
 			if available_fusions.size() > 0:
 				fusion_ui_requested.emit(available_fusions)
 				print("可用融合配方: ", available_fusions.size(), "个")
+				get_viewport().set_input_as_handled()
 
 func _on_weapon_upgraded(weapon_id: String):
 	"""武器升级时检查是否有新的融合可用"""

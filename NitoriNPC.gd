@@ -116,20 +116,18 @@ func _get_dialogue_manager() -> Node:
 	var existing_layer = get_tree().root.get_node_or_null("DialogueLayer")
 	if existing_layer:
 		return existing_layer.get_node_or_null("DialogueManager")
-	
+
 	# 创建新的 Layer 和 Manager
 	var layer = CanvasLayer.new()
 	layer.layer = 128 # 确保在最上层
 	layer.name = "DialogueLayer"
 	get_tree().root.add_child(layer)
-	
+
 	var DialoguePortraitScript = load("res://DialoguePortrait.gd")
-	var dm = null
-	if DialoguePortraitScript:
-		dm = DialoguePortraitScript.new()
-		dm.name = "DialogueManager"
-		layer.add_child(dm)
-	
+	var dm = DialoguePortraitScript.new()
+	dm.name = "DialogueManager"
+	layer.add_child(dm)
+
 	return dm
 
 func _open_shop():

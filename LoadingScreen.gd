@@ -25,16 +25,24 @@ func _ready():
 			var video_stream = load(video_path)
 			video_player.stream = video_stream
 
-			# 保持原始尺寸，不拉伸
-			video_player.expand = false
+			# 优化视频尺寸适配：保持原始纵横比
+			video_player.expand = false # 禁止拉伸填充
 
-			# 缩放到合适大小
-			video_player.scale = Vector2(0.35, 0.35)
+			# 缩放到合适大小（基于视口大小动态调整）
+			var viewport_size = get_viewport_rect().size
+			var target_width = viewport_size.x * 0.4  # 40% 视口宽度
+			video_player.scale = Vector2(target_width / 1920.0, target_width / 1920.0) # 基于1080p基准
 
-			# 定位到右下角
+			# 定位到右下角，留出更多边距（往上移）
+			var margin_x = 50
+			var margin_y = 120 # 增加底部边距，往上移
+			
+			# 如果expand=false，size可能无效，需要依赖rect_min_size或手动计算
+			# 这里假设VideoPlayer的大小是原始视频大小，scale会生效
+			# 重新计算位置，确保在右下角
 			video_player.position = Vector2(
-				get_viewport_rect().size.x - 600,
-				get_viewport_rect().size.y - 400
+				viewport_size.x - (1920.0 * video_player.scale.x) - margin_x,
+				viewport_size.y - (1080.0 * video_player.scale.y) - margin_y
 			)
 
 			video_player.play()
@@ -72,14 +80,17 @@ func _process(delta):
 
 	# 平滑插值：让显示进度快速追赶真实进度
 	if visual_progress < real_progress:
-		visual_progress = move_toward(visual_progress, real_progress, delta * 1.5) # 加快追赶速度
+		# 动态调整追赶速度，在后期更快追赶
+		var catchup_speed = lerp(1.0, 3.0, real_progress) # 从1.0到3.0
+		visual_progress = move_toward(visual_progress, real_progress, delta * catchup_speed)
 
 	# 假进度：如果卡住了，也稍微动一点点，安抚玩家
-	if visual_progress < 0.95:  # 只在95%之前才假进度
-		visual_progress += delta * 0.08 # 稍微加快假进度
+	# 改为在85%之前才添加假进度，给后期更真实的感觉
+	if visual_progress < 0.85:
+		visual_progress += delta * 0.06
 
-	# 限制范围
-	visual_progress = clamp(visual_progress, 0.0, 0.99) # 限制在99%，等待真实加载完成
+	# 限制范围 - 允许显示到99.5%，给最后阶段更多缓冲
+	visual_progress = clamp(visual_progress, 0.0, 0.995)
 
 	# 更新UI
 	if progress_bar:

@@ -166,27 +166,19 @@ func _ready():
 	# 添加阴影（下午斜阳的长影子）
 	var map_system = get_tree().get_first_node_in_group("map_system")
 	
-	# 毛玉特殊处理：使用简单影子防止反转问题
-	if enemy_type == GameConstants.EnemyType.KEDAMA:
-		_create_enemy_shadow()
-	elif map_system and map_system.has_method("create_shadow_for_entity"):
+	if map_system and map_system.has_method("add_dynamic_shadow"):
 		# 根据敌人缩放调整阴影大小
 		var enemy_scale = sprite.scale.x if sprite else 1.0
-		var shadow_size = Vector2(40 * enemy_scale, 10 * enemy_scale)
 		
-		# 根据敌人类型判断是否悬空
-		# 调整偏移：往里吃进一些 (负Y) - 用户要求更激进的偏移
-		var shadow_offset = Vector2(0, -15) # 激进吃进
-		var shadow_alpha = 0.5
-		
-		# 飞行单位
-		if enemy_type in [GameConstants.EnemyType.ELF, GameConstants.EnemyType.FAIRY, GameConstants.EnemyType.GHOST]:
-			shadow_offset = Vector2(0, 30 * enemy_scale) # 悬空还是在下方，但稍微拉近
-			shadow_alpha = 0.3 
-			
-		var shadow = map_system.create_shadow_for_entity(self, shadow_size, shadow_offset)
-		if shadow:
-			shadow.modulate.a = shadow_alpha
+		# [修复] 毛玉影子巨大问题：毛玉这种圆形且缩放极大的单位，强行使用椭圆影子而非反转影子
+		if enemy_type == GameConstants.EnemyType.KEDAMA:
+			var fixed_shadow_size = Vector2(40, 15) 
+			shadow_sprite = map_system.create_shadow_for_entity(self, fixed_shadow_size, Vector2(0, 0), 0.5, true)
+			if shadow_sprite:
+				shadow_sprite.scale = Vector2(1.0, 1.0) # 确保缩放比例正确
+		else:
+			# 其他怪使用统一的动态阴影接口
+			shadow_sprite = map_system.add_dynamic_shadow(self, enemy_scale)
 	else:
 		# 备用：直接创建阴影
 		_create_enemy_shadow()
@@ -257,6 +249,12 @@ func setup_as_boss(boss_config):
 			print("[Enemy] Loaded boss texture: ", texture_path)
 		else:
 			print("[Enemy] Warning: Boss texture not found: ", texture_path)
+			# [修复] 如果辉夜纹理不存在，尝试使用4C.png作为备用
+			if boss_config.boss_type == GameConstants.BossType.KAGUYA:
+				var fallback_path = "res://assets/characters/4C.png"
+				if ResourceLoader.exists(fallback_path):
+					sprite.texture = load(fallback_path)
+					print("[Enemy] Using fallback texture for Kaguya: ", fallback_path)
 
 	# 设置缩放（Boss更大）
 	# [修复] 智能缩放：根据纹理实际大小计算缩放，确保Boss高度约为120像素
@@ -270,8 +268,8 @@ func setup_as_boss(boss_config):
 		else:
 			sprite.scale = Vector2(0.1, 0.1) # 保底
 			
-		# 修正：将Sprite向上移动，使其底部对齐中心点（脚下）
-		sprite.position.y = - (tex_height * 0.5)
+		# 修正：将Sprite居中显示在角色脚下（不要上移）
+		sprite.position = Vector2.ZERO  # 居中显示，不偏移
 	else:
 		# 无纹理时的保底
 		sprite.scale = Vector2(0.1, 0.1)
@@ -289,12 +287,23 @@ func setup_as_boss(boss_config):
 	# 隐藏头顶小血条（使用顶部大血条）
 	if health_bar:
 		health_bar.visible = false
-	
+
+	# [修复] 强制确保Boss模型可见
+	visible = true  # 确保父节点可见
+	if sprite:
+		sprite.visible = true  # 确保精灵可见
+		sprite.modulate.a = 1.0  # 确保alpha为1.0
+		# [加强] 针对辉夜的额外可见性保障
+		if boss_config.boss_type == GameConstants.BossType.KAGUYA:
+			sprite.visible = true
+			sprite.modulate.a = 1.0
+			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)  # 强制白色不透明
+			print("[Enemy] Kaguya visibility enforced - Visible:", sprite.visible, " Alpha:", sprite.modulate.a)
+		print("[Enemy] Boss sprite visibility check - Visible:", sprite.visible, " Modulate:", sprite.modulate, " Texture:", sprite.texture != null)
+
 	# 强制确保可见性
 	modulate.a = 1.0
-	if sprite:
-		sprite.modulate.a = 1.0
-		
+
 	# [修复] 初始化 original_color，防止状态效果结束后颜色重置错误
 	original_color = boss_config.color
 
@@ -307,10 +316,13 @@ func _physics_process(delta):
 	
 	# [保底修复] 防止模型隐身
 	if enemy_type == GameConstants.EnemyType.BOSS:
+		visible = true  # 确保父节点可见
 		if modulate.a < 0.1:
 			modulate.a = 1.0
-		if sprite and sprite.modulate.a < 0.1:
-			sprite.modulate.a = 1.0
+		if sprite:
+			sprite.visible = true  # 确保精灵可见
+			if sprite.modulate.a < 0.1:
+				sprite.modulate.a = 1.0
 
 	# ==================== BOSS ATTACK LOGIC ====================
 	# 所有Boss都需要处理攻击逻辑
@@ -846,9 +858,14 @@ func _attack_impossible_bullet_hell():
 				global_position,
 				dir,
 				200.0 + wave * 20.0,  # 速度逐波递增
-				"rice_grain",  # 使用米粒弹
+				"big_bullet",  # 使用大号圆弹
 				color,
-				{"bounce_count": 1}
+				{
+					"bounce_count": 1, 
+					"scale_mult": 1.2, 
+					"radius": 15.0, # 增大碰撞半径
+					"on_hit_effect": "burn" # 增加一点特效
+				}
 			)
 
 		# 波次间隔
@@ -874,6 +891,7 @@ func _attack_time_stop():
 				"damage": 25.0,
 				"speed": 0.0,  # 初始静止
 				"lifetime": 8.0,
+				"radius": 12.0, # 确保星星大小合适
 				"is_enemy_bullet": true
 			})
 			bullet.global_position = global_position + offset
@@ -1280,8 +1298,17 @@ func _create_enemy_shadow():
 	shadow_sprite.skew = 0.5 # 稍微倾斜模拟透视
 	shadow_sprite.z_index = -1
 	shadow_sprite.centered = true
+	shadow_sprite.modulate = Color(1, 1, 1, 0.5)  # [修复] 确保阴影可见
 
-	add_child(shadow_sprite)
+	# [修复] 确保阴影正确添加到节点
+	if not has_node("Shadow"):
+		add_child(shadow_sprite)
+	else:
+		# 如果已有阴影，替换它
+		var old_shadow = get_node("Shadow")
+		if old_shadow != shadow_sprite:
+			old_shadow.queue_free()
+			add_child(shadow_sprite)
 
 # 设置敌人类型和属性（旧接口，保留兼容性）
 func setup(config_or_type, wave: int = 1):

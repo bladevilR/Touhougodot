@@ -29,6 +29,7 @@ var velocity: Vector2 = Vector2.ZERO  # Actual velocity vector
 # Visual properties
 var weapon_id: String = ""  # Weapon ID for texture selection
 var bullet_color: Color = Color.WHITE  # Color for tinting
+var scale_mult: float = 1.0  # Custom scale multiplier
 
 # ==================== PROJECTILE MECHANICS ====================
 # Penetration & Knockback
@@ -123,6 +124,8 @@ var lifetime_timer: float = 0.0
 var bounced_enemies: Array = []  # Track enemies already bounced to
 var is_initialized: bool = false
 var is_enemy_bullet: bool = false
+var should_rotate: bool = true # 是否随速度方向旋转
+var _initial_visual_scale: Vector2 = Vector2.ONE
 
 # ==================== INITIALIZATION ====================
 func _ready():
@@ -153,7 +156,7 @@ func _setup_bullet_visual():
 	# 根据weapon_id选择纹理
 	var texture_path = ""
 	var base_radius = 10.0
-	var should_rotate = false
+	should_rotate = false # 重置状态
 
 	match weapon_id:
 		"homing_amulet":
@@ -164,13 +167,17 @@ func _setup_bullet_visual():
 			texture_path = "res://assets/bullets/star.png"
 			base_radius = 240.0
 			should_rotate = true
+		"big_bullet":
+			texture_path = "res://assets/bullets/big_bullet.png"
+			base_radius = 200.0
+			should_rotate = false
 		"rice_grain":  # 米粒弹 - 敌人射击用
 			var tex = load("res://assets/bullets/rice_bullet.png")
 			if tex:
 				sprite.texture = tex
-				# 强制缩小：米粒弹应该很小
-				# 假设原图可能是64x64或更大，给一个0.15的缩放
-				sprite.scale = Vector2(0.15, 0.15) 
+				# 基础缩放 0.15 * scale_mult
+				var final_s = 0.15 * scale_mult
+				sprite.scale = Vector2(final_s, final_s) 
 				sprite.material = CanvasItemMaterial.new()
 				sprite.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 				sprite.modulate = bullet_color
@@ -284,13 +291,16 @@ func _setup_bullet_visual():
 		
 		# 特殊处理
 		if weapon_id == "yin_yang_orb":
-			sprite.scale = Vector2(0.4, 0.4) # 阴阳玉缩小，从0.8降到0.4
+			sprite.scale = Vector2(0.4 * scale_mult, 0.4 * scale_mult) # 阴阳玉缩小，从0.8降到0.4
 		else:
-			sprite.scale = Vector2(target_scale * 1.8, target_scale * 1.8) # 全局缩放从2.5降到1.8
+			var final_visual_scale = target_scale * 1.8 * scale_mult
+			sprite.scale = Vector2(final_visual_scale, final_visual_scale) # 全局缩放从2.5降到1.8
 
 		# 旋转朝向运动方向
 		if should_rotate and velocity.length() > 0:
 			sprite.rotation = velocity.angle() + PI/2  # +90度因为贴图默认朝上
+			
+	_initial_visual_scale = sprite.scale if sprite else Vector2.ONE
 
 func _create_circle_texture(radius: float, color: Color) -> ImageTexture:
 	"""创建圆形渐变纹理用于光环效果"""
@@ -511,9 +521,16 @@ func _physics_process(delta):
 	# ===== OFF-SCREEN CLEANUP =====
 	_check_out_of_bounds()
 
-	# ===== VISUAL ROTATION =====
-	if sprite and velocity.length() > 0:
-		sprite.rotation = velocity.angle()
+	# ===== VISUAL ROTATION & EFFECTS =====
+	if sprite:
+		if should_rotate and velocity.length() > 0:
+			sprite.rotation = velocity.angle()
+		
+		# 为 Boss 子弹添加闪烁/缩放脉动效果 (增强质感)
+		if is_enemy_bullet and (weapon_id == "big_bullet" or weapon_id == "star_dust"):
+			var pulse = 1.0 + sin(lifetime_timer * 12.0) * 0.15
+			sprite.modulate.a = clamp(0.6 + pulse * 0.4, 0.5, 1.0)
+			sprite.scale = _initial_visual_scale * pulse
 
 # ==================== ORBITAL MOVEMENT ====================
 func _update_orbital_movement(delta: float):
@@ -1087,6 +1104,9 @@ func setup(config: Dictionary):
 			bullet_color = color_value
 		elif color_value is String:
 			bullet_color = Color(color_value)
+			
+	if config.has("scale_mult"):
+		scale_mult = config.scale_mult
 
 	# Core properties
 	if config.has("damage"):
@@ -1102,6 +1122,10 @@ func setup(config: Dictionary):
 		velocity = config.velocity
 
 	# Projectile mechanics
+	if config.has("radius"):
+		if collision_shape and collision_shape.shape is CircleShape2D:
+			collision_shape.shape.radius = config.radius
+			
 	if config.has("penetration"):
 		penetration = config.penetration
 	if config.has("knockback"):

@@ -813,15 +813,16 @@ func _create_shadow_texture(width: int, height: int) -> ImageTexture:
 const SHADOW_DIRECTION = Vector2(5, 0) # 阴影根部微调
 const SHADOW_ANGLE = -0.5 # 配合FlipY，指向右下
 
-func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), offset: Vector2 = Vector2(0, 0), height_factor: float = 1.0) -> Sprite2D:
+func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), offset: Vector2 = Vector2(0, 0), height_factor: float = 1.0, force_ellipse: bool = false) -> Sprite2D:
 	var source_sprite: Sprite2D = null
-	if parent is Sprite2D: source_sprite = parent
-	else:
-		for child in parent.get_children():
-			if child is Sprite2D: source_sprite = child; break
+	if not force_ellipse:
+		if parent is Sprite2D: source_sprite = parent
+		else:
+			for child in parent.get_children():
+				if child is Sprite2D: source_sprite = child; break
 	
 	var shadow: Node2D = null
-	if source_sprite and source_sprite.texture:
+	if not force_ellipse and source_sprite and source_sprite.texture:
 		shadow = Sprite2D.new()
 		shadow.texture = source_sprite.texture
 		shadow.hframes = source_sprite.hframes
@@ -895,6 +896,13 @@ func ensure_entity_shadow(entity: Node2D, scale_mult: float = 1.0):
 		size = Vector2(60, 25) * scale_mult
 	
 	create_shadow_for_entity(entity, size, Vector2(0, -15), 0.5)
+
+func add_dynamic_shadow(node: Node2D, scale_mult: float = 1.0) -> Sprite2D:
+	"""为动态角色（玩家/敌人）添加影子"""
+	if not is_instance_valid(node): return null
+	var size = Vector2(50, 25) * scale_mult
+	# 动态角色通常有碰撞体，影子应该在脚下中心
+	return create_shadow_for_entity(node, size, Vector2(0, 5), 0.5)
 
 # ==================== 其他接口 ====================
 func setup_camera_limits():

@@ -122,7 +122,7 @@ static func initialize():
 		Color("#ffffff"),  # 白色
 		12.0,    # 半径 [修复] 稍微变大
 		5.0,     # 质量 轻
-		0.04     # [修复] 缩放变大 (原0.025)
+		0.035    # [修复] 缩放微调 (原0.04, 现调整为0.035)
 	)
 	kedama.can_jump = true
 	kedama.jump_interval = 0.8
