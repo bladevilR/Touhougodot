@@ -301,7 +301,7 @@ func _setup_bullet_visual():
 			return
 			
 		"phoenix_claws":
-			# 火鸟拳：扇形横扫效果，使用拉长的矩形
+			# 重踢：扇形横扫效果，使用拉长的矩形
 			var sweep_texture = _create_sweep_texture(60.0, 20.0, Color(1.0, 0.3, 0.0, 0.8))  # 橙红色拉长矩形
 			sprite.texture = sweep_texture
 			sprite.scale = Vector2(1.0, 1.0)

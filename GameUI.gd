@@ -53,6 +53,7 @@ const DPS_WINDOW: float = 5.0  # 统计最近5秒的伤害（魔兽风格）
 const MAX_WEAPON_DISPLAY: int = 6  # 最多显示6个武器
 const DPS_UPDATE_INTERVAL: float = 0.5  # 每0.5秒更新一次DPS显示（平滑更新）
 var dps_update_timer: float = 0.0
+var is_restarting: bool = false # 防止重复触发重启
 
 # 元素颜色
 const ELEMENT_COLORS = {
@@ -204,10 +205,18 @@ func on_level_up(new_level):
 	# TODO: 显示升级选择窗口
 
 func on_game_over():
+	if is_restarting: return
+	is_restarting = true
+	
 	print("UI: Game Over received")
 
+	# 获取 SceneTree 引用，防止 await 期间节点被移除导致 get_tree() 失败
+	var tree = get_tree()
+	if not tree:
+		return
+
 	# 先暂停游戏处理
-	get_tree().paused = false  # 确保不暂停，以便重启
+	tree.paused = false  # 确保不暂停，以便重启
 
 	# Create Game Over UI overlay dynamically
 	var overlay = ColorRect.new()
@@ -215,10 +224,23 @@ func on_game_over():
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(overlay)
 
+	# 添加妹红立绘（失败时的表情）
+	var mokou_portrait = TextureRect.new()
+	mokou_portrait.name = "MokouPortrait"
+	var portrait_path = "res://assets/characters/1.png"
+	if ResourceLoader.exists(portrait_path):
+		mokou_portrait.texture = load(portrait_path)
+		mokou_portrait.position = Vector2(100, 150)
+		mokou_portrait.size = Vector2(400, 500)
+		mokou_portrait.expand_mode = TextureRect.EXPAND_FIT_HEIGHT
+		mokou_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		mokou_portrait.modulate = Color(0.8, 0.8, 0.9, 1.0)  # 略微暗淡
+		overlay.add_child(mokou_portrait)
+
 	# Game Over文字容器（右侧）
 	var text_container = Control.new()
-	text_container.set_anchors_preset(Control.PRESET_CENTER) # 居中
-	text_container.size = Vector2(600, 300) # 更小
+	text_container.position = Vector2(550, 200)
+	text_container.size = Vector2(600, 400)
 	overlay.add_child(text_container)
 
 	var label = Label.new()
@@ -228,23 +250,39 @@ func on_game_over():
 	label.position = Vector2(0, 0)
 	text_container.add_child(label)
 
+	# 添加台词
+	var dialogue_label = Label.new()
+	dialogue_label.text = "不死鸟也有倒下的时候呢..."
+	dialogue_label.add_theme_font_size_override("font_size", 24)
+	dialogue_label.add_theme_color_override("font_color", Color(0.9, 0.9, 1.0))
+	dialogue_label.position = Vector2(0, 100)
+	dialogue_label.size = Vector2(600, 100)
+	dialogue_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text_container.add_child(dialogue_label)
+
 	# 添加重启提示
 	var restart_label = Label.new()
 	restart_label.text = "正在重启游戏..."
 	restart_label.add_theme_font_size_override("font_size", 28)
 	restart_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.9))
-	restart_label.position = Vector2(0, 100)
+	restart_label.position = Vector2(0, 200)
 	text_container.add_child(restart_label)
 
 	# 优化的重启逻辑：延迟更短，避免卡顿
-	await get_tree().create_timer(2.0).timeout
+	await tree.create_timer(2.0).timeout
 
 	# 先清理敌人和子弹
 	_cleanup_game_objects()
 
 	# 使用更快的重启方式
-	await get_tree().create_timer(0.1).timeout
-	get_tree().reload_current_scene()
+	await tree.create_timer(0.1).timeout
+	
+	if is_instance_valid(tree) and tree.current_scene:
+		tree.reload_current_scene()
+	else:
+		# 如果当前场景已经没了（可能正在切换中），尝试强行加载主菜单作为保底
+		if is_instance_valid(tree):
+			tree.change_scene_to_file("res://MainMenu.tscn")
 
 func _cleanup_game_objects():
 	"""清理游戏对象以避免重启卡顿"""
@@ -740,7 +778,8 @@ func _get_weapon_display_name(weapon_id: String) -> String:
 		"ofuda": "符咒",
 		"star_dust": "星尘",
 		"phoenix_wings": "凤翼光环",
-		"phoenix_claws": "火鸟拳",
+		"phoenix_claws": "重踢",
+		"mokou_kick_heavy": "重踢",
 		"knives": "飞刀",
 		"yin_yang_orb": "阴阳玉",
 		"persuasion_needle": "说得针",

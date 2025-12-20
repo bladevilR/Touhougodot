@@ -139,10 +139,10 @@ static func initialize():
 	# phoenix_wings.element_type = GameConstants.ElementType.FIRE
 	# WEAPONS["phoenix_wings"] = phoenix_wings
 
-	# 3.5 火鸟重拳 (妹红重攻击 - 右键)
+	# 3.5 重踢 (妹红重攻击 - 右键)
 	var mokou_kick_heavy = WeaponConfig.new(
 		"mokou_kick_heavy",
-		"火鸟重拳",
+		"重踢",
 		"右键：向前方踢出强力火焰，击飞敌人。",
 		20, 0.8, 80.0, GameConstants.WeaponType.MELEE
 	)
@@ -157,7 +157,7 @@ static func initialize():
 	mokou_kick_heavy.explosion_radius = 150.0
 	WEAPONS["mokou_kick_heavy"] = mokou_kick_heavy
 
-	# 3.6 火鸟轻拳 (妹红普攻 - 左键)
+	# 3.6 火鸟连踢 (妹红普攻 - 左键)
 	var mokou_kick_light = WeaponConfig.new(
 		"mokou_kick_light",
 		"火鸟连踢",

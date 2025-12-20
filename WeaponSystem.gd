@@ -563,7 +563,7 @@ func _fire_projectile_in_direction(weapon_id: String, config: WeaponData.WeaponC
 	if has_qualitative:
 		base_spread = weapon_data.get("scatter_angle", base_spread)
 
-	# 特殊处理：火鸟拳横向排列（不是扇形）
+	# 特殊处理：火鸟重踢横向排列（不是扇形）
 	var is_horizontal_sweep = (weapon_id == "phoenix_claws")
 
 	for i in range(projectile_count):
@@ -577,7 +577,7 @@ func _fire_projectile_in_direction(weapon_id: String, config: WeaponData.WeaponC
 			# 全向发射（8方向）
 			angle_offset = (i * TAU / projectile_count)
 		elif is_horizontal_sweep:
-			# 横向一字排列（火鸟拳）
+			# 横向一字排列（火鸟重踢）
 			# 计算垂直于射击方向的横向偏移
 			var perpendicular = Vector2(-direction.y, direction.x)  # 逆时针旋转90度
 			var spacing = 35.0  # 每个子弹之间的间距
@@ -1044,13 +1044,13 @@ func fire_charged_flame_ring(duration: float, override_direction: Vector2 = Vect
 		mat.gravity = Vector3(0, 0, 0)
 		mat.scale_min = 0.5
 		mat.scale_max = 0.8 # 更大的粒子
-		mat.color_ramp = load("res://assets/fire_gradient.tres") # 尝试加载，如果没有会用默认逻辑
-		if not mat.color_ramp:
-			var grad = Gradient.new()
-			grad.colors = [Color(1, 0.8, 0.2), Color(1, 0.3, 0), Color(1, 0, 0, 0)]
-			var tex = GradientTexture1D.new()
-			tex.gradient = grad
-			mat.color_ramp = tex
+		
+		# [修复] 直接使用代码生成渐变，避免加载不存在的 .tres 文件导致报错
+		var grad = Gradient.new()
+		grad.colors = [Color(1, 0.8, 0.2), Color(1, 0.3, 0), Color(1, 0, 0, 0)]
+		var tex = GradientTexture1D.new()
+		tex.gradient = grad
+		mat.color_ramp = tex
 			
 		burst.process_material = mat
 		

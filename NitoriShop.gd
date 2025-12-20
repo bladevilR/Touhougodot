@@ -191,6 +191,17 @@ func _init_shop_items():
 		Color("#9b59b6")
 	)
 
+	# ==================== 测试道具 ====================
+	ALL_ITEMS["test_pass"] = ShopItem.new(
+		"test_pass",
+		"测试通行证",
+		"人物防御力增加999 (必然出现)",
+		1,
+		"passive",
+		{"type": "defense", "value": 999.0},
+		Color("#ffffff")
+	)
+
 func _on_enemy_killed(xp_amount: int, pos: Vector2):
 	"""敌人死亡时掉落金币"""
 	# 基础金币 = 经验值/5，最少1个
@@ -249,9 +260,14 @@ func close_shop():
 	print("河童商店关门了")
 
 func _generate_stock() -> Array:
-	"""生成商店库存（随机选择5个商品）"""
+	"""生成商店库存（随机选择5个商品 + 必然出现的测试通行证）"""
 	var stock = []
 	var item_ids = ALL_ITEMS.keys()
+	
+	# 移除测试通行证，稍后单独添加
+	if item_ids.has("test_pass"):
+		item_ids.erase("test_pass")
+		
 	item_ids.shuffle()
 
 	# 确保至少有一个回复道具
@@ -265,6 +281,10 @@ func _generate_stock() -> Array:
 	# 如果没有回复道具，替换最后一个
 	if not has_heal and stock.size() > 0:
 		stock[stock.size() - 1] = ALL_ITEMS["heal_small"]
+
+	# 必然添加测试通行证到末尾
+	if ALL_ITEMS.has("test_pass"):
+		stock.append(ALL_ITEMS["test_pass"])
 
 	return stock
 
@@ -347,6 +367,8 @@ func _apply_passive_effect(item: ShopItem, player: Node):
 				_start_regen_effect(player, effect.amount, effect.interval)
 			"armor":
 				passives["armor"] = passives.get("armor", 0.0) + effect.reduction
+			"defense":
+				passives["defense"] = passives.get("defense", 0.0) + effect.value
 			"crit_chance":
 				passives["crit_chance"] = passives.get("crit_chance", 0.0) + effect.bonus
 			"coin_bonus":

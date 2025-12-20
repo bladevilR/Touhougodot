@@ -137,6 +137,22 @@ func _ready():
 	setup_camera_limits()
 	spawn_nitori_npc() # 恢复河童
 	print("DEBUG: MapSystem _ready finished")
+	
+	# 延迟打印场景树结构
+	await get_tree().create_timer(1.0).timeout
+	print("\n=== SCENE TREE DUMP ===")
+	var root = get_tree().root
+	_print_tree_recursive(root)
+	print("=======================\\n")
+
+func _print_tree_recursive(node: Node, indent: String = ""):
+	var info = indent + node.name + " (" + node.get_class() + ")"
+	if node is CanvasModulate:
+		info += " [COLOR: " + str(node.color) + "]"
+	print(info)
+	
+	for child in node.get_children():
+		_print_tree_recursive(child, indent + "  ")
 
 func _register_critical_zones():
 	"""注册所有需要避让的关键区域"""

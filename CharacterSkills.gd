@@ -278,9 +278,9 @@ func _activate_mokou_skill():
 	fire_kick_start_pos = player.global_position
 	fire_trail_timer = 0.0
 
-	# 设置无敌
+	# 设置无敌 (增加 0.2s 落地保护)
 	if player.has_method("set_invulnerable"):
-		player.set_invulnerable(fire_kick_duration)
+		player.set_invulnerable(fire_kick_duration + 0.2)
 
 	print("不死鸟！化身火鸟突进！")
 	skill_activated.emit("不死鸟")
@@ -364,13 +364,17 @@ func spawn_fire_trail(pos: Vector2):
 	get_tree().current_scene.add_child(fire_area)
 	fire_walls.append(fire_area)
 
-	# 按策划稿：火墙持续8秒
-	var timer = get_tree().create_timer(config.fire_wall_duration)
-	timer.timeout.connect(func():
-		if is_instance_valid(fire_area):
-			fire_walls.erase(fire_area)
-			fire_area.queue_free()
-	)
+	# [修复] 移除不稳定的 Timer+Lambda 清理逻辑
+	# 创建一个子 Timer 节点跟随 fire_area 的生命周期
+	var wall_timer = Timer.new()
+	wall_timer.wait_time = config.fire_wall_duration
+	wall_timer.one_shot = true
+	wall_timer.autostart = true
+	fire_area.add_child(wall_timer)
+	
+	# 连接信号，并在退出场景树时自动从数组移除
+	fire_area.tree_exiting.connect(func(): if fire_area in fire_walls: fire_walls.erase(fire_area))
+	wall_timer.timeout.connect(fire_area.queue_free)
 
 	# 使用Area2D信号进行持续伤害
 	_setup_fire_trail_damage(fire_area, config.fire_wall_damage)
@@ -464,10 +468,8 @@ func _spawn_flame_trail_particles(pos: Vector2):
 	# 添加到场景
 	get_tree().current_scene.add_child(trail_particles)
 
-	# 粒子生命周期结束后自动删除
-	await get_tree().create_timer(1.2).timeout
-	if is_instance_valid(trail_particles):
-		trail_particles.queue_free()
+	# [修复] 粒子播放完后清理，使用 finished 信号更稳定
+	trail_particles.finished.connect(trail_particles.queue_free)
 
 func damage_enemies_in_kick_path():
 	"""对飞踢路径上的敌人造成伤害和击飞"""

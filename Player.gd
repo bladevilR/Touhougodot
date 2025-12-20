@@ -361,6 +361,8 @@ func _physics_process(delta):
 	if invulnerable_timer > 0:
 		invulnerable_timer -= delta
 		is_invulnerable = invulnerable_timer > 0
+	else:
+		is_invulnerable = false
 
 	# 更新接触伤害冷却
 	if contact_damage_cooldown > 0:
@@ -542,10 +544,30 @@ func take_damage(amount: float, should_shake: bool = true):
 	if is_invulnerable:
 		return
 
-	if health_comp:
-		health_comp.damage(amount)
+	# [防御计算]
+	var final_damage = amount
+	if has_meta("shop_passives"):
+		var passives = get_meta("shop_passives")
+		
+		# 1. 减法防御力 (测试通行证)
+		var defense = passives.get("defense", 0.0)
+		final_damage -= defense
+		
+		# 2. 百分比护甲 (河童甲壳)
+		var armor_reduction = passives.get("armor", 0.0)
+		final_damage *= (1.0 - armor_reduction)
+		
+	# 确保至少造成 1 点伤害 (除非是测试通行证这种超强防御，我们甚至可以允许 0 伤害)
+	# 为了爽快感，如果防御力 > 900，我们允许 0 伤害
+	if final_damage < 0:
+		final_damage = 0
+	elif final_damage < 1.0 and amount > 0:
+		final_damage = 1.0
 
-		if should_shake:
+	if health_comp:
+		health_comp.damage(final_damage)
+
+		if should_shake and final_damage > 0:
 			# 自机受击：高频、小幅度、极短 + 泛红
 			SignalBus.screen_shake.emit(0.15, 5.0) 
 			SignalBus.screen_flash.emit(Color(1.0, 0.0, 0.0, 0.3), 0.2)
@@ -692,9 +714,6 @@ func start_dash():
 			dash_direction = Vector2.LEFT
 		else:
 			dash_direction = Vector2.RIGHT
-	if sprite:
-		sprite.modulate.a = 0.5
-
 	# Optional: Invulnerability during dash
 	set_invulnerable(DASH_DURATION)
 
@@ -703,8 +722,6 @@ func _update_dash_timers(delta: float):
 		dash_timer -= delta
 		if dash_timer <= 0:
 			is_dashing = false
-			if sprite:
-				sprite.modulate.a = 1.0 # Restore opacity
 			velocity = Vector2.ZERO # Stop momentum after dash
 
 			# 飞踢落地视觉效果（妹红专属）
