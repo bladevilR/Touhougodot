@@ -8,11 +8,10 @@ signal door_entered(from_direction: int)  # 传递进入方向
 
 var player_in_range: bool = false
 var is_active: bool = false  # 初始关闭状态
-var prompt_label: Label = null
 
 # 视觉效果
-var portal_sprite: Sprite2D = null
-var glow_timer: float = 0.0
+var fog_seal_rect: ColorRect = null # 雾门封印
+var fog_tween: Tween = null # 雾门呼吸动画Tween
 
 # 竹林封印效果
 var seal_sprites: Array[Sprite2D] = []  # 封印竹子精灵
@@ -40,129 +39,66 @@ func _ready():
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 
-	# 创建传送门视觉
-	_create_portal_visual()
-
 	# 创建竹林封印（初始状态：封闭）
 	_create_bamboo_seal()
+	_create_fog_seal() # 添加雾门效果
 
-	# 创建提示标签
-	_create_prompt_label()
-
-	# 添加碰撞形状
-	_create_collision_shape()
+	# 添加碰撞形状 (Deferred to avoid physics state errors)
+	call_deferred("_create_collision_shape")
 
 func set_door_direction(dir: DoorDirection):
 	"""设置门的方向"""
 	direction = dir
 
-func _create_portal_visual():
-	"""创建传送门视觉效果"""
-	portal_sprite = Sprite2D.new()
-	portal_sprite.name = "PortalSprite"
-
-	# 创建传送门纹理（发光圆环）
-	var texture = _create_portal_texture(60)
-	portal_sprite.texture = texture
-	portal_sprite.z_index = 10
-
-	# 加法混合发光效果
-	var material = CanvasItemMaterial.new()
-	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	portal_sprite.material = material
-
-	add_child(portal_sprite)
-
-func _create_portal_texture(radius: int) -> ImageTexture:
-	"""创建传送门纹理 - 蓝紫色发光圆环"""
-	var size = radius * 2
-	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
-	var center = Vector2(radius, radius)
-
-	for x in range(size):
-		for y in range(size):
-			var pos = Vector2(x, y)
-			var dist = pos.distance_to(center)
-			var normalized_dist = dist / float(radius)
-
-			var alpha = 0.0
-			var r = 0.3
-			var g = 0.5
-			var b = 1.0
-
-			# 外环（主要发光区域）
-			if normalized_dist > 0.6 and normalized_dist < 0.95:
-				var ring_center = 0.775
-				var ring_width = 0.175
-				var ring_dist = abs(normalized_dist - ring_center) / ring_width
-				alpha = (1.0 - ring_dist * ring_dist) * 0.9
-
-				# 颜色渐变
-				var color_t = (normalized_dist - 0.6) / 0.35
-				r = lerp(0.4, 0.6, color_t)
-				g = lerp(0.3, 0.4, color_t)
-				b = lerp(1.0, 0.9, color_t)
-
-			# 内部微光
-			elif normalized_dist < 0.6:
-				alpha = 0.1 + (0.6 - normalized_dist) * 0.15
-				r = 0.5
-				g = 0.6
-				b = 1.0
-
-			# 外部柔和边缘
-			elif normalized_dist < 1.0:
-				var edge_t = (normalized_dist - 0.95) / 0.05
-				alpha = 0.3 * (1.0 - edge_t)
-
-			if alpha > 0:
-				image.set_pixel(x, y, Color(r, g, b, alpha))
-			else:
-				image.set_pixel(x, y, Color(0, 0, 0, 0))
-
-	return ImageTexture.create_from_image(image)
-
-func _create_prompt_label():
-	"""创建交互提示"""
-	prompt_label = Label.new()
-	prompt_label.text = "按 E 进入下一个房间"
-	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt_label.position = Vector2(-80, -100)
-	prompt_label.add_theme_font_size_override("font_size", 16)
-	prompt_label.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0))
-	prompt_label.add_theme_color_override("font_shadow_color", Color.BLACK)
-	prompt_label.add_theme_constant_override("shadow_offset_x", 1)
-	prompt_label.add_theme_constant_override("shadow_offset_y", 1)
-	prompt_label.visible = false
-	add_child(prompt_label)
+func _create_fog_seal():
+	"""创建雾门封印视觉效果"""
+	fog_seal_rect = ColorRect.new()
+	fog_seal_rect.name = "FogSeal"
+	
+	# 根据方向设置雾门大小和位置
+	var size = Vector2(120, 120)
+	var offset = Vector2(-60, -60)
+	
+	match direction:
+		DoorDirection.NORTH, DoorDirection.SOUTH:
+			size = Vector2(160, 60)
+			offset = Vector2(-80, -30)
+		DoorDirection.EAST, DoorDirection.WEST:
+			size = Vector2(60, 160)
+			offset = Vector2(-30, -80)
+			
+	fog_seal_rect.size = size
+	fog_seal_rect.position = offset
+	fog_seal_rect.color = Color(0.8, 0.8, 0.9, 0.4) # 蓝白色半透明雾
+	fog_seal_rect.z_index = 8 # 在竹子后面，地面上面
+	
+	add_child(fog_seal_rect)
+	
+	# 简单的呼吸动画
+	if fog_tween: fog_tween.kill()
+	fog_tween = create_tween().set_loops()
+	fog_tween.tween_property(fog_seal_rect, "modulate:a", 0.6, 1.5).set_trans(Tween.TRANS_SINE)
+	fog_tween.tween_property(fog_seal_rect, "modulate:a", 1.0, 1.5).set_trans(Tween.TRANS_SINE)
 
 func _create_collision_shape():
 	"""创建碰撞区域"""
 	var collision = CollisionShape2D.new()
-	var shape = CircleShape2D.new()
-	shape.radius = 50.0
+	var shape = RectangleShape2D.new()
+	
+	# 根据方向调整碰撞箱形状，覆盖整个通道宽度
+	match direction:
+		DoorDirection.NORTH, DoorDirection.SOUTH:
+			shape.size = Vector2(400, 100) # 横向宽，纵向窄
+		DoorDirection.EAST, DoorDirection.WEST:
+			shape.size = Vector2(100, 400) # 纵向高，横向窄
+			
 	collision.shape = shape
 	add_child(collision)
 
 func _process(delta):
-	# 传送门动画效果（只在激活时显示）
-	if is_active:
-		glow_timer += delta
-		if portal_sprite:
-			portal_sprite.visible = true
-			# 缩放脉动
-			var pulse = 1.0 + sin(glow_timer * 3.0) * 0.05
-			portal_sprite.scale = Vector2(pulse, pulse)
-
-			# 旋转
-			portal_sprite.rotation += delta * 0.5
-
-		# 检测E键交互
-		if player_in_range and Input.is_action_just_pressed("interact"):
-			_enter_door()
-	else:
-		if portal_sprite:
-			portal_sprite.visible = false
+	# 自动检测进入（如果玩家已经在范围内且门刚打开）
+	if is_active and player_in_range:
+		_enter_door()
 
 func _create_bamboo_seal():
 	"""创建竹林封印视觉效果"""
@@ -172,9 +108,9 @@ func _create_bamboo_seal():
 
 	# 加载竹子纹理
 	var bamboo_textures = [
-		"res://assets/SUCAI/images_resized/bamboo/bamboo_single_straight_1.png",
-		"res://assets/SUCAI/images_resized/bamboo/bamboo_single_straight_2.png",
-		"res://assets/SUCAI/images_resized/bamboo/bamboo_cluster_medium_1.png",
+		"res://bamboo/bamboo_single_straight_1.png",
+		"res://bamboo/bamboo_single_straight_2.png",
+		"res://bamboo/bamboo_cluster_medium_1.png",
 	]
 
 	for i in range(bamboo_count):
@@ -264,58 +200,34 @@ func open_door():
 	# 停止封印粒子
 	if seal_particles:
 		seal_particles.emitting = false
+		
+	# 淡出雾门
+	if fog_seal_rect:
+		if fog_tween: fog_tween.kill() # 停止呼吸动画
+		var fade_tween = create_tween()
+		fade_tween.tween_property(fog_seal_rect, "modulate:a", 0.0, 0.8)
+		fade_tween.tween_callback(fog_seal_rect.queue_free)
+		fog_seal_rect = null
 
 	# 延迟激活门
 	await get_tree().create_timer(0.5).timeout
 	is_active = true
 	is_opening = false
 
-	# 显示传送门
-	if portal_sprite:
-		portal_sprite.modulate.a = 0.0
-		portal_sprite.visible = true
-		var tween = create_tween()
-		tween.tween_property(portal_sprite, "modulate:a", 1.0, 0.5)
-
 func close_door():
 	"""关闭门（重新封印）"""
 	# 测试模式：禁用门关闭，保持所有门打开
 	return
 
-	if not is_active or is_closing:
-		return
-
-	is_closing = true
-	is_active = false
-	print("Closing door at direction: ", direction)
-
-	# 隐藏传送门
-	if portal_sprite:
-		var tween = create_tween()
-		tween.tween_property(portal_sprite, "modulate:a", 0.0, 0.3)
-		await tween.finished
-		portal_sprite.visible = false
-
-	# 重新生成封印竹子
-	for sprite in seal_sprites:
-		if is_instance_valid(sprite):
-			sprite.queue_free()
-	seal_sprites.clear()
-
-	_create_bamboo_seal()
-	is_closing = false
-
 func _on_body_entered(body):
 	if body.is_in_group("player"):
 		player_in_range = true
-		if prompt_label:
-			prompt_label.visible = true
+		if is_active:
+			_enter_door()
 
 func _on_body_exited(body):
 	if body.is_in_group("player"):
 		player_in_range = false
-		if prompt_label:
-			prompt_label.visible = false
 
 func _enter_door():
 	"""进入传送门"""
@@ -323,12 +235,6 @@ func _enter_door():
 		return
 
 	is_active = false
-
-	# 播放进入效果
-	if portal_sprite:
-		var tween = create_tween()
-		tween.tween_property(portal_sprite, "scale", Vector2(2.0, 2.0), 0.3)
-		tween.parallel().tween_property(portal_sprite, "modulate:a", 0.0, 0.3)
 
 	# 发送信号，传递进入方向
 	door_entered.emit(direction)

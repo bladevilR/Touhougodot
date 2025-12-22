@@ -66,6 +66,7 @@ var immune_to_knockback: bool = false
 var current_velocity: Vector2 = Vector2.ZERO
 var target_velocity: Vector2 = Vector2.ZERO
 var base_speed: float = 200.0
+var last_move_direction: Vector2 = Vector2.RIGHT # 记录最后移动方向
 
 # Collision avoidance
 const ENEMY_AVOIDANCE_RADIUS: float = 60.0
@@ -433,6 +434,9 @@ func _physics_process(delta):
 
 	# 获取输入方向
 	var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	
+	if input_dir.length() > 0.1:
+		last_move_direction = input_dir.normalized()
 
 	# ==================== FRICTION-BASED MOVEMENT ====================
 	# Calculate target velocity based on input

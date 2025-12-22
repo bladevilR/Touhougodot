@@ -37,6 +37,13 @@ var wave_label: Label = null
 var wave_progress_bar: ProgressBar = null
 var zone_name_label: Label = null # 区域名称
 
+# 任务目标UI
+var mission_panel: Control = null
+var mission_label: Label = null
+var timer_label: Label = null
+var mission_complete: bool = false
+var mission_failed: bool = false
+
 # 房间地图UI
 var room_map_panel: Control = null
 var room_map_canvas: Control = null  # 用于绘制房间地图的画布
@@ -151,6 +158,7 @@ func _ready():
 	_create_damage_numbers_container()
 	_create_dps_ui()
 	_create_room_ui()
+	_create_mission_ui() # 创建任务UI
 	_create_room_map_ui()
 
 	# 初始化暂停菜单
@@ -180,6 +188,80 @@ func _process(delta):
 	_update_skill_cooldown()
 	# 更新DPS显示
 	_update_dps_display(delta)
+	# 更新任务计时器
+	_update_mission_timer()
+
+func _create_mission_ui():
+	"""创建任务目标UI"""
+	mission_panel = Control.new()
+	mission_panel.name = "MissionPanel"
+	mission_panel.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	mission_panel.position = Vector2(20, 350) # 屏幕左侧，技能冷却下方
+	mission_panel.size = Vector2(200, 80)
+	add_child(mission_panel)
+	
+	# 背景
+	var bg = ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.5)
+	bg.size = Vector2(200, 80)
+	mission_panel.add_child(bg)
+	
+	# 任务标题
+	mission_label = Label.new()
+	mission_label.text = "目标：找到辉夜"
+	mission_label.position = Vector2(10, 10)
+	mission_label.add_theme_font_size_override("font_size", 16)
+	mission_label.add_theme_color_override("font_color", Color("#eeeeee"))
+	mission_panel.add_child(mission_label)
+	
+	# 倒计时
+	timer_label = Label.new()
+	timer_label.text = "05:00"
+	timer_label.position = Vector2(10, 35)
+	timer_label.add_theme_font_size_override("font_size", 28)
+	timer_label.add_theme_color_override("font_color", Color("#ffffff"))
+	mission_panel.add_child(timer_label)
+
+func _update_mission_timer():
+	"""更新任务倒计时"""
+	if mission_complete or mission_failed: return
+	
+	var room_manager = get_tree().get_first_node_in_group("room_manager")
+	if not room_manager: return
+	
+	var current_time = Time.get_ticks_msec() / 1000.0
+	var elapsed = current_time - room_manager.game_start_time
+	var remaining = 300.0 - elapsed # 5分钟
+	
+	if remaining <= 0:
+		mission_failed = true
+		remaining = 0
+		if mission_label: mission_label.text = "任务失败：辉夜已离开"
+		if timer_label: 
+			timer_label.text = "00:00"
+			timer_label.add_theme_color_override("font_color", Color.RED)
+		return
+	
+	# 检查是否进入Boss房
+	# RoomType.BOSS = 2
+	if room_manager.current_room_type == 2:
+		mission_complete = true
+		if mission_label: mission_label.text = "任务完成！"
+		if timer_label: 
+			timer_label.text = "找到辉夜"
+			timer_label.add_theme_color_override("font_color", Color.GREEN)
+		return
+		
+	# 更新倒计时显示
+	var mins = int(remaining) / 60
+	var secs = int(remaining) % 60
+	if timer_label:
+		timer_label.text = "%02d:%02d" % [mins, secs]
+		# 剩余1分钟变红
+		if remaining < 60:
+			timer_label.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+		else:
+			timer_label.add_theme_color_override("font_color", Color.WHITE)
 
 func update_hp(current, max_val):
 	if hp_bar:

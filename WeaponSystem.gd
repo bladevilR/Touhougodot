@@ -519,17 +519,18 @@ func fire_weapon(weapon_id: String):
 			print("未实现的武器类型: ", config.weapon_type)
 
 func _fire_projectile(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
-	# 使用瞄准系统的方向
-	var direction: Vector2
-	if aim_system:
+	# 确定攻击方向：优先使用角色移动方向（键盘控制），其次是瞄准系统/鼠标
+	var direction: Vector2 = Vector2.RIGHT
+	
+	if player and "last_move_direction" in player:
+		direction = player.last_move_direction
+	elif aim_system:
 		direction = aim_system.get_aim_direction()
 	else:
 		# 备用：瞄准最近的敌人
 		var target = get_nearest_enemy()
 		if target:
 			direction = (target.global_position - player.global_position).normalized()
-		else:
-			direction = Vector2.RIGHT
 
 	_fire_projectile_in_direction(weapon_id, config, stats, weapon_level, direction)
 
@@ -1215,9 +1216,13 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 	# 伤害计算
 	var final_damage = config.base_damage * stats.might * 8.0 
 
-	# 获取攻击方向
-	var mouse_pos = get_global_mouse_position()
-	var direction = (mouse_pos - player.global_position).normalized()
+	# 获取攻击方向：使用角色朝向
+	var direction = Vector2.RIGHT
+	if player and "last_move_direction" in player:
+		direction = player.last_move_direction
+	else:
+		var mouse_pos = get_global_mouse_position()
+		direction = (mouse_pos - player.global_position).normalized()
 
 	# 玩家冲刺位移
 	if player and player.has_method("apply_knockback"):

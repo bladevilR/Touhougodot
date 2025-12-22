@@ -72,135 +72,178 @@ func _on_game_started():
 	"""游戏开始时记录时间"""
 	game_start_time = Time.get_ticks_msec() / 1000.0
 
-func _generate_room_map():
-	"""生成房间地图网络结构"""
-	room_map.clear()
-
-	var room_id = 0
-
-	# 深度0：起始房间
-	var start_room = RoomNode.new()
-	start_room.id = room_id
-	start_room.type = RoomType.NORMAL
-	start_room.position = Vector2(0, 0) # 原点
-	start_room.depth = 0
-	start_room.is_cleared = false # 起始房间也要战斗！
-	start_room.is_visited = false  # 确保未访问
-	room_map.append(start_room)
-	room_id += 1
-
-	# 深度1：3个房间 (西、北、东)
-	var depth1_offsets = [Vector2(-400, 0), Vector2(0, -400), Vector2(400, 0)]
-	var depth1_rooms = []
-	for i in range(3):
-		var room = RoomNode.new()
-		room.id = room_id
-		# 全部设为普通房间，NPC出现完全由 entered_room_count 控制
-		room.type = RoomType.NORMAL
-		room.position = start_room.position + depth1_offsets[i]
-		room.depth = 1
-		room.is_cleared = false
-		start_room.connected_rooms.append(room.id)
-		room.connected_rooms.append(start_room.id)
-		depth1_rooms.append(room)
-		room_map.append(room)
-		room_id += 1
-
-	# 深度2：4个房间 (在深度1的基础上延伸)
-	var depth2_rooms = []
-	# 从左(西)房间延伸出2个
-	for i in range(2):
-		var room = RoomNode.new()
-		room.id = room_id
-		room.type = RoomType.NORMAL
-		room.is_cleared = false  # 确保需要战斗
-		# 往西和往北延伸
-		var offset = Vector2(-400, 0) if i == 0 else Vector2(0, -400)
-		room.position = depth1_rooms[0].position + offset
-		room.depth = 2
-		depth1_rooms[0].connected_rooms.append(room.id)
-		room.connected_rooms.append(depth1_rooms[0].id)
-		depth2_rooms.append(room)
-		room_map.append(room)
-		room_id += 1
-
-	# 从右(东)房间延伸出2个
-	for i in range(2):
-		var room = RoomNode.new()
-		room.id = room_id
-		room.type = RoomType.NORMAL
-		room.is_cleared = false  # 确保需要战斗
-		# 往东和往北延伸
-		var offset = Vector2(400, 0) if i == 0 else Vector2(0, -400)
-		room.position = depth1_rooms[2].position + offset
-		room.depth = 2
-		depth1_rooms[2].connected_rooms.append(room.id)
-		room.connected_rooms.append(depth1_rooms[2].id)
-		depth2_rooms.append(room)
-		room_map.append(room)
-		room_id += 1
-
-	# 深度3：特殊房间 (连接深度2的末端)
-	# 移除商店和附魔房间，因为商店已在深度1
-	var special_types = [RoomType.TREASURE, RoomType.REST, RoomType.NORMAL]
-	var depth3_rooms = []
-	for i in range(3):
-		var room = RoomNode.new()
-		room.id = room_id
-		room.type = special_types[i]
-		room.is_cleared = false  # 特殊房间也标记为未清理（会在进入时自动开门）
-		# 简单堆叠在远处，坐标不再重要，只要保持不重叠即可，因为之前的连接已经决定了拓扑
-		room.position = Vector2(0, -800 - i * 400)
-		room.depth = 3
-
-		# 连接到深度2的房间 (这里简化连接逻辑，随便连一个没连满的)
-		var parent_room = depth2_rooms[i % depth2_rooms.size()]
-		parent_room.connected_rooms.append(room.id)
-		room.connected_rooms.append(parent_room.id)
-
-		depth3_rooms.append(room)
-		room_map.append(room)
-		room_id += 1
-
-	# 后续深度简化处理... 
-	# 只要确保 position 不重叠且方向大体正确
-	var last_rooms = depth3_rooms
+func reset_dungeon():
+	"""重置地牢并重新生成地图"""
+	print("RoomManager: 重置地牢...")
+	randomize() # 更新随机种子
 	
-	# 深度4-5
-	for d in range(2):
-		var new_rooms = []
-		for i in range(2):
-			var room = RoomNode.new()
-			room.id = room_id
-			room.type = RoomType.NORMAL
-			room.is_cleared = false  # 确保需要战斗
-			room.position = Vector2(-400 + i * 800, -1600 - d * 400)
-			room.depth = 4 + d
+	# 重置状态
+	current_room_index = 0
+	entered_room_count = 0
+	marisa_spawned = false
+	current_kills = 0
+	is_room_cleared = false
+	
+	# 清理旧门
+	for door in exit_doors:
+		if is_instance_valid(door):
+			door.queue_free()
+	exit_doors.clear()
+	
+	# 重新生成地图
+	_generate_room_map()
+	
+	# 重置玩家状态和位置
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		player.global_position = Vector2(1200, 900)
+		if player.has_method("reset_state"): # 假设有这个方法
+			player.reset_state()
+		elif player.get("health_comp"):
+			player.health_comp.current_hp = player.health_comp.max_hp
+			SignalBus.player_health_changed.emit(player.health_comp.current_hp, player.health_comp.max_hp)
 
-			var parent = last_rooms[i % last_rooms.size()]
-			parent.connected_rooms.append(room.id)
-			room.connected_rooms.append(parent.id)
+	# 启动初始房间
+	await get_tree().process_frame
+	_start_room(0)
 
-			new_rooms.append(room)
-			room_map.append(room)
-			room_id += 1
-		last_rooms = new_rooms
+func _create_room_node(id: int, type: int, pos: Vector2, depth: int) -> RoomNode:
+	var node = RoomNode.new()
+	node.id = id
+	node.type = type
+	node.position = pos
+	node.depth = depth
+	node.is_cleared = false
+	node.is_visited = false
+	return node
 
-	# 深度6：Boss房间
-	var boss_room = RoomNode.new()
-	boss_room.id = room_id
-	boss_room.type = RoomType.BOSS
-	boss_room.is_cleared = false  # Boss房间需要战斗
-	boss_room.position = Vector2(0, -2400)
-	boss_room.depth = 6
-	for r in last_rooms:
-		r.connected_rooms.append(boss_room.id)
-		boss_room.connected_rooms.append(r.id)
-	room_map.append(boss_room)
+func _generate_room_map():
+	"""程序化生成房间地图网络结构"""
+	room_map.clear()
+	var occupied_positions = {} # 用于防止重叠: Vector2(grid_x, grid_y) -> RoomNode
+	var room_id_counter = 0
+	
+	# 1. 起始房间 (Depth 0)
+	var start_node = _create_room_node(room_id_counter, RoomType.NORMAL, Vector2(0,0), 0)
+	room_map.append(start_node)
+	occupied_positions[Vector2(0,0)] = start_node
+	room_id_counter += 1
+	
+	var current_depth_rooms = [start_node]
+	var logical_spacing = 600.0 # 逻辑坐标间距
+	
+	# 2. 生成 Depth 1 到 5 (外围 -> 深处)
+	for d in range(1, 6):
+		var next_depth_rooms = []
+		current_depth_rooms.shuffle() # 随机打乱生成顺序
+		
+		var made_connection_for_depth = false # 确保这一层至少生成了一个房间
+		
+		for parent_room in current_depth_rooms:
+			# 决定分支数量
+			var child_count = 0
+			var roll = randf()
+			
+			if d == 1: 
+				child_count = randi_range(2, 3) # 第一层必须多分叉
+			elif d < 3:
+				child_count = 1 if roll < 0.3 else 2 # 浅层有几率分叉
+			else:
+				child_count = 1 if roll < 0.7 else 2 # 深处趋向线性，偶尔分叉
+			
+			# 如果是该层最后一个父节点且还没生成任何子节点，强制生成
+			if parent_room == current_depth_rooms.back() and not made_connection_for_depth and child_count == 0:
+				child_count = 1
+				
+			# 尝试四个方向
+			var directions = [Vector2(0, -1), Vector2(0, 1), Vector2(-1, 0), Vector2(1, 0)]
+			directions.shuffle()
+			
+			for dir in directions:
+				if child_count <= 0: break
+				
+				# 计算逻辑坐标 key
+				var parent_grid_pos = (parent_room.position / logical_spacing).round()
+				var new_grid_pos = parent_grid_pos + dir
+				
+				if not occupied_positions.has(new_grid_pos):
+					# 确定房间类型
+					var new_type = RoomType.NORMAL
+					# Depth 3+ 开始有几率生成特殊房间
+					if d >= 2 and randf() < 0.2:
+						var type_roll = randf()
+						if type_roll < 0.4: new_type = RoomType.TREASURE
+						elif type_roll < 0.7: new_type = RoomType.REST
+						# Shop主要靠河童事件，这里也可以放一点
+					
+					var new_room = _create_room_node(room_id_counter, new_type, new_grid_pos * logical_spacing, d)
+					room_id_counter += 1
+					
+					# 建立双向连接
+					parent_room.connected_rooms.append(new_room.id)
+					new_room.connected_rooms.append(parent_room.id)
+					
+					room_map.append(new_room)
+					occupied_positions[new_grid_pos] = new_room
+					next_depth_rooms.append(new_room)
+					
+					child_count -= 1
+					made_connection_for_depth = true
+		
+		if next_depth_rooms.size() > 0:
+			current_depth_rooms = next_depth_rooms
+		else:
+			print("警告：深度 ", d, " 生成中断！")
+			break
 
-	max_depth = 6
+	# 3. 深度6：Boss房间
+	if current_depth_rooms.size() > 0:
+		# 选择最远的一个房间作为Boss房入口
+		var boss_entry = current_depth_rooms[0]
+		var boss_grid_pos = (boss_entry.position / logical_spacing).round() + Vector2(0, -1) # 默认往北
+		
+		# 尝试找个空位
+		var dirs = [Vector2(0, -1), Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1)]
+		for dir in dirs:
+			var try_pos = (boss_entry.position / logical_spacing).round() + dir
+			if not occupied_positions.has(try_pos):
+				boss_grid_pos = try_pos
+				break
+				
+		var boss_room = _create_room_node(room_id_counter, RoomType.BOSS, boss_grid_pos * logical_spacing, 6)
+		boss_entry.connected_rooms.append(boss_room.id)
+		boss_room.connected_rooms.append(boss_entry.id)
+		room_map.append(boss_room)
+		max_depth = 6
+	
+	print("新地图生成完成，共 ", room_map.size(), " 个房间")
 
-	print("房间地图生成完成，共 ", room_map.size(), " 个房间")
+func get_active_directions() -> Array:
+	"""获取当前房间的活动连接方向 (用于地图生成避让)"""
+	var directions = []
+	if current_room_index < 0 or current_room_index >= room_map.size():
+		return directions
+		
+	var current_room = room_map[current_room_index]
+	
+	# 计算所有连接房间的方向
+	for target_id in current_room.connected_rooms:
+		if target_id >= room_map.size(): continue
+		var target_room = room_map[target_id]
+		var direction_vec = target_room.position - current_room.position
+		
+		# 判断主要方向 (0:N, 1:S, 2:E, 3:W - 与 ExitDoor.DoorDirection 对应)
+		# 注意：ExitDoor enum: NORTH=0, SOUTH=1, EAST=2, WEST=3
+		if abs(direction_vec.x) > abs(direction_vec.y):
+			# 东西向
+			if direction_vec.x > 0: directions.append(2) # East
+			else: directions.append(3) # West
+		else:
+			# 南北向
+			if direction_vec.y > 0: directions.append(1) # South
+			else: directions.append(0) # North
+			
+	return directions
 
 func _start_room(room_index: int):
 	"""开始一个房间"""
@@ -242,6 +285,13 @@ func _start_room(room_index: int):
 	var map_system = get_tree().get_first_node_in_group("map_system")
 	if map_system and map_system.has_method("update_environment"):
 		map_system.update_environment(current_room_node.depth)
+		
+		# 更新雾效
+		if map_system.has_method("set_fog_density"):
+			if current_room_node.depth < 3:
+				map_system.set_fog_density(0.25) # 外围薄雾
+			else:
+				map_system.set_fog_density(0.05) # 深处几乎无雾，只有黑暗光柱
 
 	# 发送UI更新信号
 	SignalBus.room_info_updated.emit(_get_room_type_name(current_room_type), room_index)
@@ -431,17 +481,15 @@ func _on_door_entered(from_direction: int, target_room_id: int):
 	# 从西门进入 → 出现在东侧
 	var player = get_tree().get_first_node_in_group("player")
 	if player:
-		# 注意：from_direction 是门的朝向 (NORTH=0, SOUTH=1...)
-		# 玩家出现在对面的位置，离边缘稍微近一点 (200px)
 		match from_direction:
-			0:  # NORTH (进入北门，去往北方房间，出现在新房间南侧)
-				player.global_position = Vector2(1200, 1800 - 200) # 南侧
-			1:  # SOUTH (进入南门，去往南方房间，出现在新房间北侧)
-				player.global_position = Vector2(1200, 200) # 北侧
-			2:  # EAST (进入东门，去往东方房间，出现在新房间西侧)
-				player.global_position = Vector2(200, 900) # 西侧
-			3:  # WEST (进入西门，去往西方房间，出现在新房间东侧)
-				player.global_position = Vector2(2400 - 200, 900) # 东侧
+			0:  # NORTH - 从北门进入，出现在新房间南侧 (远离南门)
+				player.global_position = Vector2(1200, 1500)
+			1:  # SOUTH - 从南门进入，出现在新房间北侧 (远离北门)
+				player.global_position = Vector2(1200, 300)
+			2:  # EAST - 从东门进入，出现在新房间西侧 (远离西门)
+				player.global_position = Vector2(300, 900)
+			3:  # WEST - 从西门进入，出现在新房间东侧 (远离东门)
+				player.global_position = Vector2(2100, 900)
 		print("玩家位置设置为: ", player.global_position)
 
 	# 清理门

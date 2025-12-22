@@ -39,11 +39,20 @@ func _on_room_entered(room_type_name: String, room_index: int):
 	# 根据房间名称转换为类型枚举
 	var room_type = _get_room_type_from_name(room_type_name)
 
+	# 获取当前房间的连接方向（用于避让竹林）
+	var active_directions = []
+	var room_manager = get_tree().get_first_node_in_group("room_manager")
+	if room_manager and room_manager.has_method("get_active_directions"):
+		active_directions = room_manager.get_active_directions()
+
 	# 生成新布局
-	current_layout = RoomLayoutGenerator.generate_room_layout(room_type, room_index, map_system)
+	current_layout = RoomLayoutGenerator.generate_room_layout(room_type, room_index, map_system, active_directions)
 
 	# 应用布局
 	_apply_layout(current_layout)
+	
+	# [新增] 挖通门口的竹林
+	_clear_bamboo_at_doors(active_directions)
 
 func _clear_current_layout():
 	"""清理当前房间的所有动态对象"""
@@ -66,6 +75,39 @@ func _apply_layout(layout: Dictionary):
 	if layout.has("decorations"):
 		for deco_data in layout.decorations:
 			_spawn_decoration(deco_data.pos, deco_data.type)
+
+func _clear_bamboo_at_doors(active_directions: Array):
+	"""在有门的方向清除静态环境竹林"""
+	var w = 2400
+	var h = 1800
+	if map_system:
+		w = map_system.MAP_WIDTH
+		h = map_system.MAP_HEIGHT
+		
+	var clear_zones = []
+	var clear_size = Vector2(400, 300) # 足够大的清理范围
+	
+	if 0 in active_directions: # North
+		clear_zones.append(Rect2(w/2 - clear_size.x/2, 0, clear_size.x, clear_size.y))
+	if 1 in active_directions: # South
+		clear_zones.append(Rect2(w/2 - clear_size.x/2, h - clear_size.y, clear_size.x, clear_size.y))
+	if 2 in active_directions: # East
+		clear_zones.append(Rect2(w - clear_size.y, h/2 - clear_size.x/2, clear_size.y, clear_size.x))
+	if 3 in active_directions: # West
+		clear_zones.append(Rect2(0, h/2 - clear_size.x/2, clear_size.y, clear_size.x))
+		
+	var env_bamboos = get_tree().get_nodes_in_group("environment_bamboo")
+	var cleared_count = 0
+	
+	for body in env_bamboos:
+		if not is_instance_valid(body): continue
+		for zone in clear_zones:
+			if zone.has_point(body.position):
+				body.queue_free()
+				cleared_count += 1
+				break
+				
+	print("RoomLayoutManager: Cleared ", cleared_count, " bamboos at doors.")
 
 func _spawn_bamboo_cluster(pos: Vector2, size: int):
 	"""在指定位置生成竹林簇"""
@@ -100,6 +142,9 @@ func _create_simple_bamboo(pos: Vector2):
 	body.position = pos
 	body.collision_layer = 2
 	body.collision_mask = 1
+	
+	# 附加透视脚本
+	body.set_script(load("res://BambooObstacle.gd"))
 
 	# 添加精灵
 	var sprite = Sprite2D.new()

@@ -247,6 +247,8 @@ func create_background():
 		color_rect.size = Vector2(MAP_WIDTH, MAP_HEIGHT)
 		background_layer.add_child(color_rect)
 
+var fog_layer: CanvasLayer = null # 雾效层
+
 # ==================== 竹海墙壁系统 ====================
 func create_bamboo_sea_walls():
 	"""创建地图边缘的竹林"""
@@ -257,12 +259,8 @@ func _get_edge_depth(pos_along: float, wall_length: float, side: String) -> floa
 	var wave1 = sin(pos_along * 0.008) * 60
 	var wave2 = sin(pos_along * 0.023 + 1.5) * 35
 	var wave3 = sin(pos_along * 0.041 + 3.0) * 20
-	var entrance_pos = wall_length * 0.5
-	var entrance_influence = 0.0
-	var dist_to_entrance = abs(pos_along - entrance_pos)
-	if dist_to_entrance < 200:
-		entrance_influence = exp(-dist_to_entrance * dist_to_entrance / 8000.0) * 120
-	return base_depth + wave1 + wave2 + wave3 - entrance_influence
+	# 移除入口凹陷逻辑，保持墙壁完整封闭
+	return base_depth + wave1 + wave2 + wave3
 
 func _create_organic_forest_edge() -> int:
 	var count = 0
@@ -347,6 +345,7 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 	if has_collision:
 		var body = StaticBody2D.new()
 		body.name = "BambooBody"
+		body.add_to_group("environment_bamboo") # 用于后续动态挖洞
 		body.position = pos
 		body.collision_layer = 2
 		body.collision_mask = 1
@@ -649,10 +648,9 @@ func _create_lighting_outskirts():
 	"""竹林外围 - 明亮通透，高对比度"""
 	print("MapSystem: Creating OUTSKIRTS lighting (CanvasModulate)...")
 	
-	# 1. CanvasModulate (替代原来的 AtmosphereLayer Multiply)
-	# 这是 Godot 标准的场景染色方式，不会产生蒙版问题
+	# 1. CanvasModulate (压暗一点，增加氛围)
 	var modulate = CanvasModulate.new()
-	modulate.color = Color(0.95, 0.94, 0.92) # 极浅的暖色，保持明亮
+	modulate.color = Color(0.75, 0.75, 0.8) # 稍微偏冷的暗色
 	add_child(modulate)
 	
 	# 2. WorldEnvironment - 核心调整
@@ -661,17 +659,68 @@ func _create_lighting_outskirts():
 	env.background_mode = Environment.BG_CANVAS
 	
 	env.glow_enabled = true
-	env.glow_intensity = 0.2
-	env.glow_strength = 0.6
-	env.glow_bloom = 0.05
+	env.glow_intensity = 0.5 # 增加辉光强度
+	env.glow_strength = 0.8
+	env.glow_bloom = 0.1
 	
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.35 # 强对比度
-	env.adjustment_saturation = 1.1  # 色彩鲜艳
-	env.adjustment_brightness = 1.1  # 整体提亮
+	env.adjustment_contrast = 1.2
+	env.adjustment_saturation = 1.1
+	env.adjustment_brightness = 1.0
 	
 	world_env.environment = env
 	get_parent().call_deferred("add_child", world_env)
+	
+	# 3. 添加薄雾
+	create_fog_layer(0.25)
+
+func create_fog_layer(density: float):
+	"""创建全屏薄雾层"""
+	if fog_layer and is_instance_valid(fog_layer):
+		fog_layer.queue_free()
+		
+	fog_layer = CanvasLayer.new()
+	fog_layer.name = "FogLayer"
+	fog_layer.layer = 5 # 在 World 之上，UI 之下
+	get_tree().root.add_child(fog_layer)
+	
+	var fog_rect = TextureRect.new()
+	fog_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fog_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fog_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	
+	# 噪声纹理
+	var noise = FastNoiseLite.new()
+	noise.seed = randi()
+	noise.frequency = 0.005
+	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	
+	var noise_tex = NoiseTexture2D.new()
+	noise_tex.noise = noise
+	noise_tex.width = 512
+	noise_tex.height = 512
+	noise_tex.seamless = true
+	
+	fog_rect.texture = noise_tex
+	fog_rect.modulate = Color(0.9, 0.95, 1.0, density) # 蓝白色雾
+	
+	# 材质：加法混合或普通的混合
+	var mat = CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	fog_rect.material = mat
+	
+	fog_layer.add_child(fog_rect)
+	
+	# 简单的流动动画
+	var tween = create_tween().set_loops()
+	tween.tween_property(fog_rect, "modulate:a", density * 0.8, 3.0).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(fog_rect, "modulate:a", density * 1.2, 3.0).set_trans(Tween.TRANS_SINE)
+
+func set_fog_density(density: float):
+	if fog_layer and is_instance_valid(fog_layer):
+		var rect = fog_layer.get_child(0)
+		if rect:
+			rect.modulate.a = density
 
 func _create_lighting_deep_forest_beam():
 	"""竹林深处 - 幽暗，世界空间固定光柱"""

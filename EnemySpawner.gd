@@ -30,6 +30,8 @@ var room_wave_spawned: int = 0
 var room_wave_spawn_timer: float = 0.0
 const ROOM_WAVE_SPAWN_INTERVAL: float = 0.5  # 每0.5秒生成一个敌人
 
+var spawn_warning_scene = preload("res://SpawnWarning.tscn")
+
 func _ready():
 	add_to_group("enemy_spawner")
 
@@ -84,8 +86,46 @@ func _spawn_next_room_enemy():
 	if current_enemies >= max_enemies:
 		return
 		
-	spawn_enemy()
+	# 提前计算生成位置
+	if not player:
+		var players = get_tree().get_nodes_in_group("player")
+		if players.size() > 0:
+			player = players[0]
+		else:
+			return
+
+	var random_angle = randf() * PI * 2.0
+	var spawn_pos = player.global_position + Vector2(cos(random_angle), sin(random_angle)) * spawn_distance
+	
+	# 确保在地图边界内
+	spawn_pos.x = clamp(spawn_pos.x, 100, 2300)
+	spawn_pos.y = clamp(spawn_pos.y, 100, 1700)
+	
+	# 生成预警
+	var warning_instance = null
+	if spawn_warning_scene:
+		warning_instance = spawn_warning_scene.instantiate()
+		if warning_instance:
+			warning_instance.global_position = spawn_pos
+			game_objects_parent.add_child(warning_instance)
+	else:
+		print("Error: spawn_warning_scene is null")
+	
+	# 减少待生成计数（即使还没真正生成，避免重复触发）
 	room_wave_enemies_to_spawn -= 1
+	
+	# 延迟生成敌人
+	await get_tree().create_timer(0.8).timeout
+	
+	# 销毁预警
+	if warning_instance and is_instance_valid(warning_instance):
+		if warning_instance.has_method("disappear"):
+			warning_instance.disappear()
+		else:
+			warning_instance.queue_free()
+	
+	print("EnemySpawner: Spawning enemy at ", spawn_pos)
+	spawn_enemy(null, spawn_pos)
 	room_wave_spawned += 1
 
 func _on_spawn_wave(count: int, room_index: int):
@@ -95,8 +135,8 @@ func _on_spawn_wave(count: int, room_index: int):
 	room_wave_spawned = 0
 	room_wave_spawn_timer = ROOM_WAVE_SPAWN_INTERVAL # 立即开始生成第一个
 
-func spawn_enemy(config = null):
-	"""在随机位置生成一个敌人"""
+func spawn_enemy(config = null, pos_override = null):
+	"""在随机位置或指定位置生成一个敌人"""
 	if not player:
 		var players = get_tree().get_nodes_in_group("player")
 		if players.size() > 0:
@@ -108,13 +148,18 @@ func spawn_enemy(config = null):
 	if config == null:
 		config = EnemyData.get_random_enemy_for_time(game_time)
 
-	# 随机位置（在玩家周围的一定距离）
-	var random_angle = randf() * PI * 2.0
-	var spawn_pos = player.global_position + Vector2(cos(random_angle), sin(random_angle)) * spawn_distance
+	var spawn_pos = Vector2.ZERO
 	
-	# 确保在地图边界内 (100-2300, 100-1700)
-	spawn_pos.x = clamp(spawn_pos.x, 100, 2300)
-	spawn_pos.y = clamp(spawn_pos.y, 100, 1700)
+	if pos_override != null:
+		spawn_pos = pos_override
+	else:
+		# 随机位置（在玩家周围的一定距离）
+		var random_angle = randf() * PI * 2.0
+		spawn_pos = player.global_position + Vector2(cos(random_angle), sin(random_angle)) * spawn_distance
+		
+		# 确保在地图边界内 (100-2300, 100-1700)
+		spawn_pos.x = clamp(spawn_pos.x, 100, 2300)
+		spawn_pos.y = clamp(spawn_pos.y, 100, 1700)
 
 	var enemy = enemy_scene.instantiate()
 	enemy.global_position = spawn_pos

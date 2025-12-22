@@ -14,7 +14,7 @@ enum LayoutStyle {
 	ARENA,       # 竞技场 - 大空地适合战斗
 }
 
-static func generate_room_layout(room_type: int, room_index: int, map_system: Node) -> Dictionary:
+static func generate_room_layout(room_type: int, room_index: int, map_system: Node, active_directions: Array = []) -> Dictionary:
 	"""根据房间类型和索引生成布局"""
 	var layout = {
 		"bamboos": [],
@@ -26,63 +26,97 @@ static func generate_room_layout(room_type: int, room_index: int, map_system: No
 	var style = _get_layout_style_for_room(room_type, room_index)
 	layout.style = style
 
-	# 生成对应风格的布局
+	# 生成对应风格的布局 (传递 active_directions)
 	match style:
 		LayoutStyle.SPARSE:
-			layout.bamboos = _generate_sparse_layout(map_system)
+			layout.bamboos = _generate_sparse_layout(map_system, active_directions)
 		LayoutStyle.DENSE:
-			layout.bamboos = _generate_dense_layout(map_system)
+			layout.bamboos = _generate_dense_layout(map_system, active_directions)
 		LayoutStyle.CORRIDOR:
-			layout.bamboos = _generate_corridor_layout(map_system)
+			layout.bamboos = _generate_corridor_layout(map_system, active_directions)
 		LayoutStyle.CIRCULAR:
-			layout.bamboos = _generate_circular_layout(map_system)
+			layout.bamboos = _generate_circular_layout(map_system, active_directions)
 		LayoutStyle.CROSS:
-			layout.bamboos = _generate_cross_layout(map_system)
+			layout.bamboos = _generate_cross_layout(map_system, active_directions)
 		LayoutStyle.MAZE:
-			layout.bamboos = _generate_maze_layout(map_system)
+			layout.bamboos = _generate_maze_layout(map_system, active_directions)
 		LayoutStyle.ARENA:
-			layout.bamboos = _generate_arena_layout(map_system)
+			layout.bamboos = _generate_arena_layout(map_system, active_directions)
 
 	# 添加装饰物
 	layout.decorations = _generate_decorations(style, map_system)
+	
+	# [新增] 针对封闭方向的边缘填充（封死没有门的出口）
+	_fill_closed_edges(layout.bamboos, active_directions, map_system)
 
 	return layout
 
-static func _is_pos_safe(pos: Vector2) -> bool:
+static func _fill_closed_edges(bamboos: Array, active_directions: Array, map_system):
+	"""填充没有门的边缘区域 - 强制封死"""
+	var w = 2400
+	var h = 1800
+	if map_system:
+		w = map_system.MAP_WIDTH
+		h = map_system.MAP_HEIGHT
+		
+	# 检查四个方向 (N=0, S=1, E=2, W=3)
+	# 使用更密集的网格生成，确保视觉上完全堵死
+	
+	# 北边 (0)
+	if not 0 in active_directions: 
+		# 极高密度覆盖全宽度，确保无死角
+		for x in range(20, w - 20, 20): 
+			for y in range(20, 220, 25): # 加深厚度并向外延伸
+				bamboos.append({"pos": Vector2(x + randf_range(-3, 3), y + randf_range(-3, 3)), "size": randi_range(8, 10)})
+			
+	# 南边 (1)
+	if not 1 in active_directions: 
+		for x in range(20, w - 20, 20):
+			for y in range(h - 220, h - 20, 25):
+				bamboos.append({"pos": Vector2(x + randf_range(-3, 3), y + randf_range(-3, 3)), "size": randi_range(8, 10)})
+			
+	# 东边 (2)
+	if not 2 in active_directions: 
+		for y in range(20, h - 20, 20):
+			for x in range(w - 220, w - 20, 25):
+				bamboos.append({"pos": Vector2(x + randf_range(-3, 3), y + randf_range(-3, 3)), "size": randi_range(8, 10)})
+
+	# 西边 (3)
+	if not 3 in active_directions: 
+		for y in range(20, h - 20, 20):
+			for x in range(20, 220, 25):
+				bamboos.append({"pos": Vector2(x + randf_range(-3, 3), y + randf_range(-3, 3)), "size": randi_range(8, 10)})
+
+static func _is_pos_safe(pos: Vector2, active_directions: Array = []) -> bool:
 	var w = GameConstants.MAP_WIDTH
 	var h = GameConstants.MAP_HEIGHT
 	var center = Vector2(w / 2, h / 2)
 	
-	# Spawn/Tutorial Center
+	# Spawn/Tutorial Center (始终保护)
 	if pos.distance_to(center) < 400.0: return false
 	
-	# Doors
-	if pos.distance_to(Vector2(w / 2, 0)) < 300.0: return false # N
-	if pos.distance_to(Vector2(w / 2, h)) < 300.0: return false # S
-	if pos.distance_to(Vector2(0, h / 2)) < 300.0: return false # W
-	if pos.distance_to(Vector2(w, h / 2)) < 300.0: return false # E
+	# Doors - 仅保护有活动连接的方向
+	var door_safety_radius = 500.0
+	
+	# North (0)
+	if 0 in active_directions:
+		if pos.distance_to(Vector2(w / 2, 0)) < door_safety_radius: return false 
+		
+	# South (1)
+	if 1 in active_directions:
+		if pos.distance_to(Vector2(w / 2, h)) < door_safety_radius: return false 
+		
+	# East (2)
+	if 2 in active_directions:
+		if pos.distance_to(Vector2(w, h / 2)) < door_safety_radius: return false 
+		
+	# West (3)
+	if 3 in active_directions:
+		if pos.distance_to(Vector2(0, h / 2)) < door_safety_radius: return false 
 	
 	return true
 
 static func _get_layout_style_for_room(room_type: int, room_index: int) -> LayoutStyle:
-
-# # ORIGINAL CODE START
-# # static func _is_pos_safe(pos: Vector2) -> bool:
-# # 	var w = GameConstants.MAP_WIDTH
-# # 	var h = GameConstants.MAP_HEIGHT
-# # 	var center = Vector2(w / 2, h / 2)
-	
-# # 	# Spawn/Tutorial Center
-# # 	if pos.distance_to(center) < 400.0: return false
-	
-# # 	# Doors
-# # 	if pos.distance_to(Vector2(w / 2, 0)) < 300.0: return false # N
-# # 	if pos.distance_to(Vector2(w / 2, h)) < 300.0: return false # S
-# # 	if pos.distance_to(Vector2(0, h / 2)) < 300.0: return false # W
-# # 	if pos.distance_to(Vector2(w, h / 2)) < 300.0: return false # E
-	
-# # 	return true
-# # ORIGINAL CODE END
 	"""根据房间类型和索引决定布局风格"""
 	# 商店和特殊房间使用开阔布局
 	if room_type == 1 or room_type == 3 or room_type == 4 or room_type == 5:  # SHOP, ENCHANT, REST, TREASURE
@@ -104,7 +138,7 @@ static func _get_layout_style_for_room(room_type: int, room_index: int) -> Layou
 
 	return styles[room_index % styles.size()]
 
-static func _generate_sparse_layout(map_system) -> Array:
+static func _generate_sparse_layout(map_system, active_directions) -> Array:
 	"""稀疏布局 - 外围竹林，需要更有密度"""
 	var bamboos = []
 	var map_width = 2400
@@ -121,11 +155,18 @@ static func _generate_sparse_layout(map_system) -> Array:
 			randf_range(200, map_width - 200),
 			randf_range(200, map_height - 200)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(4, 7)})
+		
+		# 边缘密度降低逻辑：如果在边缘300范围内，50%概率跳过
+		if pos.x < 500 or pos.x > map_width - 500 or pos.y < 500 or pos.y > map_height - 500:
+			if randf() < 0.5:
+				continue
+				
+		if _is_pos_safe(pos, active_directions):
+			bamboos.append({"pos": pos, "size": randi_range(4, 7)})
 
 	return bamboos
 
-static func _generate_dense_layout(map_system) -> Array:
+static func _generate_dense_layout(map_system, active_directions) -> Array:
 	"""密集布局 - 竹海，但控制性能和通道"""
 	var bamboos = []
 	var map_width = 2400
@@ -142,11 +183,12 @@ static func _generate_dense_layout(map_system) -> Array:
 			randf_range(200, map_width - 200),
 			randf_range(200, map_height - 200)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(6, 10)}) # 单个竹丛更大
+		if _is_pos_safe(pos, active_directions):
+			bamboos.append({"pos": pos, "size": randi_range(6, 10)}) # 单个竹丛更大
 
 	return bamboos
 
-static func _generate_corridor_layout(map_system) -> Array:
+static func _generate_corridor_layout(map_system, active_directions) -> Array:
 	"""走廊布局 - 中间通道两侧密集竹林"""
 	var bamboos = []
 	var map_width = 2400
@@ -165,7 +207,8 @@ static func _generate_corridor_layout(map_system) -> Array:
 			randf_range(200, center_x - corridor_width / 2 - 50),
 			randf_range(200, map_height - 200)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(5, 8)})
+		if _is_pos_safe(pos, active_directions):
+			bamboos.append({"pos": pos, "size": randi_range(5, 8)})
 
 	# 右侧密集竹林
 	for i in range(25):
@@ -173,11 +216,12 @@ static func _generate_corridor_layout(map_system) -> Array:
 			randf_range(center_x + corridor_width / 2 + 50, map_width - 200),
 			randf_range(200, map_height - 200)
 		)
-		bamboos.append({"pos": pos, "size": randi_range(5, 8)})
+		if _is_pos_safe(pos, active_directions):
+			bamboos.append({"pos": pos, "size": randi_range(5, 8)})
 
 	return bamboos
 
-static func _generate_circular_layout(map_system) -> Array:
+static func _generate_circular_layout(map_system, active_directions) -> Array:
 	"""环形布局 - 中心空地，四周是圆形墙壁"""
 	var bamboos = []
 	var map_width = 2400
@@ -210,7 +254,9 @@ static func _generate_circular_layout(map_system) -> Array:
 			if dist > arena_radius and not on_path:
 				# 稍微随机化位置
 				var offset = Vector2(randf_range(-30, 30), randf_range(-30, 30))
-				bamboos.append({"pos": pos + offset, "size": randi_range(6, 10)}) # 大簇竹子
+				var final_pos = pos + offset
+				if _is_pos_safe(final_pos, active_directions):
+					bamboos.append({"pos": final_pos, "size": randi_range(6, 10)}) # 大簇竹子
 
 	# 2. 内部少量装饰性障碍
 	for i in range(8):
@@ -223,12 +269,12 @@ static func _generate_circular_layout(map_system) -> Array:
 		if abs(pos.x - center.x) < path_width / 2.0: on_path = true
 		if abs(pos.y - center.y) < path_width / 2.0: on_path = true
 		
-		if not on_path:
+		if not on_path and _is_pos_safe(pos, active_directions):
 			bamboos.append({"pos": pos, "size": randi_range(2, 4)})
 
 	return bamboos
 
-static func _generate_cross_layout(map_system) -> Array:
+static func _generate_cross_layout(map_system, active_directions) -> Array:
 	"""十字布局 - 十字通道，四个角落被封死"""
 	var bamboos = []
 	var map_width = 2400
@@ -259,11 +305,13 @@ static func _generate_cross_layout(map_system) -> Array:
 			for y in range(c_rows):
 				var pos = rect.position + Vector2(x * grid_size + grid_size/2, y * grid_size + grid_size/2)
 				var offset = Vector2(randf_range(-40, 40), randf_range(-40, 40))
-				bamboos.append({"pos": pos + offset, "size": randi_range(6, 9)})
+				var final_pos = pos + offset
+				if _is_pos_safe(final_pos, active_directions):
+					bamboos.append({"pos": final_pos, "size": randi_range(6, 9)})
 
 	return bamboos
 
-static func _generate_maze_layout(map_system) -> Array:
+static func _generate_maze_layout(map_system, active_directions) -> Array:
 	"""迷宫布局 - 复杂的竹林迷宫"""
 	var bamboos = []
 	var map_width = 2400
@@ -283,11 +331,12 @@ static func _generate_maze_layout(map_system) -> Array:
 			# 50%概率放置竹林
 			if randf() < 0.5:
 				var pos = Vector2(x * grid_size + randf_range(-50, 50), y * grid_size + randf_range(-50, 50))
-				bamboos.append({"pos": pos, "size": randi_range(3, 6)})
+				if _is_pos_safe(pos, active_directions):
+					bamboos.append({"pos": pos, "size": randi_range(3, 6)})
 
 	return bamboos
 
-static func _generate_arena_layout(map_system) -> Array:
+static func _generate_arena_layout(map_system, active_directions) -> Array:
 	"""竞技场布局 - 大空地适合战斗"""
 	var bamboos = []
 	var map_width = 2400
@@ -306,7 +355,8 @@ static func _generate_arena_layout(map_system) -> Array:
 	]
 
 	for corner in corners:
-		bamboos.append({"pos": corner, "size": randi_range(2, 4)})
+		if _is_pos_safe(corner, active_directions):
+			bamboos.append({"pos": corner, "size": randi_range(2, 4)})
 
 	return bamboos
 
