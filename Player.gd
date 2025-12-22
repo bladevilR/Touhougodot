@@ -352,7 +352,14 @@ func _input(event):
 						
 			elif event.keycode == KEY_K and event.pressed:
 				# 键盘右键映射
-				weapon_system.try_fire_weapon("mokou_kick_heavy")
+				var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+				if input_dir.length() < 0.1:
+					if sprite and sprite.flip_h: input_dir = Vector2.LEFT
+					else: input_dir = Vector2.RIGHT
+				else:
+					input_dir = input_dir.normalized()
+				
+				weapon_system.try_fire_weapon("mokou_kick_heavy", input_dir)
 
 func _physics_process(delta):
 	# 同步影子视觉 (每帧更新)

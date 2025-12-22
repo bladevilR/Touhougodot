@@ -48,7 +48,7 @@ func _ready():
 	WeaponData.initialize()
 	ElementData.initialize()
 
-func try_fire_weapon(weapon_id: String) -> bool:
+func try_fire_weapon(weapon_id: String, override_direction: Vector2 = Vector2.ZERO) -> bool:
 	"""尝试发射指定武器（检查冷却）"""
 	if not weapon_id in weapons:
 		print("DEBUG: try_fire_weapon failed - weapon not found: ", weapon_id)
@@ -61,7 +61,7 @@ func try_fire_weapon(weapon_id: String) -> bool:
 		var current_cd = melee_cooldowns.get(weapon_id, 0.0)
 		if current_cd <= 0:
 			print("DEBUG: Firing MELEE weapon: ", weapon_id)
-			fire_weapon(weapon_id)
+			fire_weapon(weapon_id, override_direction)
 			# 设置冷却
 			var stats = _get_player_stats()
 			var level_cooldown_mult = weapon_data.get("level_bonuses", {}).get("cooldown_mult", 1.0)
@@ -490,7 +490,7 @@ func get_owned_weapon_ids() -> Array:
 	"""返回当前拥有的所有武器ID列表"""
 	return weapons.keys()
 
-func fire_weapon(weapon_id: String):
+func fire_weapon(weapon_id: String, override_direction: Vector2 = Vector2.ZERO):
 	if not weapon_id in weapons:
 		return
 
@@ -514,7 +514,7 @@ func fire_weapon(weapon_id: String):
 		GameConstants.WeaponType.SPECIAL:
 			_fire_special(weapon_id, config, stats, weapon_level)
 		GameConstants.WeaponType.MELEE:
-			_fire_melee(weapon_id, config, stats, weapon_level)
+			_fire_melee(weapon_id, config, stats, weapon_level, override_direction)
 		_:
 			print("未实现的武器类型: ", config.weapon_type)
 
@@ -991,12 +991,12 @@ func _fire_aura(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dicti
 		aura_area.queue_free()
 
 
-func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
+func _fire_melee(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int, override_direction: Vector2 = Vector2.ZERO):
 	"""近战攻击分发"""
 	if weapon_id == "mokou_kick_light":
 		_fire_melee_light(weapon_id, config, stats)
 	else:
-		_fire_melee_heavy(weapon_id, config, stats)
+		_fire_melee_heavy(weapon_id, config, stats, override_direction)
 
 func fire_charged_flame_ring(duration: float, override_direction: Vector2 = Vector2.ZERO):
 	"""发射蓄力火焰圈 - 三段式逻辑"""
@@ -1209,16 +1209,18 @@ func _fire_melee_light(weapon_id: String, config: WeaponData.WeaponConfig, stats
 	# 占位符，已弃用
 	pass
 
-func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary):
+func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, override_direction: Vector2 = Vector2.ZERO):
 	"""近战攻击 - 强力踢击 (范围击退 + 最近敌人旋转击飞)"""
 	print("DEBUG: _fire_melee_heavy CALLED for ", weapon_id)
 	
 	# 伤害计算
 	var final_damage = config.base_damage * stats.might * 8.0 
 
-	# 获取攻击方向：使用角色朝向
+	# 获取攻击方向：优先使用 override_direction，然后是 last_move_direction，最后是鼠标
 	var direction = Vector2.RIGHT
-	if player and "last_move_direction" in player:
+	if override_direction.length() > 0.1:
+		direction = override_direction.normalized()
+	elif player and "last_move_direction" in player:
 		direction = player.last_move_direction
 	else:
 		var mouse_pos = get_global_mouse_position()
