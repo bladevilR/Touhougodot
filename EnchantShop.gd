@@ -382,3 +382,5 @@ func _input(event):
 	# ESC关闭商店
 	if shop_ui and event.is_action_pressed("ui_cancel"):
 		_close_shop()
+		# 阻止事件继续传播到暂停菜单
+		get_viewport().set_input_as_handled()

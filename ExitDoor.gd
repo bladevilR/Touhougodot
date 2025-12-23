@@ -76,7 +76,8 @@ func _create_fog_seal():
 	
 	# 简单的呼吸动画
 	if fog_tween: fog_tween.kill()
-	fog_tween = create_tween().set_loops()
+	fog_tween = create_tween()
+	fog_tween.set_loops()
 	fog_tween.tween_property(fog_seal_rect, "modulate:a", 0.6, 1.5).set_trans(Tween.TRANS_SINE)
 	fog_tween.tween_property(fog_seal_rect, "modulate:a", 1.0, 1.5).set_trans(Tween.TRANS_SINE)
 

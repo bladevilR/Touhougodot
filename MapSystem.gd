@@ -157,25 +157,30 @@ func _print_tree_recursive(node: Node, indent: String = ""):
 func _register_critical_zones():
 	"""注册所有需要避让的关键区域"""
 	critical_zones.clear()
-	
+
 	# 1. 出生点保护区
 	critical_zones.append(Rect2(PLAYER_SPAWN_X - 300, PLAYER_SPAWN_Y - 300, 600, 600))
-	
-	# 2. 四个门的位置 (减小避让半径)
-	var door_clearance = 200.0
-	var door_width = 300.0
-	
-	# Top Door
-	critical_zones.append(Rect2(1200 - door_width/2, -100, door_width, door_clearance + 100))
-	# Bottom Door
-	critical_zones.append(Rect2(1200 - door_width/2, MAP_HEIGHT - door_clearance, door_width, door_clearance + 100))
-	# Left Door
-	critical_zones.append(Rect2(-100, MAP_HEIGHT/2 - door_width/2, door_clearance + 100, door_width))
-	# Right Door
-	critical_zones.append(Rect2(MAP_WIDTH - door_clearance, MAP_HEIGHT/2 - door_width/2, door_clearance + 100, door_width))
-	
+
+	# 2. 门的位置避让区域已移除 - 改由RoomManager动态设置
+	# 这样没有门的边界就不会留出缺口
+
 	# 3. NPC位置 (河童)
 	critical_zones.append(Rect2(1800 - 200, 600 - 200, 400, 400))
+
+func clear_bamboo_for_door(door_position: Vector2, door_direction: int):
+	"""清除门位置附近的竹子，为门留出空间"""
+	var clearance_radius = 150.0  # 清除半径
+
+	# 遍历所有边界竹子
+	for bamboo in border_bamboos:
+		if is_instance_valid(bamboo):
+			var distance = bamboo.position.distance_to(door_position)
+			if distance < clearance_radius:
+				bamboo.queue_free()
+
+	# 从数组中移除已删除的竹子
+	border_bamboos = border_bamboos.filter(func(b): return is_instance_valid(b))
+	wall_bodies = wall_bodies.filter(func(b): return is_instance_valid(b))
 
 func is_position_valid(pos: Vector2) -> bool:
 	"""检查位置是否有效（不在关键区域内）"""
@@ -712,7 +717,8 @@ func create_fog_layer(density: float):
 	fog_layer.add_child(fog_rect)
 	
 	# 简单的流动动画
-	var tween = create_tween().set_loops()
+	var tween = create_tween()
+	tween.set_loops()
 	tween.tween_property(fog_rect, "modulate:a", density * 0.8, 3.0).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(fog_rect, "modulate:a", density * 1.2, 3.0).set_trans(Tween.TRANS_SINE)
 

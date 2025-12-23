@@ -168,3 +168,5 @@ func _input(event):
 		if event.keycode == KEY_ESCAPE or event.keycode == KEY_N:
 			if shop_system:
 				shop_system.close_shop()
+			# 阻止事件继续传播到暂停菜单
+			get_viewport().set_input_as_handled()

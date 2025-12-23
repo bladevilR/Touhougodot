@@ -35,14 +35,6 @@ func _ready():
 	# 初始化元素数据
 	ElementData.initialize()
 
-func _process(delta):
-	# 禁用自动元素附魔生成（现在只能在附魔房间购买）
-	# enchant_spawn_timer += delta
-	# if enchant_spawn_timer >= ENCHANT_SPAWN_INTERVAL:
-	# 	enchant_spawn_timer = 0.0
-	# 	_spawn_random_enchant()
-	pass
-
 func _on_enemy_killed(xp_amount, pos):
 	# 掉落经验球（P点）
 	spawn_gem(xp_amount, pos)
@@ -65,7 +57,9 @@ func _on_xp_pickup(xp_amount: int):
 	gain_xp(xp_amount)
 
 func gain_xp(amount):
-	current_xp += amount
+	# 升级速度加快1.5倍：获得的经验乘以1.5
+	var boosted_amount = int(amount * 1.5)
+	current_xp += boosted_amount
 
 	# 检查升级
 	while current_xp >= xp_required:

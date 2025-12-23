@@ -396,8 +396,24 @@ func _on_room_cleared():
 	is_room_cleared = true
 	room_map[current_room_index].is_cleared = true # 标记为已清理
 
+	# 生成通关宝箱（在房间中心位置）
+	_spawn_clear_reward_chest()
+
 	room_cleared.emit()
 	print("房间清理完成!")
+
+func _spawn_clear_reward_chest():
+	"""生成房间通关奖励宝箱"""
+	var chest_scene = load("res://TreasureChest.tscn")
+	if not chest_scene:
+		print("警告：无法加载 TreasureChest.tscn")
+		return
+
+	var chest = chest_scene.instantiate()
+	# 在房间中心位置生成宝箱
+	chest.position = Vector2(1200, 900)
+	get_parent().call_deferred("add_child", chest)
+	print("通关宝箱已生成！")
 
 func _spawn_exit_doors():
 	"""生成出口门/传送门 - 根据连接房间的相对位置 (修复拓扑)"""
@@ -464,7 +480,11 @@ func _spawn_exit_doors():
 		
 		exit_doors.append(door)
 		get_parent().add_child(door)
-		
+
+		# 清除门位置附近的竹子（使用函数开头定义的map_system变量）
+		if map_system and map_system.has_method("clear_bamboo_for_door"):
+			map_system.call_deferred("clear_bamboo_for_door", door_data.pos, door_data.dir)
+
 		# 打开门
 		door.call_deferred("open_door")
 

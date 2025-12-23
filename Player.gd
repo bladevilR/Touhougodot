@@ -36,6 +36,26 @@ var dash_direction: Vector2 = Vector2.ZERO
 var dash_damage: float = 30.0  # 飞踢伤害
 var dash_hit_enemies: Array = []  # 记录已经伤害过的敌人
 
+# ==================== COLLISION CONSTANTS ====================
+const COLLISION_RADIUS: float = 15.0  # 圆形碰撞箱半径
+const COLLISION_Y_OFFSET: float = 45.0  # 碰撞箱垂直偏移（找脚）
+const COLLISION_RECT_SIZE: Vector2 = Vector2(30, 20)  # 矩形碰撞箱尺寸
+
+# ==================== SHADOW CONSTANTS ====================
+const SHADOW_SIZE: Vector2 = Vector2(60, 20)  # 影子尺寸
+const SHADOW_OFFSET: Vector2 = Vector2(0, -10)  # 影子偏移（贴合脚底）
+
+# ==================== CHARGE ATTACK CONSTANTS ====================
+const CHARGE_MIN_TIME: float = 0.1  # 最小蓄力时间(秒)
+const CHARGE_MAX_TIME: float = 1.5  # 最大蓄力时间(秒)
+const CHARGE_MIN_INTENSITY: float = 0.2  # 最小蓄力强度
+const CHARGE_MAX_INTENSITY: float = 1.0  # 最大蓄力强度
+const CHARGE_INTENSITY_FACTOR: float = 1.5  # 蓄力强度系数
+const CHARGE_SHAKE_INTENSITY: float = 2.5  # 蓄力颤抖强度
+
+# ==================== KNOCKBACK CONSTANTS ====================
+const CONTACT_KNOCKBACK_FORCE: float = 800.0  # 接触击退力度
+
 # 妹红动画系统
 var mokou_textures = {
 	"sprite": [],  # 水平移动帧
@@ -128,11 +148,11 @@ func _ready():
 	# 碰撞箱下移找脚
 	if collision_shape and collision_shape.shape:
 		if collision_shape.shape is CircleShape2D:
-			collision_shape.shape.radius = 15.0
-			collision_shape.position = Vector2(0, 45)
+			collision_shape.shape.radius = COLLISION_RADIUS
+			collision_shape.position = Vector2(0, COLLISION_Y_OFFSET)
 		elif collision_shape.shape is RectangleShape2D:
-			collision_shape.shape.size = Vector2(30, 20)
-			collision_shape.position = Vector2(0, 45)
+			collision_shape.shape.size = COLLISION_RECT_SIZE
+			collision_shape.position = Vector2(0, COLLISION_Y_OFFSET)
 
 func _initialize_shadow():
 	# 使用 MapSystem 的高级投影影子
@@ -142,9 +162,8 @@ func _initialize_shadow():
 		if has_node("Shadow"):
 			get_node("Shadow").queue_free()
 			
-		# 创建新影子，偏移量设为 (0, -10) 以贴合脚底
-		# 60x20 的尺寸是根据角色比例预估的
-		shadow_sprite = map_system.create_shadow_for_entity(self, Vector2(60, 20), Vector2(0, -10))
+		# 创建新影子，偏移量设为 SHADOW_OFFSET 以贴合脚底
+		shadow_sprite = map_system.create_shadow_for_entity(self, SHADOW_SIZE, SHADOW_OFFSET)
 		if shadow_sprite:
 			print("Player Shadow Created Successfully via MapSystem")
 	else:
@@ -201,8 +220,6 @@ func _sync_shadow_visuals():
 func _on_character_selected(selected_id: int):
 	"""角色选择信号回调"""
 	character_id = selected_id
-	# 重新加载角色数据（如果在游戏运行时）
-	# _load_character_data(character_id)
 
 func _load_character_data(char_id: int):
 	"""加载并应用角色数据"""
@@ -301,10 +318,10 @@ func _input(event):
 					if is_weapon_charging:
 						var current_time = Time.get_ticks_msec() / 1000.0
 						var charge_duration = current_time - charge_start_time
-						
-						# 只要蓄力超过 0.1 秒，就触发效果
-						if charge_duration > 0.1:
-							var intensity = clamp(charge_duration / 1.5, 0.2, 1.0)
+
+						# 只要蓄力超过最小时间，就触发效果
+						if charge_duration > CHARGE_MIN_TIME:
+							var intensity = clamp(charge_duration / CHARGE_MAX_TIME, CHARGE_MIN_INTENSITY, CHARGE_MAX_INTENSITY)
 							# 触发释放爆发特效
 							_spawn_release_burst(intensity)
 
@@ -331,10 +348,10 @@ func _input(event):
 					if is_weapon_charging:
 						var current_time = Time.get_ticks_msec() / 1000.0
 						var charge_duration = current_time - charge_start_time
-						
+
 						# 键盘释放逻辑同上
-						if charge_duration > 0.1:
-							var intensity = clamp(charge_duration / 1.5, 0.2, 1.0)
+						if charge_duration > CHARGE_MIN_TIME:
+							var intensity = clamp(charge_duration / CHARGE_MAX_TIME, CHARGE_MIN_INTENSITY, CHARGE_MAX_INTENSITY)
 							_spawn_release_burst(intensity)
 						
 						# 键盘释放，使用键盘方向
@@ -391,16 +408,16 @@ func _physics_process(delta):
 			charge_bar.visible = true
 			# 直接赋值，配合 step=0.01 实现平滑
 			charge_bar.value = duration
-			
+
 			# 蓄力快满时颤抖 (t > 0.7)
 			if t > 0.7:
-				var s = (t - 0.7) / 0.3 * 2.5 
-				charge_bar.position = Vector2(35, -40) + Vector2(randf_range(-s, s), randf_range(-s, s))
+				var shake_amount = (t - 0.7) / 0.3 * CHARGE_SHAKE_INTENSITY
+				charge_bar.position = Vector2(35, -40) + Vector2(randf_range(-shake_amount, shake_amount), randf_range(-shake_amount, shake_amount))
 			else:
 				charge_bar.position = Vector2(35, -40)
-			
+
 			# 满蓄力时变红
-			if duration >= 1.5:
+			if duration >= CHARGE_MAX_TIME:
 				charge_bar.modulate = Color(2.0, 0.2, 0.2) # 发光红
 			else:
 				charge_bar.modulate = Color.WHITE
@@ -485,9 +502,8 @@ func _physics_process(delta):
 
 	# 翻转精灵（面向移动方向）
 	# 妹红的翻转由_update_mokou_animation处理
-	# ColorRect不支持flip_h，暂时跳过
-	# if input_dir.x != 0:
-	# 	sprite.flip_h = input_dir.x < 0
+	if sprite and sprite is Sprite2D and input_dir.x != 0:
+		sprite.flip_h = input_dir.x < 0
 
 # ==================== COLLISION AVOIDANCE METHODS ====================
 
@@ -624,7 +640,7 @@ func _check_enemy_contact_damage():
 
 			# 击退 (增强力度)
 			var knockback_dir = (global_position - collider.global_position).normalized()
-			apply_knockback(knockback_dir, 800.0)
+			apply_knockback(knockback_dir, CONTACT_KNOCKBACK_FORCE)
 
 			break  # 一次只处理一个敌人碰撞
 
