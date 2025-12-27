@@ -244,7 +244,10 @@ func _show_shop_hint():
 		tween.tween_property(wave_announcement_label, "modulate:a", 1.0, 0.3)
 		tween.tween_interval(3.0)
 		tween.tween_property(wave_announcement_label, "modulate:a", 0.0, 0.5)
-		tween.tween_callback(func(): wave_announcement_label.visible = false)
+		tween.tween_callback(func():
+			if is_instance_valid(self) and is_instance_valid(wave_announcement_label):
+				wave_announcement_label.visible = false
+		)
 
 # ==================== 公共接口 ====================
 

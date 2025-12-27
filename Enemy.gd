@@ -666,7 +666,8 @@ func _attack_sword_dash():
 		# Spawn sword projectiles along the path (delayed)
 		for i in range(5):
 			await get_tree().create_timer(0.1 * i).timeout
-			_spawn_boss_bullet(global_position, dash_dir, 500.0, "knives", Color.WHITE, {"penetration": 5})
+			if is_instance_valid(self):
+				_spawn_boss_bullet(global_position, dash_dir, 500.0, "knives", Color.WHITE, {"penetration": 5})
 
 func _attack_spirit_split():
 	# Spawn phantom bullets
@@ -1067,10 +1068,11 @@ func take_damage(amount, weapon_id: String = ""):
 		if sprite:
 			sprite.modulate = Color.WHITE
 			await get_tree().create_timer(0.1).timeout
-			if enemy_data:
-				sprite.modulate = enemy_data.color
-			else:
-				sprite.modulate = Color.RED
+			if is_instance_valid(self):
+				if enemy_data:
+					sprite.modulate = enemy_data.color
+				else:
+					sprite.modulate = Color.RED
 
 func die():
 	# 防止重复调用
@@ -1124,8 +1126,9 @@ func die():
 		tween.tween_property(self, "modulate:a", 0.0, flight_time).set_ease(Tween.EASE_IN)
 		
 		await get_tree().create_timer(flight_time).timeout
-	
-	queue_free()
+
+	if is_instance_valid(self):
+		queue_free()
 
 # 从波次配置设置敌人（新接口，用于波次系统）
 func setup_from_wave(wave_config: EnemyData.WaveConfig):

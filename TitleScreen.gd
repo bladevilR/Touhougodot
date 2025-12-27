@@ -111,10 +111,22 @@ func _create_menu_button(text: String, index: int) -> Button:
 	button.add_theme_stylebox_override("pressed", pressed_style)
 
 	# 悬停动画
-	button.mouse_entered.connect(func(): _on_button_hover(button, true))
-	button.mouse_exited.connect(func(): _on_button_hover(button, false))
-	button.focus_entered.connect(func(): _on_button_hover(button, true))
-	button.focus_exited.connect(func(): _on_button_hover(button, false))
+	button.mouse_entered.connect(func():
+		if is_instance_valid(self) and is_instance_valid(button):
+			_on_button_hover(button, true)
+	)
+	button.mouse_exited.connect(func():
+		if is_instance_valid(self) and is_instance_valid(button):
+			_on_button_hover(button, false)
+	)
+	button.focus_entered.connect(func():
+		if is_instance_valid(self) and is_instance_valid(button):
+			_on_button_hover(button, true)
+	)
+	button.focus_exited.connect(func():
+		if is_instance_valid(self) and is_instance_valid(button):
+			_on_button_hover(button, false)
+	)
 
 	return button
 
@@ -150,8 +162,9 @@ func _create_floating_particles():
 		_animate_particle(particle)
 
 func _animate_particle(particle: ColorRect):
+	if not is_instance_valid(particle) or not is_instance_valid(self):
+		return
 	var tween = particle.create_tween()
-	tween.set_loops()
 
 	var start_y = particle.position.y
 	var end_y = start_y - randf_range(100, 300)
@@ -160,9 +173,11 @@ func _animate_particle(particle: ColorRect):
 	tween.tween_property(particle, "position:y", end_y, duration)
 	tween.parallel().tween_property(particle, "modulate:a", 0.0, duration)
 	tween.tween_callback(func():
-		particle.position.y = get_viewport_rect().size.y + 50
-		particle.position.x = randf_range(0, get_viewport_rect().size.x)
-		particle.modulate.a = 1.0
+		if is_instance_valid(particle) and is_instance_valid(self):
+			particle.position.y = get_viewport_rect().size.y + 50
+			particle.position.x = randf_range(0, get_viewport_rect().size.x)
+			particle.modulate.a = 1.0
+			_animate_particle(particle)
 	)
 
 func _animate_intro():
@@ -221,10 +236,16 @@ func _on_settings():
 func _on_quit():
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.3)
-	tween.tween_callback(func(): get_tree().quit())
+	tween.tween_callback(func():
+		if is_instance_valid(self):
+			get_tree().quit()
+	)
 
 func _transition_to_scene(scene_path: String):
 	# 淡出过渡效果
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.25)
-	tween.tween_callback(func(): get_tree().change_scene_to_file(scene_path))
+	tween.tween_callback(func():
+		if is_instance_valid(self):
+			get_tree().change_scene_to_file(scene_path)
+	)

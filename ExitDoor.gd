@@ -75,11 +75,20 @@ func _create_fog_seal():
 	add_child(fog_seal_rect)
 	
 	# 简单的呼吸动画
-	if fog_tween: fog_tween.kill()
+	_start_fog_animation(fog_seal_rect)
+
+func _start_fog_animation(fog_seal: ColorRect):
+	if not is_instance_valid(fog_seal) or not is_instance_valid(self):
+		return
+	if fog_tween and is_instance_valid(fog_tween):
+		fog_tween.kill()
 	fog_tween = create_tween()
-	fog_tween.set_loops()
-	fog_tween.tween_property(fog_seal_rect, "modulate:a", 0.6, 1.5).set_trans(Tween.TRANS_SINE)
-	fog_tween.tween_property(fog_seal_rect, "modulate:a", 1.0, 1.5).set_trans(Tween.TRANS_SINE)
+	fog_tween.tween_property(fog_seal, "modulate:a", 0.6, 1.5).set_trans(Tween.TRANS_SINE)
+	fog_tween.tween_property(fog_seal, "modulate:a", 1.0, 1.5).set_trans(Tween.TRANS_SINE)
+	fog_tween.tween_callback(func():
+		if is_instance_valid(self) and is_instance_valid(fog_seal):
+			_start_fog_animation(fog_seal)
+	)
 
 func _create_collision_shape():
 	"""创建碰撞区域"""

@@ -40,6 +40,8 @@ func _ready():
 
 	# 延迟显示开场对话（确保UI系统已初始化）
 	await get_tree().create_timer(1.0).timeout
+	if not is_instance_valid(self):
+		return
 	_show_opening_dialogue()
 
 func _show_opening_dialogue():
@@ -65,6 +67,8 @@ func _show_opening_dialogue():
 			game_ui.add_child(dialogue_system)
 			# 等待一帧确保_ready完成
 			await get_tree().process_frame
+			if not is_instance_valid(self):
+				return
 			print("[World] DialoguePortrait创建成功")
 		else:
 			print("[World] 错误: 无法加载DialoguePortrait.gd")

@@ -65,6 +65,9 @@ func _ready():
 	# 等待所有管理器初始化完成（确保 RoomLayoutManager 已准备好）
 	await get_tree().create_timer(0.1).timeout
 
+	if not is_instance_valid(self):
+		return
+
 	# 启动第一个房间
 	_start_room(0)
 
@@ -535,7 +538,8 @@ func _start_shop_room():
 	
 	# 商店房间直接打开出口
 	await get_tree().create_timer(0.5).timeout
-	_on_room_cleared()
+	if is_instance_valid(self):
+		_on_room_cleared()
 
 func _spawn_nitori_shop():
 	"""生成河童商店"""
@@ -612,6 +616,9 @@ func _start_boss_room():
 	# 延迟生成Boss（给玩家看对话的时间）
 	await get_tree().create_timer(1.0).timeout # 对话结束后只需短暂停顿
 
+	if not is_instance_valid(self):
+		return
+
 	# 生成BOSS（传递boss类型）
 	var boss_config = EnemyData.BOSSES.get(boss_type)
 	if boss_config:
@@ -632,7 +639,8 @@ func _start_enchant_room():
 
 	# 延迟开门
 	await get_tree().create_timer(0.5).timeout
-	_on_room_cleared()
+	if is_instance_valid(self):
+		_on_room_cleared()
 
 func _start_treasure_room():
 	"""宝箱房间"""
@@ -647,7 +655,8 @@ func _start_treasure_room():
 
 	# 延迟开门
 	await get_tree().create_timer(0.5).timeout
-	_on_room_cleared()
+	if is_instance_valid(self):
+		_on_room_cleared()
 
 func _start_rest_room():
 	"""休息房间"""

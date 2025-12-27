@@ -715,12 +715,20 @@ func create_fog_layer(density: float):
 	fog_rect.material = mat
 	
 	fog_layer.add_child(fog_rect)
-	
+
 	# 简单的流动动画
+	_start_fog_flow_animation(fog_rect, density)
+
+func _start_fog_flow_animation(fog_rect: TextureRect, density: float):
+	if not is_instance_valid(fog_rect) or not is_instance_valid(self):
+		return
 	var tween = create_tween()
-	tween.set_loops()
 	tween.tween_property(fog_rect, "modulate:a", density * 0.8, 3.0).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(fog_rect, "modulate:a", density * 1.2, 3.0).set_trans(Tween.TRANS_SINE)
+	tween.tween_callback(func():
+		if is_instance_valid(self) and is_instance_valid(fog_rect):
+			_start_fog_flow_animation(fog_rect, density)
+	)
 
 func set_fog_density(density: float):
 	if fog_layer and is_instance_valid(fog_layer):

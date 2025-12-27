@@ -51,7 +51,7 @@ func _ready():
 			video_player.play()
 			# 循环播放
 			video_player.finished.connect(func():
-				if video_player and is_instance_valid(video_player):
+				if is_instance_valid(self) and video_player and is_instance_valid(video_player):
 					video_player.play()
 			)
 		else:

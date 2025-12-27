@@ -373,7 +373,10 @@ func spawn_fire_trail(pos: Vector2):
 	fire_area.add_child(wall_timer)
 	
 	# 连接信号，并在退出场景树时自动从数组移除
-	fire_area.tree_exiting.connect(func(): if fire_area in fire_walls: fire_walls.erase(fire_area))
+	fire_area.tree_exiting.connect(func():
+		if is_instance_valid(self) and fire_area in fire_walls:
+			fire_walls.erase(fire_area)
+	)
 	wall_timer.timeout.connect(fire_area.queue_free)
 
 	# 使用Area2D信号进行持续伤害
@@ -385,13 +388,13 @@ func _setup_fire_trail_damage(fire_area: Area2D, damage: float):
 
 	# 敌人进入火墙
 	fire_area.body_entered.connect(func(body):
-		if body.is_in_group("enemy") and body.has_method("take_damage"):
+		if is_instance_valid(self) and body.is_in_group("enemy") and body.has_method("take_damage"):
 			enemies_in_fire[body] = 0.0  # 记录敌人，初始计时器为0
 	)
 
 	# 敌人离开火墙
 	fire_area.body_exited.connect(func(body):
-		if body in enemies_in_fire:
+		if is_instance_valid(self) and body in enemies_in_fire:
 			enemies_in_fire.erase(body)
 	)
 
@@ -402,7 +405,7 @@ func _setup_fire_trail_damage(fire_area: Area2D, damage: float):
 	fire_area.add_child(damage_timer)
 
 	damage_timer.timeout.connect(func():
-		if not is_instance_valid(fire_area):
+		if not is_instance_valid(self) or not is_instance_valid(fire_area):
 			return
 
 		# 只对火墙中的敌人造成伤害

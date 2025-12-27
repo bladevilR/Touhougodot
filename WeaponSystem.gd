@@ -1328,7 +1328,7 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 			nearest_enemy.apply_knockback(direction, 5000.0)
 
 			# 旋转特效 - 疯狂旋转
-			if "sprite" in nearest_enemy and nearest_enemy.sprite:
+			if is_instance_valid(nearest_enemy) and "sprite" in nearest_enemy and nearest_enemy.sprite and is_instance_valid(nearest_enemy.sprite):
 				var tween = get_tree().create_tween()
 				# 快速旋转多圈
 				tween.tween_property(nearest_enemy.sprite, "rotation", PI * 12, 0.8).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
@@ -1356,6 +1356,8 @@ func _create_melee_hitbox(pos: Vector2, radius: float, duration: float, damage: 
 	
 	# 连接信号处理伤害
 	area.body_entered.connect(func(body):
+		if not is_instance_valid(self):
+			return
 		if body.is_in_group("enemy"):
 			# 先击飞 (重击)
 			if body.has_method("apply_knockback"):
@@ -1365,11 +1367,11 @@ func _create_melee_hitbox(pos: Vector2, radius: float, duration: float, damage: 
 					body.apply_knockback(knock_dir, knockback)
 				else:
 					body.apply_knockback(knock_dir, knockback)
-			
+
 			# 延迟伤害
 			if damage_delay > 0:
 				await get_tree().create_timer(damage_delay).timeout
-				
+
 			if is_instance_valid(body) and body.has_method("take_damage"):
 				body.take_damage(damage)
 	)
@@ -1475,7 +1477,7 @@ func _schedule_delayed_bullet(bullet: Node, final_speed: float, delay: float):
 	# 创建一个计时器来延迟加速
 	var timer = get_tree().create_timer(delay)
 	timer.timeout.connect(func():
-		if is_instance_valid(bullet):
+		if is_instance_valid(self) and is_instance_valid(bullet):
 			# 使用保存的方向加速
 			bullet.velocity = bullet.direction * final_speed
 			bullet.speed = final_speed

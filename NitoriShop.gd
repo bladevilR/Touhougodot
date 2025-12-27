@@ -414,7 +414,7 @@ func _start_regen_effect(player: Node, amount: int, interval: float):
 	timer.wait_time = interval
 	timer.autostart = true
 	timer.timeout.connect(func():
-		if is_instance_valid(player) and player.health_comp:
+		if is_instance_valid(self) and is_instance_valid(player) and player.health_comp:
 			player.health_comp.heal(amount)
 	)
 	player.add_child(timer)

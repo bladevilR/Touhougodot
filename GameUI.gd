@@ -648,7 +648,10 @@ func _on_damage_dealt(damage_amount: float, pos: Vector2, is_critical: bool, wea
 	tween.tween_property(label, "modulate:a", 0.0, 0.8)
 
 	# 动画结束后删除
-	tween.chain().tween_callback(func(): label.queue_free())
+	tween.chain().tween_callback(func():
+		if is_instance_valid(label):
+			label.queue_free()
+	)
 
 # ==================== DPS统计 UI ====================
 func _create_dps_ui():

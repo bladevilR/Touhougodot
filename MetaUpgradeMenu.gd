@@ -361,7 +361,10 @@ func _on_upgrade_purchased(upgrade_id: String, _new_level: int):
 func _on_back_pressed():
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.2)
-	tween.tween_callback(func(): get_tree().change_scene_to_file("res://TitleScreen.tscn"))
+	tween.tween_callback(func():
+		if is_instance_valid(self):
+			get_tree().change_scene_to_file("res://TitleScreen.tscn")
+	)
 
 func _input(event):
 	if event.is_action_pressed("ui_cancel"):

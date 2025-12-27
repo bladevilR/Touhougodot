@@ -223,6 +223,9 @@ func _skill_sakuya_time_stop():
 	# 5秒后恢复
 	await get_tree().create_timer(5.0).timeout
 
+	if not is_instance_valid(self):
+		return
+
 	for enemy in get_tree().get_nodes_in_group("enemy"):
 		enemy.set_process(true)
 		enemy.set_physics_process(true)

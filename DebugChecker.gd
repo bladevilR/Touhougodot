@@ -5,6 +5,9 @@ extends Node
 func _ready():
 	await get_tree().create_timer(2.0).timeout  # 等待所有系统初始化
 
+	if not is_instance_valid(self):
+		return
+
 	print("\n========== 房间系统调试信息 ==========")
 
 	# 检查RoomManager

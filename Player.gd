@@ -603,7 +603,8 @@ func take_damage(amount: float, should_shake: bool = true):
 		if sprite:
 			sprite.modulate = Color.RED
 			await get_tree().create_timer(0.1).timeout
-			sprite.modulate = Color.WHITE
+			if is_instance_valid(self) and sprite:
+				sprite.modulate = Color.WHITE
 
 func hitstop(duration: float):
 	"""顿帧效果"""
@@ -1204,7 +1205,10 @@ func play_attack_animation(frame_index: int, duration: float):
 	
 	# 动画结束后恢复状态
 	await get_tree().create_timer(duration).timeout
-	
+
+	if not is_instance_valid(self):
+		return
+
 	# 只有当这是最后一次攻击时才恢复
 	if current_attack_id == my_id:
 		is_attacking = false

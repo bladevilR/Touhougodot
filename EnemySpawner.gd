@@ -116,7 +116,10 @@ func _spawn_next_room_enemy():
 	
 	# 延迟生成敌人
 	await get_tree().create_timer(0.8).timeout
-	
+
+	if not is_instance_valid(self):
+		return
+
 	# 销毁预警
 	if warning_instance and is_instance_valid(warning_instance):
 		if warning_instance.has_method("disappear"):
