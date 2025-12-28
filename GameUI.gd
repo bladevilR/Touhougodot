@@ -642,12 +642,14 @@ func _on_damage_dealt(damage_amount: float, pos: Vector2, is_critical: bool, wea
 	damage_numbers_container.add_child(label)
 
 	# 动画：向上飘动并淡出
-	var tween = create_tween()
+	# [修复] 绑定 Tween 到 label 上，确保 label 销毁时 tween 停止，避免 Lambda 捕获已释放对象错误
+	var tween = label.create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(label, "position:y", label.position.y - 50, 0.8)
 	tween.tween_property(label, "modulate:a", 0.0, 0.8)
 
 	# 动画结束后删除
+	# [修复] 使用 Lambda 包装，避免 label 被提前释放导致的 C++ 错误
 	tween.chain().tween_callback(func():
 		if is_instance_valid(label):
 			label.queue_free()

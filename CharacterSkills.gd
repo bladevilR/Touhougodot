@@ -377,7 +377,10 @@ func spawn_fire_trail(pos: Vector2):
 		if is_instance_valid(self) and fire_area in fire_walls:
 			fire_walls.erase(fire_area)
 	)
-	wall_timer.timeout.connect(fire_area.queue_free)
+	wall_timer.timeout.connect(func():
+		if is_instance_valid(fire_area):
+			fire_area.queue_free()
+	)
 
 	# 使用Area2D信号进行持续伤害
 	_setup_fire_trail_damage(fire_area, config.fire_wall_damage)
@@ -472,7 +475,10 @@ func _spawn_flame_trail_particles(pos: Vector2):
 	get_tree().current_scene.add_child(trail_particles)
 
 	# [修复] 粒子播放完后清理，使用 finished 信号更稳定
-	trail_particles.finished.connect(trail_particles.queue_free)
+	trail_particles.finished.connect(func():
+		if is_instance_valid(trail_particles):
+			trail_particles.queue_free()
+	)
 
 func damage_enemies_in_kick_path():
 	"""对飞踢路径上的敌人造成伤害和击飞"""

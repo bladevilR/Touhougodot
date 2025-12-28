@@ -78,15 +78,16 @@ func _create_fog_seal():
 	_start_fog_animation(fog_seal_rect)
 
 func _start_fog_animation(fog_seal: ColorRect):
-	if not is_instance_valid(fog_seal) or not is_instance_valid(self):
+	if not is_instance_valid(fog_seal) or not is_instance_valid(self) or not is_inside_tree():
 		return
 	if fog_tween and is_instance_valid(fog_tween):
 		fog_tween.kill()
-	fog_tween = create_tween()
+	# [修复] 使用 fog_seal.create_tween() 绑定 tween 到 fog_seal 的生命周期
+	fog_tween = fog_seal.create_tween()
 	fog_tween.tween_property(fog_seal, "modulate:a", 0.6, 1.5).set_trans(Tween.TRANS_SINE)
 	fog_tween.tween_property(fog_seal, "modulate:a", 1.0, 1.5).set_trans(Tween.TRANS_SINE)
 	fog_tween.tween_callback(func():
-		if is_instance_valid(self) and is_instance_valid(fog_seal):
+		if is_instance_valid(self) and is_instance_valid(fog_seal) and is_inside_tree():
 			_start_fog_animation(fog_seal)
 	)
 
@@ -214,9 +215,13 @@ func open_door():
 	# 淡出雾门
 	if fog_seal_rect:
 		if fog_tween: fog_tween.kill() # 停止呼吸动画
-		var fade_tween = create_tween()
+		# [修复] 使用 fog_seal_rect.create_tween() 绑定 tween 到 fog_seal_rect 的生命周期
+		var fade_tween = fog_seal_rect.create_tween()
 		fade_tween.tween_property(fog_seal_rect, "modulate:a", 0.0, 0.8)
-		fade_tween.tween_callback(fog_seal_rect.queue_free)
+		fade_tween.tween_callback(func():
+			if is_instance_valid(fog_seal_rect):
+				fog_seal_rect.queue_free()
+		)
 		fog_seal_rect = null
 
 	# 延迟激活门

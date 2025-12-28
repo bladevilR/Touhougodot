@@ -720,13 +720,14 @@ func create_fog_layer(density: float):
 	_start_fog_flow_animation(fog_rect, density)
 
 func _start_fog_flow_animation(fog_rect: TextureRect, density: float):
-	if not is_instance_valid(fog_rect) or not is_instance_valid(self):
+	if not is_instance_valid(fog_rect) or not is_instance_valid(self) or not is_inside_tree():
 		return
-	var tween = create_tween()
+	# [修复] 使用 fog_rect.create_tween() 绑定 tween 到 fog_rect 的生命周期
+	var tween = fog_rect.create_tween()
 	tween.tween_property(fog_rect, "modulate:a", density * 0.8, 3.0).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(fog_rect, "modulate:a", density * 1.2, 3.0).set_trans(Tween.TRANS_SINE)
 	tween.tween_callback(func():
-		if is_instance_valid(self) and is_instance_valid(fog_rect):
+		if is_instance_valid(self) and is_instance_valid(fog_rect) and is_inside_tree():
 			_start_fog_flow_animation(fog_rect, density)
 	)
 

@@ -21,4 +21,7 @@ func disappear():
 		tween.kill()
 	tween = create_tween()
 	tween.tween_property(self, "scale", Vector2.ZERO, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	tween.tween_callback(queue_free)
+	tween.tween_callback(func():
+		if is_instance_valid(self):
+			queue_free()
+	)

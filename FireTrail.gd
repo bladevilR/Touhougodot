@@ -20,9 +20,17 @@ func _ready():
 
 func setup(dmg: float, duration: float):
 	damage_amount = dmg
-	
-	# 自毁计时器
-	get_tree().create_timer(duration).timeout.connect(queue_free)
+
+	# 自毁计时器 - [修复] 使用 Timer 节点而非 SceneTreeTimer 避免 Lambda 捕获错误
+	var destroy_timer = Timer.new()
+	destroy_timer.wait_time = duration
+	destroy_timer.one_shot = true
+	destroy_timer.autostart = true
+	add_child(destroy_timer)
+	destroy_timer.timeout.connect(func():
+		if is_instance_valid(self):
+			queue_free()
+	)
 
 func _on_body_entered(body):
 	if body.is_in_group("enemy") and body.has_method("take_damage"):

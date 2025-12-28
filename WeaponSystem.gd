@@ -1072,10 +1072,13 @@ func fire_charged_flame_ring(duration: float, override_direction: Vector2 = Vect
 		var canvas_mat = CanvasItemMaterial.new()
 		canvas_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		burst.material = canvas_mat
-		
+
 		get_tree().current_scene.add_child(burst)
 		# [修复] 使用 finished 信号自动清理，避免 Lambda 捕获失效导致的 C++ 错误
-		burst.finished.connect(burst.queue_free)
+		burst.finished.connect(func():
+			if is_instance_valid(burst):
+				burst.queue_free()
+		)
 		
 		var bullet = bullet_scene.instantiate()
 		var bullet_config = {
@@ -1165,10 +1168,13 @@ func _spawn_fire_arc_particles(direction: Vector2, scale_mod: float):
 	var canvas_mat = CanvasItemMaterial.new()
 	canvas_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	arc_particles.material = canvas_mat
-	
+
 	get_tree().current_scene.add_child(arc_particles)
 	# [修复] 使用 finished 信号自动清理
-	arc_particles.finished.connect(arc_particles.queue_free)
+	arc_particles.finished.connect(func():
+		if is_instance_valid(arc_particles):
+			arc_particles.queue_free()
+	)
 
 # 辅助：扇形伤害判定 (从原_fire_melee_light提取)
 func _apply_melee_arc_damage(direction: Vector2, radius: float, arc_dot: float, damage: float, knockback: float, stun_dur: float):
@@ -1264,10 +1270,13 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 	var canvas_mat = CanvasItemMaterial.new()
 	canvas_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	particles.material = canvas_mat
-	
+
 	get_tree().current_scene.add_child(particles)
 	# [修复] 使用 finished 信号自动清理
-	particles.finished.connect(particles.queue_free)
+	particles.finished.connect(func():
+		if is_instance_valid(particles):
+			particles.queue_free()
+	)
 
 	# === 3. 立即判定 (分两层攻击) ===
 	# 获取所有敌人
@@ -1474,13 +1483,20 @@ func _get_weapon_color(weapon_id: String, config: WeaponData.WeaponConfig) -> Co
 
 func _schedule_delayed_bullet(bullet: Node, final_speed: float, delay: float):
 	"""延迟发射子弹（用于咲夜飞刀的时停效果）"""
-	# 创建一个计时器来延迟加速
-	var timer = get_tree().create_timer(delay)
+	# [修复] 使用 Timer 节点而非 SceneTreeTimer 避免 Lambda 捕获错误
+	var timer = Timer.new()
+	timer.wait_time = delay
+	timer.one_shot = true
+	timer.autostart = true
+	add_child(timer)
 	timer.timeout.connect(func():
 		if is_instance_valid(self) and is_instance_valid(bullet):
 			# 使用保存的方向加速
 			bullet.velocity = bullet.direction * final_speed
 			bullet.speed = final_speed
+			# 清理计时器
+			if is_instance_valid(timer):
+				timer.queue_free()
 	)
 
 func get_weapon_data(weapon_id: String) -> Dictionary:

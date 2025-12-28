@@ -26,6 +26,16 @@ func _ready():
 		await get_tree().create_timer(0.5).timeout
 		buttons[0].grab_focus()
 
+func _exit_tree():
+	# 清理所有粒子动画的tweens
+	for particle in particle_nodes:
+		if is_instance_valid(particle):
+			if particle.has_meta("particle_tween"):
+				var tween = particle.get_meta("particle_tween")
+				if is_instance_valid(tween):
+					tween.kill()
+			particle.queue_free()
+
 func _setup_background():
 	# 创建渐变背景效果
 	pass
@@ -164,7 +174,16 @@ func _create_floating_particles():
 func _animate_particle(particle: ColorRect):
 	if not is_instance_valid(particle) or not is_instance_valid(self):
 		return
+
+	# 如果已有tween在运行，先停止它
+	if particle.has_meta("particle_tween"):
+		var old_tween = particle.get_meta("particle_tween")
+		if is_instance_valid(old_tween):
+			old_tween.kill()
+
 	var tween = particle.create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
+	particle.set_meta("particle_tween", tween)
 
 	var start_y = particle.position.y
 	var end_y = start_y - randf_range(100, 300)
@@ -173,7 +192,7 @@ func _animate_particle(particle: ColorRect):
 	tween.tween_property(particle, "position:y", end_y, duration)
 	tween.parallel().tween_property(particle, "modulate:a", 0.0, duration)
 	tween.tween_callback(func():
-		if is_instance_valid(particle) and is_instance_valid(self):
+		if is_instance_valid(particle) and is_instance_valid(self) and is_inside_tree():
 			particle.position.y = get_viewport_rect().size.y + 50
 			particle.position.x = randf_range(0, get_viewport_rect().size.x)
 			particle.modulate.a = 1.0
