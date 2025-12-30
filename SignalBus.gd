@@ -7,6 +7,7 @@ extends Node
 var selected_character_id: int = 0  # 当前选择的角色ID
 
 # --- 战斗相关信号 ---
+@warning_ignore("unused_signal")  # Signal is emitted from other classes (HealthComponent, Player, etc.)
 signal player_health_changed(current_hp, max_hp)
 signal player_died()
 signal enemy_killed(xp_value, position) # 怪物死了，通知掉落系统和经验系统

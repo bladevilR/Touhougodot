@@ -432,13 +432,6 @@ func _apply_qualitative_change(weapon_id: String, weapon_data: Dictionary):
 			weapon_data["trail_damage"] = true
 			print("  → 全向发射, 星尘轨迹")
 
-		"phoenix_wings":
-			# 凤凰羽衣 → 双层旋转 / 击杀爆炸
-			weapon_data["qualitative_effect"] = "double_rotation"
-			weapon_data["second_layer"] = true
-			weapon_data["kill_explosion"] = true
-			print("  → 双层旋转, 击杀爆炸")
-
 		"knives":
 			# 银制飞刀 → 弹幕密度 / 时停飞刀
 			weapon_data["qualitative_effect"] = "knife_barrage"
@@ -669,38 +662,6 @@ func _fire_projectile_in_direction(weapon_id: String, config: WeaponData.WeaponC
 func _fire_orbital(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, weapon_level: int):
 	# 环绕武器（如凤凰羽衣）
 	# 这类武器应该持续存在，每次发射刷新环绕弹幕
-
-	# 特殊处理：phoenix_wings 光环武器只生成一次，持续存在
-	if weapon_id == "phoenix_wings":
-		# 清理所有旧的光环（防止重复生成）
-		var existing_auras = get_tree().get_nodes_in_group("phoenix_aura")
-		for aura in existing_auras:
-			aura.queue_free()
-
-		# 生成持续存在的光环
-		var bullet = bullet_scene.instantiate()
-		bullet.add_to_group("phoenix_aura")  # 添加到组方便查找
-
-		var bullet_config = {
-			"weapon_id": weapon_id,
-			"bullet_color": Color(0.8, 0.4, 0.1, 0.3),  # 变暗，降低透明度 (低调点)
-			"damage": config.base_damage * stats.might,
-			"speed": 0.0,
-			"lifetime": 999999.0,  # 超长生命周期，基本不会消失
-			"direction": Vector2.ZERO,
-			"penetration": config.penetration,
-			"orbit_radius": 0.01,  # 设置为接近0的值，避免完全为0导致逻辑不触发
-			"orbit_angle": 0.0,
-			"orbit_speed": 0.0,
-			"element": _element_type_to_string(config.element_type),
-			"knockback": config.knockback,
-			"on_hit_effect": config.on_hit_effect
-		}
-
-		bullet.setup(bullet_config)
-		bullet.global_position = player.global_position
-		get_tree().current_scene.call_deferred("add_child", bullet)
-		return
 
 	# 原有的环绕弹幕逻辑（用于其他武器）
 	# 获取武器数据（包含质变效果）
@@ -1238,7 +1199,7 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 
 	# === 1. 攻击动画 ===
 	if player.has_method("play_attack_animation"):
-		player.play_attack_animation(1, 0.3)
+		player.play_attack_animation(1, 0.3)  # 0.3秒播放25帧动画
 
 	# === 2. 火焰特效 ===
 	var particles = GPUParticles2D.new()
@@ -1336,9 +1297,9 @@ func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats
 			# 向前击飞
 			nearest_enemy.apply_knockback(direction, 5000.0)
 
-			# 旋转特效 - 疯狂旋转
+			# 旋转特效 - 疯狂旋转 [修复] 绑定到 sprite 的生命周期
 			if is_instance_valid(nearest_enemy) and "sprite" in nearest_enemy and nearest_enemy.sprite and is_instance_valid(nearest_enemy.sprite):
-				var tween = get_tree().create_tween()
+				var tween = nearest_enemy.sprite.create_tween()
 				# 快速旋转多圈
 				tween.tween_property(nearest_enemy.sprite, "rotation", PI * 12, 0.8).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 
@@ -1451,8 +1412,6 @@ func _get_weapon_color(weapon_id: String, config: WeaponData.WeaponConfig) -> Co
 			return Color("#e74c3c")  # 红色符札（灵梦）
 		"star_dust":
 			return Color("#f1c40f")  # 黄色星星（魔理沙）
-		"phoenix_wings":
-			return Color("#ff9500")  # 橙黄色火焰光环（妹红）
 		"phoenix_claws":
 			return Color("#ff3300")  # 鲜艳的橙红色利爪（妹红）
 		"knives":

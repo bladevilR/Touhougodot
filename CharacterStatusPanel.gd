@@ -3,7 +3,7 @@ extends CanvasLayer
 # CharacterStatusPanel - 角色状态面板 (Tab键打开)
 # 显示左侧大立绘 + 右侧角色信息
 
-var is_visible: bool = false
+var panel_visible: bool = false
 
 # UI节点
 var overlay: ColorRect = null
@@ -38,10 +38,10 @@ func _unhandled_input(event):
 
 func toggle_panel():
 	"""切换面板显示状态"""
-	is_visible = !is_visible
-	overlay.visible = is_visible
+	panel_visible = !panel_visible
+	overlay.visible = panel_visible
 
-	if is_visible:
+	if panel_visible:
 		# 打开时暂停游戏
 		get_tree().paused = true
 		_update_info()

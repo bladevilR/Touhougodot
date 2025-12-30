@@ -642,7 +642,7 @@ func _attack_freeze_circle():
 	if bullet_scene:
 		var barrier = bullet_scene.instantiate()
 		barrier.setup({
-			"weapon_id": "phoenix_wings", # Use aura visual
+			"weapon_id": "big_bullet", # Use a generic big bullet visual
 			"color": Color(0.5, 0.8, 1.0, 0.5),
 			"damage": 5.0,
 			"is_barrier_field": true,
@@ -1120,9 +1120,9 @@ func die():
 		# 这是一个"击飞处决"，让尸体飞一会儿
 		var flight_time = 0.6
 		if knockback_velocity.length() > 2000.0: flight_time = 0.8 # 超级击飞飞久一点
-		
-		# 尸体淡出
-		var tween = get_tree().create_tween()
+
+		# 尸体淡出 [修复] 绑定到 self 的生命周期
+		var tween = create_tween()
 		tween.tween_property(self, "modulate:a", 0.0, flight_time).set_ease(Tween.EASE_IN)
 		
 		await get_tree().create_timer(flight_time).timeout

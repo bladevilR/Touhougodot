@@ -193,24 +193,37 @@ func open_door():
 		if not is_instance_valid(sprite):
 			continue
 
-		var tween = create_tween()
+		# [修复] 使用 sprite.create_tween() 绑定 tween 到 sprite 的生命周期
+		var tween = sprite.create_tween()
 		tween.set_parallel(true)
 
 		# 竹子向两侧移动并淡出
 		var move_direction = Vector2.ZERO
 		match direction:
 			DoorDirection.NORTH, DoorDirection.SOUTH:
-				move_direction = Vector2(1 if i >= seal_sprites.size() / 2 else -1, 0)
+				move_direction = Vector2(1 if i >= seal_sprites.size() / 2.0 else -1, 0)
 			DoorDirection.EAST, DoorDirection.WEST:
-				move_direction = Vector2(0, 1 if i >= seal_sprites.size() / 2 else -1)
+				move_direction = Vector2(0, 1 if i >= seal_sprites.size() / 2.0 else -1)
 
 		tween.tween_property(sprite, "position", sprite.position + move_direction * 100, 0.8)
 		tween.tween_property(sprite, "modulate:a", 0.0, 0.8)
 		tween.tween_property(sprite, "rotation", sprite.rotation + randf_range(-0.5, 0.5), 0.8)
+		# 动画结束后删除 sprite
+		tween.tween_callback(func():
+			if is_instance_valid(sprite):
+				sprite.queue_free()
+		)
 
-	# 停止封印粒子
+	# 停止并删除封印粒子（异步删除，不阻塞）
 	if seal_particles:
 		seal_particles.emitting = false
+		var particles_ref = seal_particles  # 保存引用
+		seal_particles = null
+		# 异步删除粒子（不阻塞主函数）
+		get_tree().create_timer(particles_ref.lifetime).timeout.connect(func():
+			if is_instance_valid(particles_ref):
+				particles_ref.queue_free()
+		)
 		
 	# 淡出雾门
 	if fog_seal_rect:

@@ -566,14 +566,14 @@ func spawn_landing_explosion(pos: Vector2):
 	SignalBus.screen_shake.emit(0.3, 15.0)
 	SignalBus.spawn_death_particles.emit(pos, Color("#ff4500"), 30)
 
-	# 视觉效果：爆炸扩散动画（0.3秒）- 圆形扩大并淡出
-	var tween = get_tree().create_tween()
-	tween.tween_property(circle, "scale", Vector2(2.0, 2.0), 0.3)  # 扩大2倍
+	# 视觉效果：爆炸扩散动画（0.3秒）- 圆形扩大并淡出 [修复] 绑定到 circle 的生命周期
+	var tween = circle.create_tween()
+	tween.tween_property(circle, "scale", Vector2(2.0, 2.0), 0.3)  # ���大2倍
 	tween.parallel().tween_property(circle, "color:a", 0.0, 0.3)  # 淡出
-
-	await get_tree().create_timer(0.3).timeout
-	if is_instance_valid(explosion):
-		explosion.queue_free()
+	tween.tween_callback(func():
+		if is_instance_valid(explosion):
+			explosion.queue_free()
+	)
 
 
 # ============================================
