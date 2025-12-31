@@ -142,6 +142,8 @@ func _ready():
 		sprite.visible = true
 		# 复位 Sprite，不再尝试上移
 		sprite.position = Vector2.ZERO
+		# 既然决定手动缩小图片，这里就使用 Nearest 保证最锐利的像素显示
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 	# 阴影位置在_try_add_shadow中已经设置，无需重复调整
 
@@ -939,12 +941,26 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 		if input_dir.x != 0:
 			sprite.flip_h = input_dir.x < 0
 
-		sprite.scale = Vector2(TARGET_HEIGHT / 720.0, TARGET_HEIGHT / 720.0)
+		# 自动计算缩放比例：根据当前帧的实际高度缩放到 TARGET_HEIGHT (100px)
+		if sprite.texture:
+			var current_frame_height = sprite.texture.get_height()
+			if current_frame_height > 0:
+				var s = TARGET_HEIGHT / float(current_frame_height)
+				sprite.scale = Vector2(s, s)
+			else:
+				sprite.scale = Vector2(TARGET_HEIGHT / 720.0, TARGET_HEIGHT / 720.0)
 	else:
 		animation_timer = 0.0
 		if mokou_textures.stand:
 			sprite.texture = mokou_textures.stand
-			sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
+			# Use dynamic scaling based on actual texture height
+			var tex_height = mokou_textures.stand.get_height()
+			if tex_height > 0:
+				var scale_factor = TARGET_HEIGHT / float(tex_height)
+				sprite.scale = Vector2(scale_factor, scale_factor)
+			else:
+				# Fallback if height is somehow 0 (unlikely)
+				sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
 
 	# [实现] 动态阴影系统：妹红的影子根据跑步方向变化
 	# _update_mokou_animation 不再调用 shadow 更新，避免冲突

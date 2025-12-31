@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://rhrs13ys3cmv"
-path="res://.godot/imported/mokuo (4).png-b47d2476bde84297a034109c010f1b58.ctex"
+uid="uid://db7rw64q4ldrh"
+path="res://.godot/imported/down - 副本.png-a5b7f8791bc00416b94958bfdec4d1cd.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/characters/mokuo (4).png"
-dest_files=["res://.godot/imported/mokuo (4).png-b47d2476bde84297a034109c010f1b58.ctex"]
+source_file="res://assets/down - 副本.png"
+dest_files=["res://.godot/imported/down - 副本.png-a5b7f8791bc00416b94958bfdec4d1cd.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

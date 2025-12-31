@@ -181,13 +181,13 @@ func _create_status_panel():
 	else:
 		print("[GameUI] 错误: 无法加载 CharacterStatusPanel.gd")
 
-func _process(delta):
+func _process(_delta):
 	# 更新元素附魔计时器显示
 	_update_enchant_timer()
 	# 更新技能冷却显示
 	_update_skill_cooldown()
 	# 更新DPS显示
-	_update_dps_display(delta)
+	_update_dps_display(_delta)
 	# 更新任务计时器
 	_update_mission_timer()
 

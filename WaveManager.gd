@@ -7,6 +7,7 @@ class_name WaveManager
 signal wave_started(wave_number: int, wave_name: String)
 signal wave_completed(wave_number: int)
 signal boss_wave_started(boss_name: String)
+@warning_ignore("unused_signal")
 signal all_waves_completed()
 
 # 波次状态

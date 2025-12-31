@@ -45,22 +45,22 @@ var bamboo_configs = [
 # 装饰物纹理路径
 var decoration_textures = {
 	"flowers": [
-		"res://flower_white_daisy_single.png",
-		"res://flower_blue_single_1.png",
-		"res://flower_red_cluster_1.png",
-		"res://flower_yellow_cluster_1.png",
-		"res://flower_white_cluster_1.png",
+		"res://assets/SUCAI/images_resized/flower_white_daisy_single.png",
+		"res://assets/SUCAI/images_resized/flower_blue_single_1.png",
+		"res://assets/SUCAI/images_resized/flower_red_cluster_1.png",
+		"res://assets/SUCAI/images_resized/flower_yellow_cluster_1.png",
+		"res://assets/SUCAI/images_resized/flower_white_cluster_1.png",
 	],
 	"shoots": [
-		"res://shoot_small_1.png",
-		"res://shoot_small_2.png",
-		"res://shoot_medium_1.png",
-		"res://shoot_medium_2.png",
+		"res://assets/SUCAI/images_resized/shoot_small_1.png",
+		"res://assets/SUCAI/images_resized/shoot_small_2.png",
+		"res://assets/SUCAI/images_resized/shoot_medium_1.png",
+		"res://assets/SUCAI/images_resized/shoot_medium_2.png",
 	],
 	"rocks": [
-		"res://rock_medium_grey.png",
-		"res://rock_large_moss_1.png",
-		"res://rock_medium_scattered.png",
+		"res://assets/SUCAI/images_resized/rock_medium_grey.png",
+		"res://assets/SUCAI/images_resized/rock_large_moss_1.png",
+		"res://assets/SUCAI/images_resized/rock_medium_scattered.png",
 	]
 }
 
@@ -339,7 +339,7 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 		"small": target_height = randf_range(100, 120)
 		_: target_height = randf_range(80, 100)
 
-	var scale = target_height / config.height
+	var scale = target_height / float(texture.get_height())
 	var scale_x = scale * randf_range(0.9, 1.05)
 	var scale_y = scale * randf_range(0.95, 1.1)
 	if config.type == "xlarge": scale_x *= 0.9
@@ -357,6 +357,8 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 
 		var sprite = Sprite2D.new()
 		sprite.texture = texture
+		# 强制使用 Nearest 采样，保持锐利
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		sprite.scale = Vector2(scale_x, scale_y)
 		sprite.centered = false
 		sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
@@ -427,7 +429,7 @@ func create_interior_bamboo():
 				create_interior_bamboo_varied(pos, types)
 				count += 1
 				if randf() < 0.3: # 伴生竹笋
-					_create_shoot(pos + Vector2(randf_range(-20, 20), randf_range(10, 20)), 0.1)
+					_create_shoot(pos + Vector2(randf_range(-20, 20), randf_range(10, 20)), 20.0)
 			
 			elif noise_val < -0.3 and randf() < 0.01: # 稀疏散布 (1% 概率)
 				create_interior_bamboo_varied(pos, ["single", "small"])
@@ -456,7 +458,7 @@ func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 		"small": target_height = randf_range(100, 120)
 		_: target_height = randf_range(80, 100)
 
-	var scale = target_height / config.height
+	var scale = target_height / float(texture.get_height())
 	var scale_x = scale * randf_range(0.9, 1.05)
 	var scale_y = scale * randf_range(0.95, 1.1)
 	if config.type == "xlarge": scale_x *= 0.9
@@ -469,6 +471,8 @@ func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 
 	var sprite = Sprite2D.new()
 	sprite.texture = texture
+	# 强制使用 Nearest 采样，保持锐利
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.scale = Vector2(scale_x, scale_y)
 	sprite.centered = false
 	sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
@@ -520,11 +524,11 @@ func create_decorations_designed():
 			# 在空地 (noise < 0) 生成装饰物
 			if noise_val < 0.0:
 				if randf() < 0.2: # 20% 概率生成花簇
-					_create_flower_cluster(pos + Vector2(randf_range(-30,30), randf_range(-30,30)), randi_range(3, 5), 0.1)
+					_create_flower_cluster(pos + Vector2(randf_range(-30,30), randf_range(-30,30)), randi_range(3, 5), 30.0)
 				elif randf() < 0.1: # 10% 概率生成石头
-					_create_rock_group(pos + Vector2(randf_range(-20,20), randf_range(-20,20)), randi_range(1, 2), 0.2)
+					_create_rock_group(pos + Vector2(randf_range(-20,20), randf_range(-20,20)), randi_range(1, 2), 60.0)
 
-func _create_flower_cluster(center: Vector2, count: int, base_scale: float) -> int:
+func _create_flower_cluster(center: Vector2, count: int, target_h: float) -> int:
 	var flower_types = decoration_textures["flowers"]
 	var created = 0
 	for i in range(count):
@@ -532,22 +536,24 @@ func _create_flower_cluster(center: Vector2, count: int, base_scale: float) -> i
 		var radius = randf_range(20, 50)
 		var pos = center + Vector2(cos(angle), sin(angle)) * radius
 		var tex = flower_types[randi() % flower_types.size()]
-		if create_decoration_sprite(tex, pos, base_scale + randf_range(-0.02, 0.02), -1, Vector2(0, 0)):
+		# 加上 10% 的随机高度波动
+		if create_decoration_sprite(tex, pos, target_h * randf_range(0.9, 1.1), -1, Vector2(0, 0)):
 			created += 1
 	return created
 
-func _create_rock_group(center: Vector2, count: int, base_scale: float) -> int:
+func _create_rock_group(center: Vector2, count: int, target_h: float) -> int:
 	var rock_types = decoration_textures["rocks"]
 	var created = 0
 	for i in range(count):
 		var pos = center + Vector2(randf_range(-30, 30), randf_range(-20, 20))
 		var tex = rock_types[randi() % rock_types.size()]
-		create_solid_rock(tex, pos, base_scale + randf_range(-0.05, 0.05))
+		# 加上 15% 的随机高度波动
+		create_solid_rock(tex, pos, target_h * randf_range(0.85, 1.15))
 		created += 1
 	return created
 
 # 公开此方法供 RoomLayoutManager 使用，确保石头生成逻辑一致
-func create_solid_rock(texture_path: String, pos: Vector2, scale: float) -> Node2D:
+func create_solid_rock(texture_path: String, pos: Vector2, target_h: float = 60.0) -> Node2D:
 	var texture = load(texture_path)
 	if not texture: return null
 	
@@ -555,11 +561,14 @@ func create_solid_rock(texture_path: String, pos: Vector2, scale: float) -> Node
 	body.position = pos
 	body.collision_layer = 2
 	body.collision_mask = 1
-	body.z_index = 0
-	
 	var sprite = Sprite2D.new()
 	sprite.texture = texture
-	sprite.scale = Vector2(scale, scale)
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	
+	# 使用动态缩放：根据目标高度计算比例
+	var s = target_h / float(texture.get_height())
+	sprite.scale = Vector2(s, s)
+	
 	sprite.centered = false
 	sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
 	body.add_child(sprite)
@@ -567,14 +576,14 @@ func create_solid_rock(texture_path: String, pos: Vector2, scale: float) -> Node
 	var col = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
 	# 增大碰撞体积覆盖底部
-	shape.radius = texture.get_width() * scale * 0.45
+	shape.radius = texture.get_width() * s * 0.45
 	col.shape = shape
-	col.position = Vector2(0, -10 * scale)
+	col.position = Vector2(0, -10 * s)
 	body.add_child(col)
 	
-	var shadow_size = Vector2(texture.get_width() * scale * 0.8, texture.get_height() * scale * 0.4)
-	# 统一使用吃进 -20 的阴影
-	create_shadow_for_entity(body, shadow_size, Vector2(0, -20), 0.3)
+	var shadow_size = Vector2(texture.get_width() * s * 0.8, texture.get_height() * s * 0.4)
+	# 使用高级投影，手动 offset (-15) 向上提，防止石头影子脱节
+	create_shadow_for_entity(body, shadow_size, Vector2(0, -15), 0.3)
 	
 	if not game_objects_parent:
 		game_objects_parent = get_parent()
@@ -589,7 +598,7 @@ func _create_shoot(pos: Vector2, scale: float) -> int:
 	if create_decoration_sprite(tex, pos, scale, -1, Vector2(0, 0)): return 1
 	return 0
 
-func create_decoration_sprite(texture_path: String, pos: Vector2, scale: float, z_index: int = 0, shadow_offset: Vector2 = Vector2(0, -10)) -> Node2D:
+func create_decoration_sprite(texture_path: String, pos: Vector2, target_h: float, z_index: int = 0, shadow_offset: Vector2 = Vector2(0, 10)) -> Node2D:
 	var texture = load(texture_path)
 	if not texture: return null
 	var container = Node2D.new()
@@ -598,13 +607,18 @@ func create_decoration_sprite(texture_path: String, pos: Vector2, scale: float, 
 	
 	var sprite = Sprite2D.new()
 	sprite.texture = texture
-	sprite.scale = Vector2(scale, scale)
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	
+	# 使用动态缩放：根据目标高度计算比例
+	var s = target_h / float(texture.get_height())
+	sprite.scale = Vector2(s, s)
+	
 	sprite.centered = false
 	sprite.offset = Vector2(-texture.get_width() * 0.5, -texture.get_height())
 	container.add_child(sprite)
 	
 	# Shadow (After sprite added)
-	var shadow_size = Vector2(texture.get_width() * scale * 0.8, texture.get_height() * scale * 0.4)
+	var shadow_size = Vector2(texture.get_width() * s * 0.8, texture.get_height() * s * 0.4)
 	create_shadow_for_entity(container, shadow_size, shadow_offset, 0.3)
 	
 	if not game_objects_parent:
@@ -883,7 +897,7 @@ func _create_shadow_texture(width: int, height: int) -> ImageTexture:
 			var dy = (y - cy) / (height / 2.0)
 			var d = dx*dx + dy*dy
 			if d <= 1.0:
-				var alpha = pow(1.0 - sqrt(d), 0.8) * 0.6 # 更黑一点
+				var alpha = pow(1.0 - sqrt(d), 2.0) * 0.8 # 更柔和的边缘 (2.0 power)
 				image.set_pixel(x, y, Color(0, 0, 0, alpha))
 			else:
 				image.set_pixel(x, y, Color(0,0,0,0))
@@ -926,9 +940,10 @@ func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), o
 		# 1. Calculate Source Sprite's visual bottom in Local Space
 		var source_local_bottom_y = visible_bottom_y
 		
-		# 额外向内"吃"一点距离 (40px)，解决底部凹陷/不规则图形的贴合问题
-		# 增加到40.0以确保石头根部完全覆盖影子起点
-		var contact_eat_in = 40.0 
+		# 根据高度因子动态缩放吃进距离。
+		# 竹子 (height_factor=2.5) 依然是 40px；石头 (0.3) 则是 ~5px。
+		# 这样既保证了竹子贴合，又防止了小物体影子飞天。
+		var contact_eat_in = 40.0 * (height_factor / 2.5)
 		source_local_bottom_y -= contact_eat_in
 		
 		# Adjust for Source Centering/Offset
@@ -962,7 +977,7 @@ func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), o
 		
 	shadow.name = "Shadow"
 	shadow.z_index = -10 
-	shadow.modulate = Color(0, 0, 0, 0.5) 
+	shadow.modulate = Color(0, 0, 0, 0.35) # 降低不透明度 (0.5 -> 0.35) 
 	
 	parent.call_deferred("add_child", shadow)
 	return shadow

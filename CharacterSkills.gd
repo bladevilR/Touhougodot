@@ -136,30 +136,30 @@ func _ready():
 
 	print("角色技能系统已初始化，角色ID: ", character_id)
 
-func _process(delta):
+func _process(_delta):
 	# 更新技能冷却
 	if skill_cooldown > 0:
-		skill_cooldown -= delta
+		skill_cooldown -= _delta
 		if skill_cooldown < 0:
 			skill_cooldown = 0
 		skill_cooldown_changed.emit(skill_cooldown, max_cooldown)
 
 	# 更新传送标记计时器
 	if has_gap_mark:
-		gap_mark_timer -= delta
+		gap_mark_timer -= _delta
 		if gap_mark_timer <= 0:
 			clear_gap_mark()
 
 	# 更新技能持续效果
-	_update_active_skills(delta)
+	_update_active_skills(_delta)
 
-func _physics_process(delta):
+func _physics_process(_delta):
 	# 处理需要物理更新的技能
 	if is_fire_kicking:
-		_process_fire_kick(delta)
+		_process_fire_kick(_delta)
 
 	if is_broom_dashing:
-		_process_broom_dash(delta)
+		_process_broom_dash(_delta)
 
 func _input(event):
 	if not enabled or not player:

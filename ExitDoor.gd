@@ -106,7 +106,7 @@ func _create_collision_shape():
 	collision.shape = shape
 	add_child(collision)
 
-func _process(delta):
+func _process(_delta):
 	# 自动检测进入（如果玩家已经在范围内且门刚打开）
 	if is_active and player_in_range:
 		_enter_door()

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://rhrs13ys3cmv"
-path="res://.godot/imported/mokuo (4).png-b47d2476bde84297a034109c010f1b58.ctex"
+uid="uid://cxaxeqigah7m1"
+path="res://.godot/imported/bamboo_single_broken_4.png-bdef35fbaa3a2532beb3a45f64829827.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/characters/mokuo (4).png"
-dest_files=["res://.godot/imported/mokuo (4).png-b47d2476bde84297a034109c010f1b58.ctex"]
+source_file="res://assets/SUCAI/images_resized/bamboo_single_broken_4.png"
+dest_files=["res://.godot/imported/bamboo_single_broken_4.png-bdef35fbaa3a2532beb3a45f64829827.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

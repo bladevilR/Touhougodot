@@ -185,7 +185,8 @@ func _spawn_decoration(pos: Vector2, type: String):
 				var tex = textures[randi() % textures.size()]
 				# 石头：实体碰撞，Z-Index 0，阴影偏移 -20
 				if map_system.has_method("create_solid_rock"):
-					obj = map_system.create_solid_rock(tex, pos, 0.15 + randf_range(-0.03, 0.03))
+					# 传入目标高度 60.0 像素（带波动），而不是缩放倍数
+					obj = map_system.create_solid_rock(tex, pos, 60.0 * randf_range(0.85, 1.15))
 		"shoot":
 			var textures = map_system.decoration_textures.get("shoots", [])
 			if not textures.is_empty():
