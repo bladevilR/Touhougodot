@@ -632,7 +632,7 @@ func create_lighting(style: String = "outskirts"):
 func _clear_lighting():
 	# Clear CanvasLayer based lighting
 	for child in get_tree().root.get_children():
-		if child.name == "AtmosphereLayer" and is_instance_valid(child):
+		if child.name == "FogLayer" and is_instance_valid(child):
 			child.queue_free()
 	# Clear CanvasModulate
 	for child in get_children():
