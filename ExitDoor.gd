@@ -86,8 +86,12 @@ func _start_fog_animation(fog_seal: ColorRect):
 	fog_tween = fog_seal.create_tween()
 	fog_tween.tween_property(fog_seal, "modulate:a", 0.6, 1.5).set_trans(Tween.TRANS_SINE)
 	fog_tween.tween_property(fog_seal, "modulate:a", 1.0, 1.5).set_trans(Tween.TRANS_SINE)
+	# [修复] Lambda 捕获错误：添加弱引用检查
 	fog_tween.tween_callback(func():
-		if is_instance_valid(self) and is_instance_valid(fog_seal) and is_inside_tree():
+		# 检查 ExitDoor (self) 是否仍然有效且未被标记为删除
+		if not is_instance_valid(self) or is_queued_for_deletion():
+			return
+		if is_instance_valid(fog_seal) and is_inside_tree():
 			_start_fog_animation(fog_seal)
 	)
 
@@ -208,8 +212,11 @@ func open_door():
 		tween.tween_property(sprite, "position", sprite.position + move_direction * 100, 0.8)
 		tween.tween_property(sprite, "modulate:a", 0.0, 0.8)
 		tween.tween_property(sprite, "rotation", sprite.rotation + randf_range(-0.5, 0.5), 0.8)
-		# 动画结束后删除 sprite
+		# [修复] Lambda 捕获错误：添加 self 有效性检查
 		tween.tween_callback(func():
+			# 如果 ExitDoor (self) 已被标记删除，sprite 会自动随父节点清理，无需手动 queue_free
+			if not is_instance_valid(self) or is_queued_for_deletion():
+				return
 			if is_instance_valid(sprite):
 				sprite.queue_free()
 		)
@@ -219,10 +226,17 @@ func open_door():
 		seal_particles.emitting = false
 		var particles_ref = seal_particles  # 保存引用
 		seal_particles = null
-		# 异步删除粒子（不阻塞主函数）
-		get_tree().create_timer(particles_ref.lifetime).timeout.connect(func():
+		# [修复] 使用 Timer 节点而非 SceneTreeTimer 避免 Lambda 捕获错误
+		var cleanup_timer = Timer.new()
+		cleanup_timer.wait_time = particles_ref.lifetime
+		cleanup_timer.one_shot = true
+		cleanup_timer.autostart = true
+		add_child(cleanup_timer)
+		cleanup_timer.timeout.connect(func():
 			if is_instance_valid(particles_ref):
 				particles_ref.queue_free()
+			if is_instance_valid(cleanup_timer):
+				cleanup_timer.queue_free()
 		)
 		
 	# 淡出雾门
@@ -231,7 +245,11 @@ func open_door():
 		# [修复] 使用 fog_seal_rect.create_tween() 绑定 tween 到 fog_seal_rect 的生命周期
 		var fade_tween = fog_seal_rect.create_tween()
 		fade_tween.tween_property(fog_seal_rect, "modulate:a", 0.0, 0.8)
+		# [修复] Lambda 捕获错误：添加 self 有效性检查
 		fade_tween.tween_callback(func():
+			# 如果 ExitDoor (self) 已被标记删除，fog_seal_rect 会自动随父节点清理
+			if not is_instance_valid(self) or is_queued_for_deletion():
+				return
 			if is_instance_valid(fog_seal_rect):
 				fog_seal_rect.queue_free()
 		)

@@ -137,22 +137,6 @@ func _ready():
 	setup_camera_limits()
 	spawn_nitori_npc() # 恢复河童
 	print("DEBUG: MapSystem _ready finished")
-	
-	# 延迟打印场景树结构
-	await get_tree().create_timer(1.0).timeout
-	print("\n=== SCENE TREE DUMP ===")
-	var root = get_tree().root
-	_print_tree_recursive(root)
-	print("=======================\\n")
-
-func _print_tree_recursive(node: Node, indent: String = ""):
-	var info = indent + node.name + " (" + node.get_class() + ")"
-	if node is CanvasModulate:
-		info += " [COLOR: " + str(node.color) + "]"
-	print(info)
-	
-	for child in node.get_children():
-		_print_tree_recursive(child, indent + "  ")
 
 func _register_critical_zones():
 	"""注册所有需要避让的关键区域"""
@@ -740,8 +724,11 @@ func _start_fog_flow_animation(fog_rect: TextureRect, density: float):
 	var tween = fog_rect.create_tween()
 	tween.tween_property(fog_rect, "modulate:a", density * 0.8, 3.0).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(fog_rect, "modulate:a", density * 1.2, 3.0).set_trans(Tween.TRANS_SINE)
+	# [修复] Lambda 捕获错误：添加 is_queued_for_deletion 检查
 	tween.tween_callback(func():
-		if is_instance_valid(self) and is_instance_valid(fog_rect) and is_inside_tree():
+		if not is_instance_valid(self) or is_queued_for_deletion():
+			return
+		if is_instance_valid(fog_rect) and is_inside_tree():
 			_start_fog_flow_animation(fog_rect, density)
 	)
 
