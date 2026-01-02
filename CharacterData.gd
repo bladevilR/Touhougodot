@@ -98,7 +98,7 @@ static func initialize():
 		"蓬莱人形",
 		"近战坦克。重装，站火回血，复活能力。",
 		Color("#ecf0f1"),
-		"phoenix_wings",
+		"mokou_kick_light",
 		CharacterStats.new(120, 3.2, 1.0, 1.0, 1.0, 100, 1.0, 0, 0, 1),
 		CharacterPhysics.new(20, 0.15, 1.0, false, true, true, false), # Reduced mass from 40 to 20
 		0.1 # Mokou needs larger scale due to smaller sprite sheet frames

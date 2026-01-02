@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3 uid="uid://b4tg0a2qpeaio"]
+
+[ext_resource type="PackedScene" path="res://assets/characters/Mokou_Skin.tscn" id="1_45eme"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_fd18j"]
+radius = 0.4116211
+height = 1.0878906
+
+[node name="player" type="CharacterBody3D"]
+
+[node name="body_Rigged" parent="." instance=ExtResource("1_45eme")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4560547, 0)
+shape = SubResource("CapsuleShape3D_fd18j")
+
+[node name="SpringArm3D" type="SpringArm3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.99723226, 0)
+spring_length = 3.0
+
+[node name="Camera3D" type="Camera3D" parent="SpringArm3D"]

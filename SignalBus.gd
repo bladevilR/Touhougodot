@@ -12,7 +12,11 @@ signal player_health_changed(current_hp, max_hp)
 @warning_ignore("unused_signal")
 signal player_died()
 @warning_ignore("unused_signal")
-signal enemy_killed(xp_value, position) # 怪物死了，通知掉落系统和经验系统
+signal player_leveled_up(new_level: int)
+@warning_ignore("unused_signal")
+signal player_dashed()
+@warning_ignore("unused_signal")
+signal enemy_killed(enemy: Node2D, xp_value: int, position: Vector2) # 怪物死了，通知掉落系统和经验系统
 @warning_ignore("unused_signal")
 signal xp_gained(current_xp, max_xp, level)
 @warning_ignore("unused_signal")
@@ -22,9 +26,15 @@ signal xp_pickup(xp_value) # 拾取经验球
 @warning_ignore("unused_signal")
 signal game_started()
 @warning_ignore("unused_signal")
+signal game_paused()
+@warning_ignore("unused_signal")
+signal game_resumed()
+@warning_ignore("unused_signal")
 signal game_over()
 @warning_ignore("unused_signal")
 signal level_up(new_level)
+@warning_ignore("unused_signal")
+signal scene_changed(scene_name: String)
 
 # --- 武器相关信号 ---
 @warning_ignore("unused_signal")
@@ -92,11 +102,17 @@ signal element_enchant_expired()  # 元素附魔过期
 
 # --- 房间/波次系统信号 ---
 @warning_ignore("unused_signal")
+signal room_entered(room_type: int, room_index: int)  # 进入房间
+@warning_ignore("unused_signal")
+signal room_cleared()  # 房间清理完成
+@warning_ignore("unused_signal")
+signal wave_started(wave_number: int, enemy_count: int)  # 波次开始
+@warning_ignore("unused_signal")
+signal all_waves_completed()  # 所有波次完成
+@warning_ignore("unused_signal")
 signal spawn_wave(enemy_count: int, room_index: int)  # 生成一波敌人
 @warning_ignore("unused_signal")
 signal spawn_boss(room_index: int)  # 生成BOSS
-@warning_ignore("unused_signal")
-signal room_cleared()  # 房间清理完成
 @warning_ignore("unused_signal")
 signal wave_info_updated(current_wave: int, total_waves: int)  # 波次信息更新
 @warning_ignore("unused_signal")

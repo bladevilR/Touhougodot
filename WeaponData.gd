@@ -453,14 +453,6 @@ static func _initialize_weapon_recipes():
 			"🌟"
 		),
 		WeaponRecipe.new(
-			"phoenix_rebirth_fusion",
-			"凤凰涅槃",
-			"凤凰羽衣 + 鸡尾酒瓶 = 妹红的永恒业火！复活后触发超大爆炸。",
-			["phoenix_wings", "molotov"],
-			"phoenix_rebirth",
-			"🔥"
-		),
-		WeaponRecipe.new(
 			"sakuyas_world_fusion",
 			"The World - 咲夜之世界",
 			"银制飞刀 + 时停 = 咲夜的时空掌控！时停期间狂飞刀。",

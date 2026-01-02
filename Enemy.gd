@@ -160,6 +160,14 @@ func _ready():
 	var players = get_tree().get_nodes_in_group("player")
 	if players.size() > 0:
 		target = players[0]
+		
+	# [视觉] 柔化敌人纹理（应用地图系统的过滤设置）
+	if sprite:
+		var map_system = get_tree().get_first_node_in_group("map_system")
+		if map_system and "character_texture_filter" in map_system:
+			sprite.texture_filter = map_system.character_texture_filter
+		else:
+			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	# 连接组件信号：当组件说"我死了"，我就执行 die()
 	if health_comp:

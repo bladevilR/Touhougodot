@@ -3,9 +3,9 @@ class_name RoomMapCanvas
 
 # RoomMapCanvas - 房间地图绘制画布（方格布局，类似以撒的结合）
 
-const ROOM_SIZE = 35  # 每个房间方格的大小
-const ROOM_PADDING = 3  # 房间之间的间距
-const DOOR_WIDTH = 8  # 门的宽度
+const ROOM_SIZE = 35.0  # 每个房间方格的大小
+const ROOM_PADDING = 3.0  # 房间之间的间距
+const DOOR_WIDTH = 8.0  # 门的宽度
 
 func _draw():
 	var room_manager = get_tree().get_first_node_in_group("room_manager")

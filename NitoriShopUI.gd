@@ -2,7 +2,7 @@ extends Control
 
 # NitoriShopUI - 河童商店界面
 
-var shop_system: NitoriShop = null
+var shop_system = null
 var nitori_portrait: TextureRect = null  # 河童立绘
 
 @onready var background = $Background
@@ -111,7 +111,7 @@ func _refresh_ui():
 	for item in stock:
 		_create_item_button(item)
 
-func _create_item_button(item: NitoriShop.ShopItem):
+func _create_item_button(item):
 	"""创建商品按钮"""
 	var button = Button.new()
 	button.custom_minimum_size = Vector2(180, 120)
@@ -149,7 +149,7 @@ func _create_item_button(item: NitoriShop.ShopItem):
 
 	item_container.add_child(button)
 
-func _on_item_clicked(item: NitoriShop.ShopItem):
+func _on_item_clicked(item):
 	"""点击商品"""
 	if shop_system and shop_system.purchase_item(item):
 		_refresh_ui()

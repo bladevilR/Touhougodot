@@ -17,6 +17,12 @@ var BAMBOO_TALL_HEIGHT = 300.0
 # 深度缩放因子
 var depth_height_scale: float = 1.0
 
+# 角色缩放系数（相对于默认值）
+var character_scale_multiplier = 1.0
+
+# 角色纹理过滤模式（NEAREST=锐利像素风，LINEAR=柔化）
+var character_texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
 # 边界墙厚度（竹海深度）
 const WALL_THICKNESS = 200
 
@@ -213,28 +219,46 @@ func setup_layers():
 	_create_post_process_layer()
 
 func create_background():
-	var grass_texture = load("res://assets/grass2.png")
-	if grass_texture:
-		var GRASS_TILE_SIZE = 256
-		var tiles_x = ceil(MAP_WIDTH / float(GRASS_TILE_SIZE)) + 1
-		var tiles_y = ceil(MAP_HEIGHT / float(GRASS_TILE_SIZE)) + 1
+	var town_texture = load("res://assets/map/town1.png")
+	if town_texture:
+		var TILE_SIZE = 1024 # Larger tile size for the town image
+		var tiles_x = ceil(MAP_WIDTH / float(TILE_SIZE)) + 1
+		var tiles_y = ceil(MAP_HEIGHT / float(TILE_SIZE)) + 1
 
 		for x in range(tiles_x):
 			for y in range(tiles_y):
 				var sprite = Sprite2D.new()
-				sprite.texture = grass_texture
-				var scale_factor = GRASS_TILE_SIZE / float(grass_texture.get_width())
+				sprite.texture = town_texture
+				var scale_factor = TILE_SIZE / float(town_texture.get_width())
 				sprite.scale = Vector2(scale_factor, scale_factor)
-				sprite.position = Vector2(x * GRASS_TILE_SIZE, y * GRASS_TILE_SIZE)
+				sprite.position = Vector2(x * TILE_SIZE, y * TILE_SIZE)
 				sprite.centered = false
-				# 稍微变暗一点地面，突出光照
-				sprite.modulate = Color(0.9, 0.95, 0.9) 
+				# Brighten up a bit for town feel
+				sprite.modulate = Color(1.0, 1.0, 1.0)
 				background_layer.add_child(sprite)
 	else:
-		var color_rect = ColorRect.new()
-		color_rect.color = Color(0.2, 0.5, 0.2)
-		color_rect.size = Vector2(MAP_WIDTH, MAP_HEIGHT)
-		background_layer.add_child(color_rect)
+		# Fallback to grass if town texture missing
+		var grass_texture = load("res://assets/grass2.png")
+		if grass_texture:
+			var GRASS_TILE_SIZE = 256
+			var tiles_x = ceil(MAP_WIDTH / float(GRASS_TILE_SIZE)) + 1
+			var tiles_y = ceil(MAP_HEIGHT / float(GRASS_TILE_SIZE)) + 1
+
+			for x in range(tiles_x):
+				for y in range(tiles_y):
+					var sprite = Sprite2D.new()
+					sprite.texture = grass_texture
+					var scale_factor = GRASS_TILE_SIZE / float(grass_texture.get_width())
+					sprite.scale = Vector2(scale_factor, scale_factor)
+					sprite.position = Vector2(x * GRASS_TILE_SIZE, y * GRASS_TILE_SIZE)
+					sprite.centered = false
+					sprite.modulate = Color(0.9, 0.95, 0.9)
+					background_layer.add_child(sprite)
+		else:
+			var color_rect = ColorRect.new()
+			color_rect.color = Color(0.2, 0.5, 0.2)
+			color_rect.size = Vector2(MAP_WIDTH, MAP_HEIGHT)
+			background_layer.add_child(color_rect)
 
 var fog_layer: CanvasLayer = null # 雾效层
 

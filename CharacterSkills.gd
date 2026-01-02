@@ -855,11 +855,16 @@ func _create_emerge_effect(radius: float):
 
 	get_tree().current_scene.add_child(effect)
 
-	# 0.5秒后销毁
-	var timer = get_tree().create_timer(0.5)
-	timer.timeout.connect(func():
+	# [修复] 使用 Timer 节点而非 SceneTreeTimer 避免 Lambda 捕获错误
+	var cleanup_timer = Timer.new()
+	cleanup_timer.wait_time = 0.5
+	cleanup_timer.one_shot = true
+	cleanup_timer.autostart = true
+	effect.add_child(cleanup_timer)
+	cleanup_timer.timeout.connect(func():
 		if is_instance_valid(effect):
 			effect.queue_free()
+		# Timer 作为 effect 的子节点会随 effect 一起销毁，无需手动清理
 	)
 
 # ============================================

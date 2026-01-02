@@ -12,9 +12,13 @@ var collision_shape = null
 var character_skills = null
 var bond_system = null
 var shadow_sprite: Sprite2D = null # 影子引用
+var player_viewport = null # 3D Player Viewport Reference
 
 # 角色数据
 var character_data = null
+
+# 场景缩放系数（从地图系统读取）
+var scene_scale_multiplier: float = 1.0
 
 # 无敌状态
 var invulnerable_timer: float = 0.0
@@ -62,7 +66,7 @@ var mokou_textures = {
 	"up": [],      # 向上移动帧
 	"down": [],    # 向下移动帧
 	"stand": null, # 站立
-	"kick": null   # 飞踢
+	"kick": []     # 飞踢动画帧（5x5雪碧图）
 }
 var is_attacking: bool = false # 是否正在播放攻击动画
 var current_attack_id: int = 0 # 攻击动画实例ID
@@ -103,10 +107,13 @@ func _ready():
 	collision_shape = get_node_or_null("CollisionShape2D")
 	character_skills = get_node_or_null("CharacterSkills")
 	bond_system = get_node_or_null("BondSystem")
+	player_viewport = get_node_or_null("PlayerViewport")
 
-	# 确保精灵可见
-	if sprite:
+	# 确保精灵可见 (仅当没有3D模型时)
+	if sprite and not player_viewport:
 		sprite.visible = true
+	elif sprite and player_viewport:
+		sprite.visible = false
 
 	# 初始化角色数据
 	CharacterData.initialize()
@@ -138,12 +145,16 @@ func _ready():
 	_create_charge_bar()
 
 	# 显示精灵（角色数据已加载）
-	if sprite:
+	if sprite and not player_viewport:
 		sprite.visible = true
 		# 复位 Sprite，不再尝试上移
 		sprite.position = Vector2.ZERO
-		# 既然决定手动缩小图片，这里就使用 Nearest 保证最锐利的像素显示
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# 从地图系统读取纹理过滤模式，如果没有则使用 NEAREST
+		var map_system = get_tree().get_first_node_in_group("map_system")
+		if map_system and "character_texture_filter" in map_system:
+			sprite.texture_filter = map_system.character_texture_filter
+		else:
+			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	# 阴影位置在_try_add_shadow中已经设置，无需重复调整
 
@@ -176,18 +187,18 @@ func _sync_shadow_visuals():
 	if not shadow_sprite or not is_instance_valid(shadow_sprite):
 		shadow_sprite = get_node_or_null("Shadow")
 		if not shadow_sprite: return
-		
+
 	if not sprite or not sprite.texture: return
-	
+
 	# 同步纹理属性
 	if shadow_sprite.texture != sprite.texture:
 		shadow_sprite.texture = sprite.texture
-	
+
 	shadow_sprite.hframes = sprite.hframes
 	shadow_sprite.vframes = sprite.vframes
 	shadow_sprite.frame = sprite.frame
-	
-	# 计算尺寸
+
+	# 计算尺寸（对于 AtlasTexture，get_width/height 会返回 region 的大小）
 	var frame_height = sprite.texture.get_height() / sprite.vframes
 	var frame_width = sprite.texture.get_width() / sprite.hframes
 	
@@ -230,7 +241,7 @@ func _load_character_data(char_id: int):
 		# 应用角色属性
 		health_comp.max_hp = character_data.stats.max_hp
 		health_comp.current_hp = character_data.stats.max_hp
-		base_speed = character_data.stats.speed * 100.0  # 调整速度比例 (Increased from 50.0 to 100.0)
+		base_speed = character_data.stats.speed * 200.0  # 调整速度比例 (Increased from 100.0 to 200.0)
 		speed = base_speed
 
 		# 应用物理属性
@@ -261,8 +272,11 @@ func _load_character_data(char_id: int):
 			# 立即应用站立纹理，防止首帧隐身
 			if mokou_textures.stand:
 				sprite.texture = mokou_textures.stand
-				# 预设一个合理的 Scale
-				sprite.scale = Vector2(0.05, 0.05) 
+				# 从地图系统获取角色缩放系数
+				var map_system = get_tree().get_first_node_in_group("map_system")
+				if map_system and "character_scale_multiplier" in map_system:
+					scene_scale_multiplier = map_system.character_scale_multiplier
+				sprite.scale = Vector2(0.05, 0.05) * scene_scale_multiplier 
 			
 			# Give her weapons: Light Kick (LMB) and Heavy Kick (RMB)
 			SignalBus.weapon_added.emit("mokou_kick_light")
@@ -432,7 +446,12 @@ func _physics_process(delta):
 			charge_bar.visible = false
 			charge_bar.value = 0 # 重置
 
-	# 如果正在执行技能，跳过普通移动逻辑 (包括Dash)
+	# 如果正在执行技能或攻击，跳过普通移动逻辑 (包括Dash)
+	if is_attacking:
+		# 攻击期间完全锁定移动，不更新动画（由 play_attack_animation 控制）
+		velocity = Vector2.ZERO
+		return
+
 	if character_skills and character_skills.is_skill_active():
 		# 修复：技能期间（如飞踢）也需要更新动画
 		if character_id == GameConstants.CharacterId.MOKOU and character_skills.is_fire_kicking:
@@ -481,7 +500,7 @@ func _physics_process(delta):
 		current_velocity = current_velocity.lerp(Vector2.ZERO, friction_factor * delta * 2.0)
 
 	# Apply final velocity
-	velocity = current_velocity
+	velocity = current_velocity * 2.0 # Force double speed for feel
 
 	# ==================== COLLISION AVOIDANCE ====================
 	if not can_pass_through_enemies:
@@ -506,6 +525,22 @@ func _physics_process(delta):
 	# 妹红的翻转由_update_mokou_animation处理
 	if sprite and sprite is Sprite2D and input_dir.x != 0:
 		sprite.flip_h = input_dir.x < 0
+		
+	# Update 3D Model Logic
+	if player_viewport:
+		# Sync orientation with movement or input
+		var dir = velocity.normalized()
+		if dir.length() < 0.1:
+			dir = last_move_direction
+			
+		player_viewport.set_orientation(dir)
+		
+		# Sync Animation with hysteresis to prevent stutter
+		# Use a higher threshold to enter run, lower to exit
+		if velocity.length() > 20.0:
+			player_viewport.play_animation("Run")
+		elif velocity.length() < 10.0:
+			player_viewport.play_animation("Idle")
 
 # ==================== COLLISION AVOIDANCE METHODS ====================
 
@@ -855,48 +890,82 @@ func _load_mokou_textures():
 				mokou_textures.down.append(atlas)
 
 	# stand.png - 站立
-	# 改用无特殊字符的文件名，防止加载失败
-	var stand_path = "res://assets/characters/mokuo.png"
-	if ResourceLoader.exists(stand_path):
-		mokou_textures.stand = load(stand_path)
-	else:
-		# Fallback
-		mokou_textures.stand = load("res://assets/characters/mokuo (4).png")
+	mokou_textures.stand = load("res://assets/stand.png")
 
-	# mokuokick.png - 飞踢
-	var kick_path = "res://assets/mokuokick.png"
-	print("Loading kick texture from: ", kick_path)
+	# kick.png - 飞踢动画雪碧图（5x5，1像素间距，从右下到左上播放）
+	var kick_path = "res://assets/kick.png"
+	print("Loading kick sprite sheet from: ", kick_path)
 	if ResourceLoader.exists(kick_path):
-		mokou_textures.kick = load(kick_path)
-		print("Kick texture loaded successfully: ", mokou_textures.kick)
+		var kick_texture = load(kick_path)
+		if kick_texture:
+			# 5x5网格，1像素间距
+			var cols = 5
+			var rows = 5
+			var spacing = 1
+
+			# 计算每帧的尺寸（包含间距）- 使用整数避免浮点精度问题
+			var tex_width = kick_texture.get_width()
+			var tex_height = kick_texture.get_height()
+			var frame_width = int((tex_width - spacing * (cols - 1)) / cols)
+			var frame_height = int((tex_height - spacing * (rows - 1)) / rows)
+
+			mokou_textures.kick = []
+
+			# 从右下到左上的顺序：从下往上，每行从右往左
+			for row in range(rows - 1, -1, -1):  # 从第4行到第0行（下到上）
+				for col in range(cols - 1, -1, -1):  # 从第4列到第0列（右到左）
+					var atlas = AtlasTexture.new()
+					atlas.atlas = kick_texture
+					# 计算区域时考虑间距 - 使用整数坐标
+					var x = int(col * (frame_width + spacing))
+					var y = int(row * (frame_height + spacing))
+					# Region 稍微缩小一点点，避免采样到间距的白色像素
+					atlas.region = Rect2(x, y, frame_width - 0.5, frame_height - 0.5)
+					mokou_textures.kick.append(atlas)
+
+			print("Kick sprite sheet loaded successfully: ", mokou_textures.kick.size(), " frames")
+			print("Frame size: ", frame_width, "x", frame_height)
 	else:
 		print("错误：找不到飞踢图片文件！")
-		mokou_textures.kick = null
+		mokou_textures.kick = []
 
 func _update_mokou_animation(delta: float, input_dir: Vector2):
 	"""更新妹红的动画帧"""
 	# 状态 1: 攻击 (Attack) - 由 play_attack_animation 控制
-	if is_attacking: 
-		return 
-		
+	if is_attacking:
+		return
+
 	# 兜底重置：非攻击状态下，必须重置 Sprite 属性以支持 AtlasTexture
 	if sprite:
 		sprite.hframes = 1
 		sprite.vframes = 1
+		# 确保纹理过滤模式正确（从地图系统读取）
+		var map_system = get_tree().get_first_node_in_group("map_system")
+		if map_system and "character_texture_filter" in map_system:
+			sprite.texture_filter = map_system.character_texture_filter
 
 	# 优先处理空格技能飞踢 (强制使用飞踢图)
 	var is_skill_kicking = false
 	if character_skills:
 		is_skill_kicking = character_skills.is_fire_kicking
 
-	if is_skill_kicking:
-		print("显示飞踢图片！") # Debug
+	if (is_skill_kicking or is_dashing) and mokou_textures.kick.size() > 0:
+		# 使用雪碧图的中间帧作为飞踢姿态
+		var mid_frame = mokou_textures.kick.size() / 2
+		sprite.texture = mokou_textures.kick[mid_frame]
 
-	if (is_skill_kicking or is_dashing) and mokou_textures.kick:
-		sprite.texture = mokou_textures.kick
-		# mokuokick.png: 2496x1696，保持与其他动画一致的高度
+		# 确保纹理过滤模式正确（冲刺/飞踢状态）
+		var map_system = get_tree().get_first_node_in_group("map_system")
+		if map_system and "character_texture_filter" in map_system:
+			sprite.texture_filter = map_system.character_texture_filter
+
+		# 计算合适的缩放（应用场景缩放系数）
 		var kick_height = 100.0
-		sprite.scale = Vector2(kick_height / 1696.0, kick_height / 1696.0)
+		if mokou_textures.kick[mid_frame].get_height() > 0:
+			var scale_factor = kick_height / mokou_textures.kick[mid_frame].get_height()
+			sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier
+		else:
+			sprite.scale = Vector2(0.1, 0.1) * scene_scale_multiplier
 
 		# 冲刺时增加亮度效果
 		if is_dashing:
@@ -938,29 +1007,42 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 			var frame_index = int(progress * 8) % 8
 			sprite.texture = mokou_textures.sprite[7 - frame_index]
 
+		# 确保纹理过滤模式正确（移动状态）
+		var map_system = get_tree().get_first_node_in_group("map_system")
+		if map_system and "character_texture_filter" in map_system:
+			sprite.texture_filter = map_system.character_texture_filter
+
 		if input_dir.x != 0:
 			sprite.flip_h = input_dir.x < 0
 
 		# 自动计算缩放比例：根据当前帧的实际高度缩放到 TARGET_HEIGHT (100px)
+		# 并应用场景缩放系数
 		if sprite.texture:
 			var current_frame_height = sprite.texture.get_height()
 			if current_frame_height > 0:
 				var s = TARGET_HEIGHT / float(current_frame_height)
-				sprite.scale = Vector2(s, s)
+				sprite.scale = Vector2(s, s) * scene_scale_multiplier
 			else:
-				sprite.scale = Vector2(TARGET_HEIGHT / 720.0, TARGET_HEIGHT / 720.0)
+				sprite.scale = Vector2(TARGET_HEIGHT / 720.0, TARGET_HEIGHT / 720.0) * scene_scale_multiplier
 	else:
 		animation_timer = 0.0
 		if mokou_textures.stand:
 			sprite.texture = mokou_textures.stand
+
+			# 确保纹理过滤模式正确（站立状态）
+			var map_system = get_tree().get_first_node_in_group("map_system")
+			if map_system and "character_texture_filter" in map_system:
+				sprite.texture_filter = map_system.character_texture_filter
+
 			# Use dynamic scaling based on actual texture height
+			# 并应用场景缩放系数
 			var tex_height = mokou_textures.stand.get_height()
 			if tex_height > 0:
 				var scale_factor = TARGET_HEIGHT / float(tex_height)
-				sprite.scale = Vector2(scale_factor, scale_factor)
+				sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier
 			else:
 				# Fallback if height is somehow 0 (unlikely)
-				sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0)
+				sprite.scale = Vector2(TARGET_HEIGHT / 2048.0, TARGET_HEIGHT / 2048.0) * scene_scale_multiplier
 
 	# [实现] 动态阴影系统：妹红的影子根据跑步方向变化
 	# _update_mokou_animation 不再调用 shadow 更新，避免冲突
@@ -1192,35 +1274,38 @@ func _spawn_dash_fire_particles():
 		particles.queue_free()
 
 func play_attack_animation(frame_index: int, duration: float):
-	"""播放攻击动画（替换本体贴图）"""
+	"""播放攻击动画（如果是妹红，播放雪碧图动画；否则使用旧的攻击图）"""
 	current_attack_id += 1
 	var my_id = current_attack_id
 	is_attacking = true
-	
-	# 备份当前缩放 (只在第一次进入攻击状态时备份，防止连续攻击时备份了错误的攻击缩放)
-	# 实际上，只要我们确保恢复逻辑正确，每次备份 sprite.scale 也可以，因为上一帧可能已经被恢复了
-	# 或者我们硬编码恢复值为 Vector2(0.05, 0.05)，这是最安全的
-	var restore_scale = Vector2(0.05, 0.05)
-	
+
+	# 备份当前缩放（从sprite读取，而不是硬编码）
+	var restore_scale = sprite.scale if sprite else Vector2(0.05, 0.05)
+
 	if sprite:
-		var attack_tex = load("res://assets/attack.png")
-		if attack_tex:
-			sprite.texture = attack_tex
-			sprite.hframes = 2
-			sprite.vframes = 1
-			sprite.frame = frame_index
-			# 参考之前的 WeaponSystem 代码，攻击图缩放为 0.1
-			sprite.scale = Vector2(0.1, 0.1)
-			
-			# 根据鼠标方向翻转
-			var mouse_pos = get_global_mouse_position()
-			if mouse_pos.x < global_position.x:
-				sprite.flip_h = true
-			else:
-				sprite.flip_h = false
-	
-	# 动画结束后恢复状态
-	await get_tree().create_timer(duration).timeout
+		# 如果是妹红并且有雪碧图动画，播放雪碧图
+		if character_id == GameConstants.CharacterId.MOKOU and mokou_textures.kick.size() > 0:
+			# 播放雪碧图动画
+			await _play_kick_sprite_animation(duration, my_id)
+		else:
+			# 使用旧的攻击图（其他角色）
+			var attack_tex = load("res://assets/attack.png")
+			if attack_tex:
+				sprite.texture = attack_tex
+				sprite.hframes = 2
+				sprite.vframes = 1
+				sprite.frame = frame_index
+				sprite.scale = Vector2(0.1, 0.1)
+
+				# 根据鼠标方向翻转
+				var mouse_pos = get_global_mouse_position()
+				if mouse_pos.x < global_position.x:
+					sprite.flip_h = true
+				else:
+					sprite.flip_h = false
+
+			# 动画结束后恢复状态
+			await get_tree().create_timer(duration).timeout
 
 	if not is_instance_valid(self):
 		return
@@ -1232,3 +1317,77 @@ func play_attack_animation(frame_index: int, duration: float):
 			sprite.hframes = 1
 			sprite.vframes = 1
 			sprite.scale = restore_scale # 恢复默认缩放
+			sprite.offset = Vector2.ZERO # 恢复offset
+
+func _play_kick_sprite_animation(total_duration: float, attack_id: int):
+	"""播放踢击雪碧图动画（25帧，跳帧播放增加打击感）"""
+	if not sprite or mokou_textures.kick.size() == 0:
+		return
+
+	# 跳帧播放：每隔1帧播放一次，增加打击感
+	var frame_step = 2  # 1=全部播放, 2=每隔一帧, 3=每隔两帧
+	var total_frames = mokou_textures.kick.size()  # 25帧
+	var actual_frame_count = ceil(float(total_frames) / float(frame_step))  # 实际播放帧数
+	var frame_duration = total_duration / actual_frame_count  # 每帧持续时间
+
+	# 【锁定攻击方向】在动画开始时确定方向，不受后续输入影响
+	var direction = Vector2.RIGHT
+	var mouse_pos = get_global_mouse_position()
+	if mouse_pos.x < global_position.x:
+		direction = Vector2.LEFT
+	elif "last_move_direction" in self and last_move_direction.length() > 0.1:
+		direction = last_move_direction
+
+	# 锁定翻转状态
+	var locked_flip_h = direction.x < 0
+
+	# 备份原始 offset
+	var original_offset = sprite.offset
+
+	# 播放每一帧（跳帧）
+	for i in range(0, total_frames, frame_step):
+		# 检查是否还是当前的攻击实例
+		if current_attack_id != attack_id or not is_attacking:
+			break
+
+		if sprite and is_instance_valid(sprite):
+			# 先设置 hframes 和 vframes 为 1，再切换纹理
+			# 这样可以避免纹理切换时的计算错误
+			sprite.hframes = 1
+			sprite.vframes = 1
+			sprite.frame = 0  # 重置 frame
+			sprite.texture = mokou_textures.kick[i]
+
+			# 确保纹理过滤模式正确
+			var map_system = get_tree().get_first_node_in_group("map_system")
+			if map_system and "character_texture_filter" in map_system:
+				sprite.texture_filter = map_system.character_texture_filter
+
+			# 计算合适的缩放（假设原图大小，调整到合适的显示尺寸）
+			# 并应用场景缩放系数
+			var target_height = 120.0  # 稍微大一点的显示高度
+			if mokou_textures.kick[i].get_height() > 0:
+				var scale_factor = target_height / mokou_textures.kick[i].get_height()
+				sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier
+
+				# 调整 Y 轴偏移，让脚底与影子对齐
+				# sprite 是 centered=true，所以 offset 是基于中心点的偏移
+				# 要让脚底和影子对齐，不需要 offset（或者只需要微调）
+				# 因为影子系统会自动计算脚底位置
+				sprite.offset = Vector2(0, 0)  # 先不偏移，看看效果
+			else:
+				sprite.scale = Vector2(0.15, 0.15) * scene_scale_multiplier
+				sprite.offset = Vector2(0, 0)
+
+			# 使用锁定的翻转状态，不受实时输入影响
+			sprite.flip_h = locked_flip_h
+
+		# 等待下一帧
+		await get_tree().create_timer(frame_duration).timeout
+
+		if not is_instance_valid(self):
+			return
+
+	# 恢复原始 offset
+	if sprite and is_instance_valid(sprite):
+		sprite.offset = original_offset

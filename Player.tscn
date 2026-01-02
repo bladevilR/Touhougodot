@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://coxn54wrglgrg" path="res://FusionSystem.gd" id="7"]
 [ext_resource type="Script" uid="uid://bf5xvb3sf5y28" path="res://NitoriShop.gd" id="8"]
 [ext_resource type="Script" uid="uid://chnx1ac5kywxq" path="res://CharacterSkills.gd" id="9"]
+[ext_resource type="PackedScene" uid="uid://playerviewport01" path="res://PlayerViewport.tscn" id="10_viewport"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_1"]
 radius = 20.0
@@ -16,6 +17,8 @@ height = 60.0
 [node name="Player" type="CharacterBody2D" groups=["player"]]
 collision_mask = 54
 script = ExtResource("1")
+
+[node name="PlayerViewport" parent="." instance=ExtResource("10_viewport")]
 
 [node name="Shadow" type="Sprite2D" parent="."]
 

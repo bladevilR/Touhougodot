@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3 uid="uid://dy2dmmcl6v6qq"]
+
+[ext_resource type="Script" path="res://Player3DVisuals.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://i4dhg0hwb3dd" path="res://assets/characters/Mokou_Skin.tscn" id="2_skin"]
+
+[node name="Player3DVisuals" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="body_Rigged" parent="." instance=ExtResource("2_skin")]
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]

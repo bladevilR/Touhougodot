@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://mjvkb8idbuex"]
+
+[ext_resource type="PackedScene" uid="uid://b2ekagjjc0q6g" path="res://assets/characters/body_Rigged.fbx" id="1_bmud8"]
+[ext_resource type="PackedScene" uid="uid://bg2dvc6kmw708" path="res://assets/characters/bowl.fbx" id="2_pjqix"]
+
+[node name="body_Rigged" instance=ExtResource("1_bmud8")]
+
+[node name="BoneAttachment3D" type="BoneAttachment3D" parent="Skeleton3D" index="1"]
+transform = Transform3D(0.9999999, -1.8707922e-08, -1.8978286e-05, 5.7001207e-06, 0.95412487, 0.29940897, 1.810205e-05, -0.29940897, 0.95412487, -1.6955719e-12, 0.46173257, -0.0010605059)
+bone_name = "CC_Base_Spine01"
+bone_idx = 34
+
+[node name="bowl" parent="Skeleton3D/BoneAttachment3D" index="0" instance=ExtResource("2_pjqix")]
+transform = Transform3D(1, 5.726433e-06, -8.8425986e-07, -5.726965e-06, 0.95359623, -0.3010884, -8.809038e-07, 0.30108854, 0.95359606, 0.001278044, -0.4061456, -0.24444398)

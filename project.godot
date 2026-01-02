@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Touhou Phantom"
-run/main_scene="res://TitleScreen.tscn"
+run/main_scene="res://TownWorld.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -19,9 +19,15 @@ config/icon="res://icon.svg"
 
 SignalBus="*res://SignalBus.gd"
 GameConstants="*res://GameConstants.gd"
+GameSettings="*res://GameSettings.gd"
+ServiceLocator="*res://core/autoloads/ServiceLocator.gd"
+ResourceManager="*res://core/autoloads/ResourceManager.gd"
+SceneManager="*res://core/autoloads/SceneManager.gd"
+AudioManager="*res://core/autoloads/AudioManager.gd"
+GameplaySystem="*res://core/managers/GameplaySystem.gd"
 GameSaveManager="*res://GameSaveManager.gd"
 MetaProgressionManager="*res://MetaProgressionManager.gd"
-GameSettings="*res://GameSettings.gd"
+UIManager="*res://UIManager.gd"
 
 [display]
 

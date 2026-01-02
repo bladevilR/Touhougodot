@@ -189,20 +189,6 @@ func _setup_bullet_visual():
 				texture_path = "res://assets/bullets/rice_bullet.png"
 				base_radius = 120.0
 				should_rotate = true
-		"phoenix_wings":
-			# 为光环创建高级感半透明纹理（火焰能量场效果）
-			var aura_texture = _create_premium_aura_texture(120.0, Color(1.0, 0.5, 0.1, 0.6))
-			sprite.texture = aura_texture
-			sprite.scale = Vector2(1.0, 1.0)
-			# 不使用ADD混合模式，避免闪烁
-			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)  # 固定不变
-			should_rotate = false
-			# 设置z_index让光环在玩家下层，不影响玩家颜色
-			z_index = -5
-			# 增大碰撞半径形成光环区域
-			if collision_shape and collision_shape.shape:
-				collision_shape.shape.radius = 120.0  # 光环伤害范围
-			return  # 直接返回，不执行后续通用纹理加载
 		"charged_fire_ring_full":
 			# 满蓄力：真正的火焰特效 (复刻Space技能视觉)
 			sprite.texture = null # 不用贴图
@@ -648,11 +634,7 @@ func _update_orbital_movement(delta: float):
 
 	# Rotate sprite to face outward
 	if sprite:
-		# 光环特殊效果：完全静止，不旋转，不改变任何视觉属性
-		if weapon_id == "phoenix_wings":
-			pass  # 不做任何操作，保持纹理完全静止
-		else:
-			sprite.rotation = orbit_angle
+		sprite.rotation = orbit_angle
 
 	# 主动检测并伤害重叠的敌人（修复光环不造成伤害的问题）
 	var overlapping_bodies = get_overlapping_bodies()

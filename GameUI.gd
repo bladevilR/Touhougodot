@@ -92,27 +92,32 @@ func _load_character_portrait():
 	# 根据角色ID选择对应的头像文件
 	match char_id:
 		GameConstants.CharacterId.REIMU:
-			portrait_path = "res://assets/leimuF.png" # 灵梦使用立绘作为头像（或寻找专门的1C）
+			portrait_path = "res://assets/leimuF.png" 
 		GameConstants.CharacterId.MOKOU:
-			portrait_path = "res://assets/characters/1C.png" # 妹红对应1C
+			portrait_path = "res://assets/characters/1C.png" 
 		GameConstants.CharacterId.MARISA:
-			portrait_path = "res://assets/characters/2C.png" # 魔理沙对应2C
+			portrait_path = "res://assets/characters/2C.png" 
 		GameConstants.CharacterId.SAKUYA:
-			portrait_path = "res://assets/characters/3C.png" # 咲夜对应3C
+			portrait_path = "res://assets/characters/3C.png" 
 		_:
-			# 默认尝试使用 ID+1 的规律
 			portrait_path = "res://assets/characters/" + str(char_id + 1) + "C.png"
 
 	if ResourceLoader.exists(portrait_path):
 		character_portrait.texture = load(portrait_path)
 		print("[GameUI] 角色头像加载成功: ", portrait_path)
 	else:
-		# 最后的保底
+		print("[GameUI] 警告: 找不到头像 ", portrait_path)
+		# 尝试备用路径
 		if ResourceLoader.exists("res://assets/characters/1C.png"):
 			character_portrait.texture = load("res://assets/characters/1C.png")
-			print("[GameUI] 警告: 找不到指定头像，使用保底 1C.png")
+		elif ResourceLoader.exists("res://assets/leimuF.png"):
+			character_portrait.texture = load("res://assets/leimuF.png")
 		else:
-			print("[GameUI] 严重警告: 找不到任何角色头像文件")
+			# 最后的保底：创建一个纯色纹理，防止崩溃
+			var img = Image.create(128, 128, false, Image.FORMAT_RGBA8)
+			img.fill(Color(0.2, 0.2, 0.2, 0.8))
+			character_portrait.texture = ImageTexture.create_from_image(img)
+			print("[GameUI] 使用纯色占位符作为头像")
 
 func _ready():
 	add_to_group("ui")
@@ -534,30 +539,36 @@ func _create_boss_ui():
 	boss_panel = Control.new()
 	boss_panel.name = "BossPanel"
 	boss_panel.visible = false
+	add_child(boss_panel)
+	
 	boss_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	boss_panel.position = Vector2(0, 10)
-	boss_panel.size = Vector2(0, 60)
-	add_child(boss_panel)
+	boss_panel.custom_minimum_size.y = 60  # 使用 custom_minimum_size 代替 size
 
 	# Boss名称
 	boss_name_label = Label.new()
 	boss_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_panel.add_child(boss_name_label)
+	
 	boss_name_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	boss_name_label.position.y = 5
 	boss_name_label.add_theme_font_size_override("font_size", 24)
 	boss_name_label.add_theme_color_override("font_color", Color("#ff0000"))
-	boss_panel.add_child(boss_name_label)
 
 	# Boss血条容器
 	var bar_container = Control.new()
+	boss_panel.add_child(bar_container)
+	
 	bar_container.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	bar_container.position = Vector2(100, 35)
-	bar_container.size = Vector2(-200, 20)
-	boss_panel.add_child(bar_container)
+	bar_container.custom_minimum_size.y = 20  # 使用 custom_minimum_size 代替 size
+	bar_container.offset_right = -100  # 设置右侧偏移来控制宽度
 
 	# Boss血条背景
 	var bar_bg = ColorRect.new()
 	bar_bg.color = Color(0.1, 0.1, 0.1, 0.85)
+	bar_container.add_child(bar_bg)
+	
 	bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	# 添加圆角效果
 	var bg_style = StyleBoxFlat.new()
@@ -567,10 +578,11 @@ func _create_boss_ui():
 	bg_style.corner_radius_bottom_left = 12
 	bg_style.corner_radius_bottom_right = 12
 	bar_bg.add_theme_stylebox_override("panel", bg_style)
-	bar_container.add_child(bar_bg)
 
 	# Boss血条
 	boss_hp_bar = ProgressBar.new()
+	bar_container.add_child(boss_hp_bar)
+	
 	boss_hp_bar.set_anchors_preset(Control.PRESET_FULL_RECT)
 	boss_hp_bar.show_percentage = false
 	boss_hp_bar.value = 100
@@ -587,7 +599,6 @@ func _create_boss_ui():
 	gradient.add_point(0.5, Color(1.0, 0.15, 0.15, 0.95))
 	gradient.add_point(1.0, Color(0.9, 0.1, 0.1, 0.9))
 	boss_hp_bar.add_theme_stylebox_override("fill", fill_style)
-	bar_container.add_child(boss_hp_bar)
 
 func _on_boss_spawned(boss_name: String, _boss_hp: float, _boss_max_hp: float):
 	"""Boss出现时显示血条"""
@@ -864,7 +875,6 @@ func _get_weapon_display_name(weapon_id: String) -> String:
 		"kunai": "苦无",
 		"ofuda": "符咒",
 		"star_dust": "星尘",
-		"phoenix_wings": "凤翼光环",
 		"phoenix_claws": "重踢",
 		"mokou_kick_heavy": "重踢",
 		"knives": "飞刀",
@@ -1089,14 +1099,27 @@ func _on_tenryu_changed(current_tenryu: int):
 
 func _create_pause_menu():
 	"""创建暂停菜单"""
-	var pause_menu = PauseMenu.new()
-	pause_menu.name = "PauseMenu"
-	add_child(pause_menu)
-	print("[GameUI] 暂停菜单已创建")
+	var PauseMenuScript = load("res://PauseMenu.gd")
+	if PauseMenuScript:
+		var pause_menu = PauseMenuScript.new()
+		pause_menu.name = "PauseMenu"
+		add_child(pause_menu)
+		print("[GameUI] 暂停菜单已创建")
+	else:
+		print("[GameUI] 错误: 无法加载 PauseMenu.gd")
+
+# 标记当前是否为简洁模式
+var is_minimal_mode: bool = false
 
 func _apply_settings():
 	"""应用当前设置到UI"""
 	if not GameSettings:
+		return
+
+	# 如果是简洁模式，强制隐藏，忽略设置
+	if is_minimal_mode:
+		if dps_panel: dps_panel.visible = false
+		if room_map_panel: room_map_panel.visible = false
 		return
 
 	# 显示/隐藏DPS面板
@@ -1106,6 +1129,28 @@ func _apply_settings():
 	# 显示/隐藏房间地图
 	if room_map_panel:
 		room_map_panel.visible = GameSettings.show_room_map
+
+func set_minimal_mode(enabled: bool):
+	"""切换简洁模式（用于城镇等非战斗场景）"""
+	is_minimal_mode = enabled
+	var hide_visibility = !enabled
+	
+	# 隐藏主要战斗面板
+	if dps_panel: dps_panel.visible = hide_visibility
+	if room_map_panel: room_map_panel.visible = hide_visibility
+	if room_panel: room_panel.visible = hide_visibility
+	if mission_panel: mission_panel.visible = hide_visibility
+	
+	# 隐藏经验和等级相关
+	var exp_panel = get_node_or_null("ExpPanel")
+	if exp_panel: exp_panel.visible = hide_visibility
+	if level_label: level_label.visible = hide_visibility
+	
+	# 隐藏货币相关（如果需要）
+	if coins_label: coins_label.visible = hide_visibility
+	if tenryu_label: tenryu_label.visible = hide_visibility
+	
+	print("[GameUI] 简洁模式: ", "开启" if enabled else "关闭")
 
 func _on_settings_changed():
 	"""设置改变时响应"""
