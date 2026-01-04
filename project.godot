@@ -28,6 +28,12 @@ GameplaySystem="*res://core/managers/GameplaySystem.gd"
 GameSaveManager="*res://GameSaveManager.gd"
 MetaProgressionManager="*res://MetaProgressionManager.gd"
 UIManager="*res://UIManager.gd"
+GameStateManager="*res://scripts/core/GameStateManager.gd"
+SaveSystem="*res://scripts/core/SaveSystem.gd"
+InventoryManager="*res://scripts/core/InventoryManager.gd"
+QuestManager="*res://scripts/core/QuestManager.gd"
+ItemData="*res://scripts/data/ItemData.gd"
+QuestData="*res://scripts/data/QuestData.gd"
 
 [display]
 

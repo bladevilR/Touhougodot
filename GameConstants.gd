@@ -11,14 +11,14 @@ const FPS = 60
 const GAME_SPEED = 2.0  # 2x游戏速度
 const GRASS_TILE_SIZE = 256
 
-# 角色ID枚举
+# 角色ID枚举（保留用于兼容性，但游戏固定使用 MOKOU）
 enum CharacterId {
-	REIMU,    # 博丽灵梦
-	MOKOU,    # 藤原妹红
-	MARISA,   # 雾雨魔理沙
-	SAKUYA,   # 十六夜咲夜
-	YUMA,     # 饕餮尤魔
-	KOISHI    # 古明地恋
+	REIMU,    # 博丽灵梦（未使用）
+	MOKOU,    # 藤原妹红（当前主角）
+	MARISA,   # 雾雨魔理沙（未使用）
+	SAKUYA,   # 十六夜咲夜（未使用）
+	YUMA,     # 饕餮尤魔（未使用）
+	KOISHI    # 古明地恋（未使用）
 }
 
 # 敌人类型枚举

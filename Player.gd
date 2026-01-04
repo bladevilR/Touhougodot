@@ -1,9 +1,8 @@
 extends CharacterBody2D
 
-# Player - 玩家角色控制器（使用角色数据）
+# Player - 玩家角色控制器（固定为藤原妹红）
 
 @export var speed = 200.0
-@export var character_id: int = 0  # 默认使用灵梦
 
 var health_comp = null
 var sprite = null
@@ -14,8 +13,16 @@ var bond_system = null
 var shadow_sprite: Sprite2D = null # 影子引用
 var player_viewport = null # 3D Player Viewport Reference
 
-# 角色数据
-var character_data = null
+# 妹红固定属性
+const CHARACTER_NAME = "藤原妹红"
+const BASE_MAX_HP = 120.0
+const BASE_SPEED = 320.0  # 3.2 * 100
+const BASE_MASS = 20.0
+const BASE_FRICTION = 0.15
+const HITBOX_SCALE = 1.0
+const CAN_PASS_THROUGH_ENEMIES = false
+const IMMUNE_TO_KNOCKBACK = true
+const HEAL_IN_FIRE = true
 
 # 场景缩放系数（从地图系统读取）
 var scene_scale_multiplier: float = 1.0
@@ -79,12 +86,13 @@ var charge_start_time: float = 0.0
 var is_weapon_charging: bool = false # 是否正在蓄力
 
 # ==================== PHYSICS SYSTEM ====================
-# Physics properties from CharacterData
-var mass: float = 10.0
-var friction: float = 0.1
-var hitbox_scale: float = 1.0
-var can_pass_through_enemies: bool = false
-var immune_to_knockback: bool = false
+# Physics properties (fixed for Mokou)
+var mass: float = BASE_MASS
+var friction: float = BASE_FRICTION
+var hitbox_scale: float = HITBOX_SCALE
+var can_pass_through_enemies: bool = CAN_PASS_THROUGH_ENEMIES
+var immune_to_knockback: bool = IMMUNE_TO_KNOCKBACK
+var heal_in_fire: bool = HEAL_IN_FIRE
 
 # Movement state
 var current_velocity: Vector2 = Vector2.ZERO
@@ -115,18 +123,8 @@ func _ready():
 	elif sprite and player_viewport:
 		sprite.visible = false
 
-	# 初始化角色数据
-	CharacterData.initialize()
-
-	# 监听角色选择信号（用于游戏运行时切换角色）
-	SignalBus.character_selected.connect(_on_character_selected)
-
-	# 从MainMenu获取选择的角色ID
-	if SignalBus.selected_character_id >= 0:
-		character_id = SignalBus.selected_character_id
-
-	# 加载角色配置（使用选择的角色或默认角色）
-	_load_character_data(character_id)
+	# 初始化妹红数据
+	_load_mokou_data()
 
 	# 设置碰撞层
 	_setup_collision_layers()
@@ -230,26 +228,17 @@ func _sync_shadow_visuals():
 	# 应用倾斜 (与环境保持一致，不再取反)
 	shadow_sprite.skew = map_skew
 
-func _on_character_selected(selected_id: int):
-	"""角色选择信号回调"""
-	character_id = selected_id
-
-func _load_character_data(char_id: int):
-	"""加载并应用角色数据"""
-	character_data = CharacterData.CHARACTERS.get(char_id)
-	if character_data and health_comp:
+func _load_mokou_data():
+	"""加载并应用妹红的数据（固定）"""
+	if health_comp:
 		# 应用角色属性
-		health_comp.max_hp = character_data.stats.max_hp
-		health_comp.current_hp = character_data.stats.max_hp
-		base_speed = character_data.stats.speed * 200.0  # 调整速度比例 (Increased from 100.0 to 200.0)
+		health_comp.max_hp = BASE_MAX_HP
+		health_comp.current_hp = BASE_MAX_HP
+		base_speed = BASE_SPEED
 		speed = base_speed
 
-		# 应用物理属性
-		mass = character_data.physics.mass
-		friction = character_data.physics.friction
-		hitbox_scale = character_data.physics.hitbox_scale
-		can_pass_through_enemies = character_data.physics.can_pass_through_enemies
-		immune_to_knockback = character_data.physics.immune_to_knockback
+		# 应用物理属性（已在声明时设置）
+		# mass, friction, hitbox_scale, etc.
 
 		# 应用碰撞箱缩放
 		if collision_shape and collision_shape.shape:
@@ -260,34 +249,25 @@ func _load_character_data(char_id: int):
 
 		# 应用视觉缩放
 		if sprite:
-			if "scale" in character_data:
-				var s = character_data.scale
-				sprite.scale = Vector2(s, s)
-			else:
-				sprite.scale = Vector2(0.08, 0.08)
+			sprite.scale = Vector2(0.05, 0.05)
 
-		# 加载妹红动画（如果是妹红）
-		if char_id == GameConstants.CharacterId.MOKOU:
-			_load_mokou_textures()
-			# 立即应用站立纹理，防止首帧隐身
-			if mokou_textures.stand:
-				sprite.texture = mokou_textures.stand
-				# 从地图系统获取角色缩放系数
-				var map_system = get_tree().get_first_node_in_group("map_system")
-				if map_system and "character_scale_multiplier" in map_system:
-					scene_scale_multiplier = map_system.character_scale_multiplier
-				sprite.scale = Vector2(0.05, 0.05) * scene_scale_multiplier 
-			
-			# Give her weapons: Light Kick (LMB) and Heavy Kick (RMB)
-			SignalBus.weapon_added.emit("mokou_kick_light")
-			SignalBus.weapon_added.emit("mokou_kick_heavy")
+		# 加载妹红动画
+		_load_mokou_textures()
+		# 立即应用站立纹理，防止首帧隐身
+		if mokou_textures.stand:
+			sprite.texture = mokou_textures.stand
+			sprite.scale = Vector2(0.05, 0.05)
 
-		# 装备初始武器
-		SignalBus.weapon_added.emit(character_data.starting_weapon_id)
-		
-		# 同步ID到技能组件（解决初始化时序问题）
+		# 装备妹红武器：轻踢和重踢
+		SignalBus.weapon_added.emit("mokou_kick_light")
+		SignalBus.weapon_added.emit("mokou_kick_heavy")
+
+		# 装备初始武器：凤凰之翼
+		SignalBus.weapon_added.emit("phoenix_wings")
+
+		# 同步ID到技能组件
 		if character_skills:
-			character_skills.character_id = char_id
+			character_skills.character_id = GameConstants.CharacterId.MOKOU
 
 	# Adjust Camera Zoom (适当的视野大小)
 	var camera = get_node_or_null("Camera2D")
@@ -320,7 +300,7 @@ func _setup_collision_layers():
 
 func _input(event):
 	# 妹红攻击输入处理
-	if character_id == GameConstants.CharacterId.MOKOU and weapon_system:
+	if weapon_system:
 		# 鼠标输入
 		if event is InputEventMouseButton:
 			if event.button_index == MOUSE_BUTTON_LEFT:
@@ -454,7 +434,7 @@ func _physics_process(delta):
 
 	if character_skills and character_skills.is_skill_active():
 		# 修复：技能期间（如飞踢）也需要更新动画
-		if character_id == GameConstants.CharacterId.MOKOU and character_skills.is_fire_kicking:
+		if character_skills.is_fire_kicking:
 			_update_mokou_animation(delta, character_skills.fire_kick_direction)
 		return
 
@@ -466,14 +446,10 @@ func _physics_process(delta):
 		move_and_slide()
 
 		# 飞踢伤害判定（妹红专属）
-		if character_id == GameConstants.CharacterId.MOKOU:
-			_check_dash_damage()
-		else:
-			_check_enemy_contact_damage() # 其他角色dash时仍然可能受伤
+		_check_dash_damage()
 
-		# 更新妹红飞踢动画（如果是妹红）
-		if character_id == GameConstants.CharacterId.MOKOU:
-			_update_mokou_animation(delta, dash_direction)
+		# 更新妹红飞踢动画
+		_update_mokou_animation(delta, dash_direction)
 
 		return
 
@@ -517,9 +493,8 @@ func _physics_process(delta):
 	# Check for collisions with enemies and apply contact damage
 	_check_enemy_contact_damage()
 
-	# 更新妹红动画（如果是妹红）
-	if character_id == GameConstants.CharacterId.MOKOU:
-		_update_mokou_animation(delta, input_dir)
+	# 更新妹红动画
+	_update_mokou_animation(delta, input_dir)
 
 	# 翻转精灵（面向移动方向）
 	# 妹红的翻转由_update_mokou_animation处理
@@ -789,9 +764,8 @@ func _update_dash_timers(delta: float):
 			is_dashing = false
 			velocity = Vector2.ZERO # Stop momentum after dash
 
-			# 飞踢落地视觉效果（妹红专属）
-			if character_id == GameConstants.CharacterId.MOKOU:
-				_spawn_dash_landing_effect()
+			# 飞踢落地视觉效果
+		_spawn_dash_landing_effect()
 
 	if not can_dash:
 		dash_cooldown_timer -= delta
