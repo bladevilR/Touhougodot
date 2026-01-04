@@ -199,11 +199,11 @@ func _update_info():
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		print("DEBUG: Portrait size forced to ", portrait.size)
 
-	var player = get_tree().get_first_node_in_group("player")
-	var char_id = SignalBus.selected_character_id
-	if player and "character_id" in player:
-		char_id = player.character_id
-		
+	# 固定使用妹红（已移除多角色系统）
+	var char_id = GameConstants.CharacterId.MOKOU
+	if SignalBus.selected_character_id >= 0:
+		char_id = SignalBus.selected_character_id
+
 	var char_data = CharacterData.CHARACTERS.get(char_id)
 	if char_data:
 		if name_label:

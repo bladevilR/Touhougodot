@@ -31,7 +31,10 @@ func _get_upgrade_choices() -> Array:
 	if not player:
 		return choices
 
-	var player_character_id = player.character_id
+	# 固定使用妹红（已移除多角色系统）
+	var player_character_id = GameConstants.CharacterId.MOKOU
+	if SignalBus.selected_character_id >= 0:
+		player_character_id = SignalBus.selected_character_id
 
 	# 获取玩家当前拥有的武器
 	var owned_weapons = []

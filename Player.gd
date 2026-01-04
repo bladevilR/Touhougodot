@@ -1257,12 +1257,12 @@ func play_attack_animation(frame_index: int, duration: float):
 	var restore_scale = sprite.scale if sprite else Vector2(0.05, 0.05)
 
 	if sprite:
-		# 如果是妹红并且有雪碧图动画，播放雪碧图
-		if character_id == GameConstants.CharacterId.MOKOU and mokou_textures.kick.size() > 0:
+		# 妹红固定使用雪碧图动画
+		if mokou_textures.kick.size() > 0:
 			# 播放雪碧图动画
 			await _play_kick_sprite_animation(duration, my_id)
 		else:
-			# 使用旧的攻击图（其他角色）
+			# Fallback：使用旧的攻击图（如果雪碧图未加载）
 			var attack_tex = load("res://assets/attack.png")
 			if attack_tex:
 				sprite.texture = attack_tex
