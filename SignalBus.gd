@@ -3,9 +3,6 @@ extends Node
 # SignalBus - 全局信号总线
 # 这是整个游戏的"电话局"，所有节点只跟它说话，不互相找
 
-# --- 全局状态变量 ---
-var selected_character_id: int = 0  # 当前选择的角色ID
-
 # --- 战斗相关信号 ---
 @warning_ignore("unused_signal")  # Signal is emitted from other classes (HealthComponent, Player, etc.)
 signal player_health_changed(current_hp, max_hp)
@@ -33,10 +30,6 @@ signal weapon_added(weapon_id) # 获得新武器
 signal weapon_upgraded(weapon_id) # 武器升级
 
 # --- UI相关信号 ---
-@warning_ignore("unused_signal")
-signal character_selected(character_id: int)
-@warning_ignore("unused_signal")
-signal bond_selected(bond_id: String)
 @warning_ignore("unused_signal")
 signal show_level_up_screen(upgrade_choices: Array)
 @warning_ignore("unused_signal")
@@ -113,3 +106,19 @@ signal tenryu_changed(current_tenryu: int)  # 転流（杀敌数）变化
 signal settings_changed()  # 设置改变
 @warning_ignore("unused_signal")
 signal pause_menu_toggled(is_paused: bool)  # 暂停菜单切换
+
+# --- 新增 RPG 系统信号 ---
+@warning_ignore("unused_signal")
+signal inventory_opened()  # 背包打开
+@warning_ignore("unused_signal")
+signal inventory_closed()  # 背包关闭
+@warning_ignore("unused_signal")
+signal quest_log_opened()  # 任务日志打开
+@warning_ignore("unused_signal")
+signal quest_log_closed()  # 任务日志关闭
+@warning_ignore("unused_signal")
+signal npc_interaction_started(npc_id: String)  # NPC 交互开始
+@warning_ignore("unused_signal")
+signal npc_interaction_ended()  # NPC 交互结束
+@warning_ignore("unused_signal")
+signal dialogue_line_displayed(npc_name: String, text: String)  # 对话显示
