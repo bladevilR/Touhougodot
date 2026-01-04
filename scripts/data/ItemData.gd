@@ -134,6 +134,63 @@ func _define_equipment() -> void:
 
 ## 定义材料
 func _define_materials() -> void:
+	# 采集物品 - 植物类
+	items["flower"] = {
+		"id": "flower",
+		"name": "花朵",
+		"description": "美丽的花朵，可用于制作药品或装饰",
+		"type": "material",
+		"max_stack": 99,
+		"icon": "res://assets/items/flower.png",
+		"price": 5,
+		"rarity": "common"
+	}
+
+	items["bamboo_shoot"] = {
+		"id": "bamboo_shoot",
+		"name": "竹笋",
+		"description": "新鲜的竹笋，可以食用或加工",
+		"type": "material",
+		"max_stack": 99,
+		"icon": "res://assets/items/bamboo_shoot.png",
+		"price": 15,
+		"rarity": "common"
+	}
+
+	items["herb"] = {
+		"id": "herb",
+		"name": "草药",
+		"description": "药用植物，用于制作治疗药",
+		"type": "material",
+		"max_stack": 99,
+		"icon": "res://assets/items/herb.png",
+		"price": 20,
+		"rarity": "common"
+	}
+
+	items["mushroom"] = {
+		"id": "mushroom",
+		"name": "蘑菇",
+		"description": "可食用的蘑菇",
+		"type": "material",
+		"max_stack": 99,
+		"icon": "res://assets/items/mushroom.png",
+		"price": 12,
+		"rarity": "common"
+	}
+
+	# 采集物品 - 矿物类
+	items["stone"] = {
+		"id": "stone",
+		"name": "石头",
+		"description": "普通的石头，用于建造",
+		"type": "material",
+		"max_stack": 99,
+		"icon": "res://assets/items/stone.png",
+		"price": 3,
+		"rarity": "common"
+	}
+
 	items["bamboo"] = {
 		"id": "bamboo",
 		"name": "竹子",
@@ -141,7 +198,8 @@ func _define_materials() -> void:
 		"type": "material",
 		"max_stack": 99,
 		"icon": "res://assets/items/bamboo.png",
-		"price": 10
+		"price": 10,
+		"rarity": "common"
 	}
 
 	items["iron_ore"] = {
@@ -151,7 +209,8 @@ func _define_materials() -> void:
 		"type": "material",
 		"max_stack": 99,
 		"icon": "res://assets/items/iron_ore.png",
-		"price": 50
+		"price": 50,
+		"rarity": "uncommon"
 	}
 
 	items["magic_crystal"] = {
@@ -161,7 +220,31 @@ func _define_materials() -> void:
 		"type": "material",
 		"max_stack": 99,
 		"icon": "res://assets/items/magic_crystal.png",
-		"price": 100
+		"price": 100,
+		"rarity": "rare"
+	}
+
+	# 采集物品 - 稀有材料
+	items["rare_flower"] = {
+		"id": "rare_flower",
+		"name": "稀有花朵",
+		"description": "罕见的魔法花朵，散发着微光",
+		"type": "material",
+		"max_stack": 99,
+		"icon": "res://assets/items/rare_flower.png",
+		"price": 80,
+		"rarity": "rare"
+	}
+
+	items["golden_bamboo"] = {
+		"id": "golden_bamboo",
+		"name": "金色竹子",
+		"description": "传说中的金色竹子，极为珍贵",
+		"type": "material",
+		"max_stack": 99,
+		"icon": "res://assets/items/golden_bamboo.png",
+		"price": 200,
+		"rarity": "epic"
 	}
 
 ## 查询方法

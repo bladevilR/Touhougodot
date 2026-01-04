@@ -138,3 +138,7 @@ signal npc_interaction_started(npc_id: String)  # NPC 交互开始
 signal npc_interaction_ended()  # NPC 交互结束
 @warning_ignore("unused_signal")
 signal dialogue_line_displayed(npc_name: String, text: String)  # 对话显示
+@warning_ignore("unused_signal")
+signal show_notification(message: String, color: Color)  # 显示通知消息（采集、拾取等）
+@warning_ignore("unused_signal")
+signal item_harvested(item_id: String, amount: int)  # 物品被采集
