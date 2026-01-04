@@ -1,17 +1,25 @@
 extends Node3D
 
-@onready var body = $body_Rigged
+var body = null
 var animation_player: AnimationPlayer = null
 
 # Animation names mapping
 var anim_map = {
-	"Idle": ["Standing Idle", "Standing Idel", "Idle", "stand", "mixamo.com"], 
+	"Idle": ["Standing Idle", "Standing Idel", "Idle", "stand", "mixamo.com"],
 	"Run": ["Standard Run", "Fast Run", "Run", "run", "Walk"]
 }
 
 const RUNNING_PATH = "res://assets/characters/Standard Run.fbx"
 
 func _ready():
+	# 尝试获取3D模型节点（可能不存在）
+	body = get_node_or_null("body_Rigged")
+
+	# 如果3D模型不存在，跳过初始化（使用2D模式）
+	if not body:
+		print("[Player3DVisuals] 3D模型未找到，使用2D精灵模式")
+		return
+
 	# Apply Toon Shading
 	_apply_toon_shading(body)
 
@@ -64,6 +72,9 @@ func _add_external_animation(path: String, target_name: String):
 			lib.add_animation(unique_name, anim)
 
 func _apply_toon_shading(node: Node):
+	if not node:
+		return
+
 	if node is MeshInstance3D:
 		var mesh = node.mesh
 		if mesh:
@@ -105,7 +116,8 @@ func _find_animation_player(node: Node) -> AnimationPlayer:
 	return null
 
 func play_animation(state_name: String):
-	if not animation_player: return
+	if not body or not animation_player:
+		return
 	
 	var target_anim = ""
 	var available_anims = animation_player.get_animation_list()
@@ -134,6 +146,9 @@ func play_animation(state_name: String):
 				animation_player.play(state_name)
 
 func set_orientation(direction: Vector2):
+	if not body:
+		return
+
 	if direction.length() > 0.1:
 		var angle = atan2(direction.x, direction.y)
 		rotation.y = angle
