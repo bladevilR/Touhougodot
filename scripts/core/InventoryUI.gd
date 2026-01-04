@@ -18,6 +18,9 @@ const ITEM_BUTTON_SCENE = preload("res://scenes/ui/global/ItemButton.tscn")
 var selected_item_id: String = ""
 
 func _ready():
+	# 注册到全局UI管理器
+	GlobalUIManager.register_inventory_ui(self)
+
 	# 连接信号
 	InventoryManager.inventory_changed.connect(_on_inventory_changed)
 	close_button.pressed.connect(_on_close_pressed)

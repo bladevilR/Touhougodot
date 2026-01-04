@@ -417,15 +417,14 @@ signal npc_interaction_ended()
 - [x] **重构 SignalBus.gd - 移除多角色相关信号，添加 RPG 系统信号**
 - [x] **重构 GameConstants.gd - 简化角色枚举**
 - [x] **创建 InventoryUI.gd - 背包界面逻辑脚本**
+- [x] **创建 QuestUI.gd - 任务日志界面逻辑脚本**
+- [x] **创建 GlobalUIManager.gd - 全局UI输入管理器（Autoload）**
+- [x] **添加输入映射 - I键打开背包，J键打开任务日志**
 
 ### 进行中 🔄
-- [ ] 创建 QuestUI.gd - 任务日志界面逻辑脚本（已有 InventoryUI 模板可参考）
-- [ ] 创建 GlobalUI.tscn - 全局 UI 容器场景
-  - 需要包含 InventoryUI 和 QuestUI
-  - 添加 PauseMenu（暂停菜单）
+- [ ] 创建 GlobalUI.tscn - 全局 UI 容器场景（可选，已通过 GlobalUIManager 实现）
 
 ### 待完成 ⏳
-- [ ] 添加全局 UI 输入处理（I键打开背包，J键打开任务）
 - [ ] 重构 TitleScreen.tscn - 移除角色选择界面，直接开始游戏
 - [ ] 创建城镇场景（Town.tscn）- 第一个主世界场景
 - [ ] 创建农场场景（Farm.tscn）
@@ -497,7 +496,7 @@ signal npc_interaction_ended()
 
 ---
 
-**文档版本**: 1.1
+**文档版本**: 1.2
 **创建日期**: 2026-01-04
-**最后更新**: 2026-01-04 (完成 Player.gd 重构 + 创建核心 UI 系统)
+**最后更新**: 2026-01-04 (完成 QuestUI + GlobalUIManager + 全局输入系统)
 **作者**: Claude Code
