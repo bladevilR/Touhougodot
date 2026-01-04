@@ -3,6 +3,20 @@
 /android/
 *.uid
 
+# 编译输出（不应提交）
+*.exe
+*.pck
+*.console.exe
+*.dll
+*.so
+*.dylib
+
+# 压缩包和归档
+*.zip
+*.7z
+*.tar.gz
+*.rar
+
 # 测试临时文件
 tests/**/*.tmp
 tests/**/temp_*
