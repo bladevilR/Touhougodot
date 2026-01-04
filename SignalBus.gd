@@ -3,6 +3,10 @@ extends Node
 # SignalBus - 全局信号总线
 # 这是整个游戏的"电话局"，所有节点只跟它说话，不互相找
 
+# --- 全局变量 ---
+# 当前选中的角色ID（固定为妹红，但保留变量以兼容现有代码）
+var selected_character_id: int = 1  # 1 = GameConstants.CharacterId.MOKOU
+
 # --- 战斗相关信号 ---
 @warning_ignore("unused_signal")  # Signal is emitted from other classes (HealthComponent, Player, etc.)
 signal player_health_changed(current_hp, max_hp)
@@ -124,6 +128,8 @@ signal settings_changed()  # 设置改变
 signal pause_menu_toggled(is_paused: bool)  # 暂停菜单切换
 
 # --- 新增 RPG 系统信号 ---
+@warning_ignore("unused_signal")
+signal character_selected(character_id: int)  # 角色选择（固定妹红，但保留信号）
 @warning_ignore("unused_signal")
 signal inventory_opened()  # 背包打开
 @warning_ignore("unused_signal")
