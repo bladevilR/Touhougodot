@@ -4,6 +4,7 @@ extends CanvasLayer
 # 显示左侧大立绘 + 右侧角色信息
 
 var panel_visible: bool = false
+var player: CharacterBody2D = null  # 玩家引用
 
 # UI节点
 var overlay: ColorRect = null
@@ -190,6 +191,10 @@ func _create_ui():
 
 func _update_info():
 	"""更新角色信息显示"""
+	# 获取玩家引用
+	if not player:
+		player = get_tree().get_first_node_in_group("player")
+
 	# 强制重置立绘大小（防止布局系统覆盖）
 	if portrait:
 		portrait.custom_minimum_size = Vector2(675, 1012) 
