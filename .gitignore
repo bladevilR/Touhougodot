@@ -1,3 +1,16 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# 测试临时文件
+tests/**/*.tmp
+tests/**/temp_*
+tests/**/*.backup
+
+# 实验性资源（可选提交）
+# 如果是共享的测试资源，取消注释提交
+# assets/shaders/*.gdshader
+# assets/characters/test_*
+
+# Windows临时文件
+nul
