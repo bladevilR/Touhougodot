@@ -420,16 +420,17 @@ signal npc_interaction_ended()
 - [x] **创建 QuestUI.gd - 任务日志界面逻辑脚本**
 - [x] **创建 GlobalUIManager.gd - 全局UI输入管理器（Autoload）**
 - [x] **添加输入映射 - I键打开背包，J键打开任务日志**
+- [x] **重构 TitleScreen.gd - 简化为新游戏/继续游戏，移除角色选择**
 
 ### 进行中 🔄
 - [ ] 创建 GlobalUI.tscn - 全局 UI 容器场景（可选，已通过 GlobalUIManager 实现）
+- [ ] 创建城镇场景（Town.tscn）- 第一个主世界场景（需要完成后替换 TitleScreen 中的 TODO）
 
 ### 待完成 ⏳
-- [ ] 重构 TitleScreen.tscn - 移除角色选择界面，直接开始游戏
-- [ ] 创建城镇场景（Town.tscn）- 第一个主世界场景
 - [ ] 创建农场场景（Farm.tscn）
 - [ ] 创建地下城入口场景（DungeonEntrance.tscn）
 - [ ] 重构战斗场景（CombatArena.tscn）- 从 world.tscn 改造
+- [ ] 连接 TitleScreen 到城镇场景（替换当前的 LoadingScreen 临时方案）
 - [ ] 测试场景切换流程
 - [ ] 测试存档/读档功能
 - [ ] 测试背包和任务系统
@@ -496,7 +497,7 @@ signal npc_interaction_ended()
 
 ---
 
-**文档版本**: 1.2
+**文档版本**: 1.3
 **创建日期**: 2026-01-04
-**最后更新**: 2026-01-04 (完成 QuestUI + GlobalUIManager + 全局输入系统)
+**最后更新**: 2026-01-04 (完成 TitleScreen 简化 - 移除角色选择)
 **作者**: Claude Code

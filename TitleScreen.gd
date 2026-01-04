@@ -61,7 +61,8 @@ func _create_menu_buttons():
 		return
 
 	var menu_items = [
-		{"text": "开始游戏", "callback": _on_start_game, "icon": "play"},
+		{"text": "新游戏", "callback": _on_new_game, "icon": "play"},
+		{"text": "继续游戏", "callback": _on_continue_game, "icon": "continue"},
 		{"text": "局外升级", "callback": _on_meta_upgrade, "icon": "upgrade"},
 		{"text": "设置", "callback": _on_settings, "icon": "settings"},
 		{"text": "退出游戏", "callback": _on_quit, "icon": "exit"}
@@ -73,6 +74,10 @@ func _create_menu_buttons():
 		button.pressed.connect(item.callback)
 		menu_container.add_child(button)
 		buttons.append(button)
+
+		# "继续游戏"按钮根据存档状态启用/禁用
+		if item.text == "继续游戏":
+			button.disabled = not _has_save_file()
 
 	# 连接按钮焦点以支持键盘导航
 	for i in range(buttons.size()):
@@ -243,8 +248,57 @@ func _navigate_menu(direction: int):
 
 # --- 菜单回调 ---
 
+## 检查是否有存档文件
+func _has_save_file() -> bool:
+	# 检查默认槽位（槽位1）是否有存档
+	return SaveSystem.has_save(1)
+
+## 新游戏
+func _on_new_game():
+	print("[TitleScreen] 开始新游戏")
+
+	# 固定选择妹红为主角（移除角色选择环节）
+	SignalBus.selected_character_id = GameConstants.CharacterId.MOKOU
+	SignalBus.character_selected.emit(GameConstants.CharacterId.MOKOU)
+
+	# 初始化新游戏状态
+	GameStateManager.player_data.level = 1
+	GameStateManager.player_data.exp = 0
+	GameStateManager.player_data.current_scene = ""
+
+	print("[TitleScreen] 角色已选择：藤原妹红")
+
+	# TODO: 创建城镇场景后，改为进入城镇
+	# SceneManager.change_scene("town")
+
+	# 暂时保持原有流程：进入 LoadingScreen
+	_transition_to_scene("res://LoadingScreen.tscn")
+
+## 继续游戏
+func _on_continue_game():
+	print("[TitleScreen] 继续游戏")
+
+	# 从默认槽位（槽位1）加载存档
+	var success = SaveSystem.load_game(1)
+
+	if success:
+		print("[TitleScreen] 存档加载成功")
+
+		# TODO: 创建城镇场景后，根据存档的场景恢复
+		# var saved_scene = GameStateManager.player_data.current_scene
+		# if saved_scene != "":
+		#     SceneManager.change_scene_instant(saved_scene)
+		# else:
+		#     SceneManager.change_scene("town")
+
+		# 暂时进入 LoadingScreen
+		_transition_to_scene("res://LoadingScreen.tscn")
+	else:
+		push_error("[TitleScreen] 存档加载失败")
+
 func _on_start_game():
-	_transition_to_scene("res://MainMenu.tscn")
+	# 保留旧函数名，重定向到新游戏
+	_on_new_game()
 
 func _on_meta_upgrade():
 	_transition_to_scene("res://MetaUpgradeMenu.tscn")
