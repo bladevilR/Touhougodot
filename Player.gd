@@ -73,7 +73,8 @@ var mokou_textures = {
 	"up": [],      # 向上移动帧
 	"down": [],    # 向下移动帧
 	"stand": null, # 站立
-	"kick": []     # 飞踢动画帧（5x5雪碧图）
+	"kick": [],    # 飞踢动画帧（5x5雪碧图）
+	"punch": []    # 出拳动画帧（26帧）
 }
 var is_attacking: bool = false # 是否正在播放攻击动画
 var current_attack_id: int = 0 # 攻击动画实例ID
@@ -303,75 +304,29 @@ func _input(event):
 	if weapon_system:
 		# 鼠标输入
 		if event is InputEventMouseButton:
-			if event.button_index == MOUSE_BUTTON_LEFT:
-				if event.pressed:
-					# 开始蓄力
-					if not is_weapon_charging:
-						charge_start_time = Time.get_ticks_msec() / 1000.0
-						is_weapon_charging = true
-				else:
-					# 释放蓄力攻击
-					if is_weapon_charging:
-						var current_time = Time.get_ticks_msec() / 1000.0
-						var charge_duration = current_time - charge_start_time
-
-						# 只要蓄力超过最小时间，就触发效果
-						if charge_duration > CHARGE_MIN_TIME:
-							var intensity = clamp(charge_duration / CHARGE_MAX_TIME, CHARGE_MIN_INTENSITY, CHARGE_MAX_INTENSITY)
-							# 触发释放爆发特效
-							_spawn_release_burst(intensity)
-
-						# 根据输入方式决定方向
-						var fire_dir = Vector2.ZERO
-						fire_dir = (get_global_mouse_position() - global_position).normalized()
-
-						weapon_system.fire_charged_flame_ring(charge_duration, fire_dir)
-
-						is_weapon_charging = false
-						if sprite: sprite.modulate = Color.WHITE # 复位颜色
+			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+				# 左键出拳
+				if not is_attacking:
+					_trigger_punch_attack()
 			elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 				# 右键重击
 				weapon_system.try_fire_weapon("mokou_kick_heavy")
 
 		# 键盘输入 (J/K)
 		if event is InputEventKey:
-			if event.keycode == KEY_J:
-				if event.pressed:
-					if not is_weapon_charging:
-						charge_start_time = Time.get_ticks_msec() / 1000.0
-						is_weapon_charging = true
-				else:
-					if is_weapon_charging:
-						var current_time = Time.get_ticks_msec() / 1000.0
-						var charge_duration = current_time - charge_start_time
-
-						# 键盘释放逻辑同上
-						if charge_duration > CHARGE_MIN_TIME:
-							var intensity = clamp(charge_duration / CHARGE_MAX_TIME, CHARGE_MIN_INTENSITY, CHARGE_MAX_INTENSITY)
-							_spawn_release_burst(intensity)
-						
-						# 键盘释放，使用键盘方向
-						var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-						if input_dir.length() < 0.1:
-							if sprite and sprite.flip_h: input_dir = Vector2.LEFT
-							else: input_dir = Vector2.RIGHT
-						else:
-							input_dir = input_dir.normalized()
-							
-						weapon_system.fire_charged_flame_ring(charge_duration, input_dir)
-						
-						is_weapon_charging = false
-						if sprite: sprite.modulate = Color.WHITE
-						
+			if event.keycode == KEY_J and event.pressed:
+				# J键出拳
+				if not is_attacking:
+					_trigger_punch_attack()
 			elif event.keycode == KEY_K and event.pressed:
-				# 键盘右键映射
+				# K键重踢
 				var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 				if input_dir.length() < 0.1:
 					if sprite and sprite.flip_h: input_dir = Vector2.LEFT
 					else: input_dir = Vector2.RIGHT
 				else:
 					input_dir = input_dir.normalized()
-				
+
 				weapon_system.try_fire_weapon("mokou_kick_heavy", input_dir)
 
 func _physics_process(delta):
@@ -903,6 +858,51 @@ func _load_mokou_textures():
 		print("错误：找不到飞踢图片文件！")
 		mokou_textures.kick = []
 
+	# punch - 出拳动画序列（26帧独立PNG文件）
+	print("Loading punch animation frames...")
+	mokou_textures.punch = []
+	var punch_dir = "res://assets/sprites/characters/punch/"
+	var punch_files = [
+		"未标题-1_0154_图层-26.png",
+		"未标题-1_0155_图层-25.png",
+		"未标题-1_0156_图层-24.png",
+		"未标题-1_0157_图层-23.png",
+		"未标题-1_0158_图层-22.png",
+		"未标题-1_0159_图层-21.png",
+		"未标题-1_0160_图层-20.png",
+		"未标题-1_0161_图层-19.png",
+		"未标题-1_0162_图层-18.png",
+		"未标题-1_0163_图层-17.png",
+		"未标题-1_0164_图层-16.png",
+		"未标题-1_0165_图层-15.png",
+		"未标题-1_0166_图层-14.png",
+		"未标题-1_0167_图层-13.png",
+		"未标题-1_0168_图层-12.png",
+		"未标题-1_0169_图层-11.png",
+		"未标题-1_0170_图层-10.png",
+		"未标题-1_0171_图层-9.png",
+		"未标题-1_0172_图层-8.png",
+		"未标题-1_0173_图层-7.png",
+		"未标题-1_0174_图层-6.png",
+		"未标题-1_0175_图层-5.png",
+		"未标题-1_0176_图层-4.png",
+		"未标题-1_0177_图层-3.png",
+		"未标题-1_0178_图层-2.png",
+		"未标题-1_0179_图层-1.png"
+	]
+
+	for filename in punch_files:
+		var path = punch_dir + filename
+		if ResourceLoader.exists(path):
+			var tex = load(path)
+			if tex:
+				mokou_textures.punch.append(tex)
+
+	if mokou_textures.punch.size() > 0:
+		print("Punch animation loaded successfully: ", mokou_textures.punch.size(), " frames")
+	else:
+		print("警告：出拳动画帧未加载！")
+
 func _update_mokou_animation(delta: float, input_dir: Vector2):
 	"""更新妹红的动画帧"""
 	# 状态 1: 攻击 (Attack) - 由 play_attack_animation 控制
@@ -1365,3 +1365,141 @@ func _play_kick_sprite_animation(total_duration: float, attack_id: int):
 	# 恢复原始 offset
 	if sprite and is_instance_valid(sprite):
 		sprite.offset = original_offset
+
+func _play_punch_animation(total_duration: float, attack_id: int):
+	"""播放出拳动画（26帧序列）"""
+	if not sprite or mokou_textures.punch.size() == 0:
+		return
+
+	var total_frames = mokou_textures.punch.size()  # 26帧
+	var frame_duration = total_duration / total_frames  # 每帧持续时间
+
+	# 锁定攻击方向
+	var direction = Vector2.RIGHT
+	var mouse_pos = get_global_mouse_position()
+	if mouse_pos.x < global_position.x:
+		direction = Vector2.LEFT
+	elif "last_move_direction" in self and last_move_direction.length() > 0.1:
+		direction = last_move_direction
+
+	# 锁定翻转状态
+	var locked_flip_h = direction.x < 0
+
+	# 备份原始 offset
+	var original_offset = sprite.offset
+
+	# 播放每一帧
+	for i in range(total_frames):
+		# 检查是否还是当前的攻击实例
+		if current_attack_id != attack_id or not is_attacking:
+			break
+
+		if sprite and is_instance_valid(sprite):
+			# 先设置 hframes 和 vframes 为 1，再切换纹理
+			sprite.hframes = 1
+			sprite.vframes = 1
+			sprite.frame = 0
+			sprite.texture = mokou_textures.punch[i]
+
+			# 确保纹理过滤模式正确
+			var map_system = get_tree().get_first_node_in_group("map_system")
+			if map_system and "character_texture_filter" in map_system:
+				sprite.texture_filter = map_system.character_texture_filter
+
+			# 计算合适的缩放
+			var target_height = 120.0
+			if mokou_textures.punch[i].get_height() > 0:
+				var scale_factor = target_height / mokou_textures.punch[i].get_height()
+				sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier
+				sprite.offset = Vector2(0, 0)
+			else:
+				sprite.scale = Vector2(0.15, 0.15) * scene_scale_multiplier
+				sprite.offset = Vector2(0, 0)
+
+			# 使用锁定的翻转状态
+			sprite.flip_h = locked_flip_h
+
+		# 等待下一帧
+		await get_tree().create_timer(frame_duration).timeout
+
+		if not is_instance_valid(self):
+			return
+
+	# 恢复原始 offset
+	if sprite and is_instance_valid(sprite):
+		sprite.offset = original_offset
+
+func _trigger_punch_attack():
+	"""触发出拳攻击"""
+	if not sprite or mokou_textures.punch.size() == 0:
+		print("警告：出拳动画未加载")
+		return
+
+	# 锁定攻击状态
+	current_attack_id += 1
+	var my_id = current_attack_id
+	is_attacking = true
+
+	# 保存当前缩放
+	var restore_scale = sprite.scale if sprite else Vector2(0.05, 0.05)
+
+	# 播放出拳动画（0.4秒播放26帧）
+	var punch_duration = 0.4
+	_play_punch_animation(punch_duration, my_id)
+
+	# 在动画中段触发伤害判定
+	await get_tree().create_timer(punch_duration * 0.5).timeout
+	if is_instance_valid(self):
+		_check_punch_damage()
+
+	# 等待动画完成
+	await get_tree().create_timer(punch_duration * 0.5).timeout
+	if not is_instance_valid(self):
+		return
+
+	# 恢复状态
+	if current_attack_id == my_id:
+		is_attacking = false
+		if sprite:
+			sprite.hframes = 1
+			sprite.vframes = 1
+			sprite.scale = restore_scale
+			sprite.offset = Vector2.ZERO
+
+func _check_punch_damage():
+	"""检查出拳近战伤害判定"""
+	var punch_range = 80.0  # 出拳范围
+	var punch_damage = 20.0  # 出拳伤害
+	var enemies = get_tree().get_nodes_in_group("enemy")
+
+	# 获取出拳方向
+	var mouse_pos = get_global_mouse_position()
+	var punch_direction = (mouse_pos - global_position).normalized()
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		var distance = global_position.distance_to(enemy.global_position)
+		if distance > punch_range:
+			continue
+
+		# 检查敌人是否在出拳方向上
+		var to_enemy = (enemy.global_position - global_position).normalized()
+		var dot = punch_direction.dot(to_enemy)
+
+		# 前方的敌人（120度范围）
+		if dot > 0.5:
+			# 造成伤害
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(punch_damage)
+
+			# 轻微击退
+			if enemy.has_method("apply_knockback"):
+				enemy.apply_knockback(punch_direction, 300.0)
+
+			# 视觉反馈
+			SignalBus.spawn_death_particles.emit(enemy.global_position, Color("#ffaa00"), 10)
+
+			# 轻微顿帧
+			hitstop(0.05)

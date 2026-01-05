@@ -687,38 +687,42 @@ func create_fog_layer(density: float):
 	"""创建全屏薄雾层"""
 	if fog_layer and is_instance_valid(fog_layer):
 		fog_layer.queue_free()
-		
+
 	fog_layer = CanvasLayer.new()
 	fog_layer.name = "FogLayer"
 	fog_layer.layer = 5 # 在 World 之上，UI 之下
-	get_tree().root.add_child(fog_layer)
-	
+	get_tree().root.add_child.call_deferred(fog_layer)
+
+	# 延迟添加fog_rect，确保fog_layer已经添加完成
+	await get_tree().process_frame
+
 	var fog_rect = TextureRect.new()
 	fog_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	fog_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fog_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	
+
 	# 噪声纹理
 	var noise = FastNoiseLite.new()
 	noise.seed = randi()
 	noise.frequency = 0.005
 	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-	
+
 	var noise_tex = NoiseTexture2D.new()
 	noise_tex.noise = noise
 	noise_tex.width = 512
 	noise_tex.height = 512
 	noise_tex.seamless = true
-	
+
 	fog_rect.texture = noise_tex
 	fog_rect.modulate = Color(0.9, 0.95, 1.0, density) # 蓝白色雾
-	
+
 	# 材质：加法混合或普通的混合
 	var mat = CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	fog_rect.material = mat
-	
-	fog_layer.add_child(fog_rect)
+
+	if is_instance_valid(fog_layer):
+		fog_layer.add_child(fog_rect)
 
 	# 简单的流动动画
 	_start_fog_flow_animation(fog_rect, density)
@@ -740,9 +744,10 @@ func _start_fog_flow_animation(fog_rect: TextureRect, density: float):
 
 func set_fog_density(density: float):
 	if fog_layer and is_instance_valid(fog_layer):
-		var rect = fog_layer.get_child(0)
-		if rect:
-			rect.modulate.a = density
+		if fog_layer.get_child_count() > 0:
+			var rect = fog_layer.get_child(0)
+			if rect:
+				rect.modulate.a = density
 
 func _create_lighting_deep_forest_beam():
 	"""竹林深处 - 幽暗，世界空间固定光柱"""

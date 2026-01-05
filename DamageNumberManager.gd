@@ -11,7 +11,7 @@ func _ready():
 	# 监听伤害信号
 	SignalBus.damage_dealt.connect(_on_damage_dealt)
 
-func _on_damage_dealt(damage: float, pos: Vector2, is_critical: bool):
+func _on_damage_dealt(damage: float, pos: Vector2, is_critical: bool, weapon_id: String = ""):
 	"""显示伤害数字"""
 	var damage_number = _get_damage_number_from_pool()
 	if not damage_number:
