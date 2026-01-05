@@ -1,0 +1,31 @@
+[gd_scene load_steps=3 format=3 uid="uid://rare_flower_harvestable"]
+
+[ext_resource type="Script" path="res://scripts/components/Harvestable.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/SUCAI/images/flower_red_tulip.png" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 32.0
+
+[node name="RareFlower" type="Area2D" groups=["harvestable"]]
+script = ExtResource("1")
+item_id = "rare_flower"
+harvest_amount_min = 1
+harvest_amount_max = 1
+respawn_time = 0.0
+require_tool = ""
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+modulate = Color(1, 0.8, 1, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")
+
+[node name="InteractionLabel" type="Label" parent="."]
+offset_left = -40.0
+offset_top = -60.0
+offset_right = 40.0
+offset_bottom = -40.0
+text = "[E] 采集稀有花朵"
+horizontal_alignment = 1
+visible = false

@@ -1,0 +1,41 @@
+[gd_scene load_steps=10 format=3 uid="uid://combat_arena_001"]
+
+[ext_resource type="Script" path="res://world.gd" id="1"]
+[ext_resource type="PackedScene" path="res://Player.tscn" id="2"]
+[ext_resource type="Script" path="res://ExperienceManager.gd" id="3"]
+[ext_resource type="Script" path="res://EnemySpawner.gd" id="4"]
+[ext_resource type="PackedScene" path="res://GameUI.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://Enemy.tscn" id="6"]
+[ext_resource type="Script" path="res://MapSystem.gd" id="7"]
+[ext_resource type="Script" path="res://RoomManager.gd" id="8"]
+[ext_resource type="Script" path="res://DebugChecker.gd" id="9"]
+[ext_resource type="Script" path="res://RoomLayoutManager.gd" id="10"]
+
+[node name="CombatArena" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1")
+
+[node name="MapSystem" type="Node2D" parent="."]
+script = ExtResource("7")
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(1200, 1500)
+
+[node name="ExperienceManager" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="EnemySpawner" type="Node2D" parent="."]
+script = ExtResource("4")
+enemy_scene = ExtResource("6")
+use_room_system = true
+
+[node name="RoomManager" type="Node" parent="."]
+script = ExtResource("8")
+
+[node name="RoomLayoutManager" type="Node" parent="."]
+script = ExtResource("10")
+
+[node name="GameUI" parent="." instance=ExtResource("5")]
+
+[node name="DebugChecker" type="Node" parent="."]
+script = ExtResource("9")

@@ -1,0 +1,30 @@
+[gd_scene load_steps=3 format=3 uid="uid://stone_harvestable"]
+
+[ext_resource type="Script" path="res://scripts/components/Harvestable.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/SUCAI/images/rock_medium_grey.png" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 40.0
+
+[node name="Stone" type="Area2D" groups=["harvestable"]]
+script = ExtResource("1")
+item_id = "stone"
+harvest_amount_min = 1
+harvest_amount_max = 3
+respawn_time = 0.0
+require_tool = ""
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")
+
+[node name="InteractionLabel" type="Label" parent="."]
+offset_left = -40.0
+offset_top = -70.0
+offset_right = 40.0
+offset_bottom = -50.0
+text = "[E] 采集"
+horizontal_alignment = 1
+visible = false

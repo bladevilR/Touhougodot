@@ -2,6 +2,68 @@
 
 ## [未发布] - 2026-01-05
 
+### ✨ 新功能 (New Features)
+
+#### 场景文件创建
+- **RPG场景**: 创建完整的场景文件
+  - `scenes/overworld/town/Town.tscn` - 城镇主场景
+  - `scenes/overworld/farm/Farm.tscn` - 农场场景
+  - `scenes/overworld/dungeon_entrance/DungeonEntrance.tscn` - 地下城入口场景
+  - 所有场景包含玩家节点��地图容器、功能性子节点
+
+- **可采集物场景系统**: 创建6种可采集物场景
+  - `scenes/harvestables/Flower.tscn` - 花朵 (1-3个)
+  - `scenes/harvestables/BambooShoot.tscn` - 竹笋 (1-2个)
+  - `scenes/harvestables/Herb.tscn` - 草药 (1-2个)
+  - `scenes/harvestables/Stone.tscn` - 石头 (1-3个)
+  - `scenes/harvestables/IronOre.tscn` - 铁矿石 (1-2个，需要镐)
+  - `scenes/harvestables/RareFlower.tscn` - 稀有花朵 (1个)
+  - 所有场景使用真实的素材贴图
+
+- **战斗场景重构**
+  - 将 `world.tscn` 重构为 `scenes/combat/CombatArena.tscn`
+  - 统一场景命名规范
+
+#### 背包UI系统
+- **InventoryUI场景**: 创建完整的背包界面 (`scenes/ui/global/InventoryUI.tscn`)
+  - 8x6 网格布局 (最多48个格子)
+  - 物品信息面板（显示名称、描述）
+  - 使用/装备按钮
+  - 按 I 键打开，ESC 键关闭
+
+- **GlobalUIManager集成**
+  - 自动加载 InventoryUI 到场景树
+  - 全局快捷键处理 (I键打开背包)
+  - UI互斥显示（同时只显示一个UI）
+
+### 🔄 系统重构 (Refactoring)
+
+#### 采集系统改为长期RPG模式
+- **移除重生机制**:
+  - `Harvestable.gd` 不再处理重生计时器
+  - 采集后物品直接 `queue_free()` 从世界移除
+  - `respawn_time` 默认改为 0.0
+  - 符合长期RPG设计：每次进图资源固定，采完就没
+
+- **背包集成优化**:
+  - 采集物自动添加到 InventoryManager
+  - 显示绿色浮动文字反馈
+  - 物品在背包中正确显示名称和数量
+
+- **InventoryUI.gd 修复**:
+  - 移除不存在的 `ItemButton.tscn` 预加载
+  - 使用代码动态创建物品按钮
+  - 修复 Parser Error
+
+### 📚 文档 (Documentation)
+
+- **HARVEST_TEST_GUIDE.md**: 采集系统测试指南
+  - 系统变更说明（不重生、固定资源）
+  - 详细的测试步骤
+  - 可采集物场景配置表
+  - 自定义采集物教程
+  - 已知限制和相关文件索引
+
 ### 🛠️ 错误修复 (Bug Fixes)
 
 #### 编译错误修复

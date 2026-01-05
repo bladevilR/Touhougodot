@@ -11,8 +11,8 @@ extends Control
 @onready var use_button: Button = $Panel/MarginContainer/VBoxContainer/ItemInfoPanel/VBoxContainer/UseButton
 @onready var close_button: Button = $Panel/MarginContainer/VBoxContainer/HBoxContainer/CloseButton
 
-# 物品按钮场景
-const ITEM_BUTTON_SCENE = preload("res://scenes/ui/global/ItemButton.tscn")
+# 物品按钮场景（暂未使用，直接用代码创建按钮）
+# const ITEM_BUTTON_SCENE = preload("res://scenes/ui/global/ItemButton.tscn")
 
 # 当前选中的物品
 var selected_item_id: String = ""
@@ -86,7 +86,7 @@ func _refresh_inventory():
 	for i in range(max_slots - current_count):
 		_create_empty_slot()
 
-## ���建物品按钮
+## 创建物品按钮
 func _create_item_button(item_id: String, amount: int):
 	# 简化版：使用 Button 代替场景实例化
 	var button = Button.new()

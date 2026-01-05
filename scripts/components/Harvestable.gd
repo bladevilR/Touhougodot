@@ -9,7 +9,7 @@ class_name Harvestable
 @export var item_id: String = ""  # 物品 ID（对应 ItemData）
 @export var harvest_amount_min: int = 1  # 采集数量最小值
 @export var harvest_amount_max: int = 1  # 采集数量最大值
-@export var respawn_time: float = 30.0  # 重生时间（秒），0 表示不重生
+@export var respawn_time: float = 0.0  # 重生时间（秒），0 表示不重生（采完就消失）
 @export var require_tool: String = ""  # 需要的工具（例如："pickaxe"），空字符串表示不需要
 
 # 视觉配置
@@ -60,13 +60,7 @@ func _ready():
 
 	print("[Harvestable] %s 初始化完成" % name)
 
-func _process(delta):
-	# 处理重生计时
-	if not is_harvestable and respawn_time > 0:
-		respawn_timer += delta
-		if respawn_timer >= respawn_time:
-			_respawn()
-
+func _process(_delta):
 	# 更新交互提示
 	if interaction_label:
 		if player_nearby and is_harvestable:
@@ -130,12 +124,8 @@ func _harvest():
 
 	# 标记为已采集
 	is_harvestable = false
-	respawn_timer = 0.0
 
-	# 更新外观
-	_update_appearance()
-
-	print("[Harvestable] 采集 %s x%d" % [item_id, amount])
+	print("[Harvestable] 采集 %s x%d，物品将从世界中移除" % [item_id, amount])
 
 ## 重生
 func _respawn():
@@ -181,12 +171,11 @@ func _play_harvest_animation():
 	tween.tween_property(sprite, "scale", Vector2(0.5, 0.5), 0.2)
 	tween.parallel().tween_property(sprite, "modulate:a", 0.0, 0.2)
 
-	# 如果不重生，完全隐藏
-	if respawn_time <= 0:
-		tween.tween_callback(func():
-			if is_instance_valid(self):
-				visible = false
-		)
+	# 长期RPG：采完直接删除节点
+	tween.tween_callback(func():
+		if is_instance_valid(self):
+			queue_free()  # 完全移除这个可采集物
+	)
 
 ## 播放重生动画
 func _play_respawn_animation():
