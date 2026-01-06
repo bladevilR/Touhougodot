@@ -445,8 +445,19 @@ func _physics_process(delta):
 					print("[Boss Debug] Pos:", global_position, " Vis:", visible, " Mod:", modulate, " SprVis:", sprite.visible if sprite else "NoSprite", " SprMod:", sprite.modulate if sprite else "N/A")
 
 		if not is_static_boss:
-			var direction = global_position.direction_to(target.global_position)
-			desired_velocity = direction * current_speed
+			var to_target = target.global_position - global_position
+			var y_diff = abs(to_target.y)
+			const Y_AXIS_MELEE_THRESHOLD: float = 40.0  # Y轴差距阈值
+
+			# [Y轴近战限制] 如果Y轴距离太远，优先垂直移动到同一水平线
+			if y_diff > Y_AXIS_MELEE_THRESHOLD:
+				# 只在Y轴移动，接近玩家的水平线
+				var y_direction = sign(to_target.y)
+				desired_velocity = Vector2(0, y_direction) * current_speed
+			else:
+				# Y轴已对齐，正常向玩家移动（包含X和Y）
+				var direction = global_position.direction_to(target.global_position)
+				desired_velocity = direction * current_speed
 		else:
 			desired_velocity = Vector2.ZERO # 强制静止
 
@@ -884,8 +895,13 @@ func _process_kedama_charge_attack(delta: float) -> bool:
 	# 正常状态：检测是否应该开始蓄力
 	if attack_cooldown <= 0 and is_instance_valid(target):
 		var distance = global_position.distance_to(target.global_position)
-		# 在150像素范围内触发撞击攻击
-		if distance < 150.0 and distance > 30.0:
+
+		# [Y轴近战限制] 只有在同一水平线上才会发起撞击攻击
+		var y_diff = abs(global_position.y - target.global_position.y)
+		const Y_AXIS_MELEE_THRESHOLD: float = 40.0  # Y轴差距阈值
+
+		# 在150像素范围内且Y轴差距不大时触发撞击攻击
+		if distance < 150.0 and distance > 30.0 and y_diff < Y_AXIS_MELEE_THRESHOLD:
 			_start_charge_attack()
 			return true # 开始蓄力，阻止移动
 			
@@ -1111,7 +1127,7 @@ func die():
 		SignalBus.screen_shake.emit(0.08, 5.0)  # 0.08秒，5像素
 
 	# 通知全世界：这里死怪了，掉经验吧，播音效吧
-	SignalBus.enemy_killed.emit(xp_value, global_position)
+	SignalBus.enemy_killed.emit(self, xp_value, global_position)
 
 	# Boss死亡特殊处理：发出boss_defeated信号
 	if enemy_type == GameConstants.EnemyType.BOSS:

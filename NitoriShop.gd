@@ -202,9 +202,10 @@ func _init_shop_items():
 		Color("#ffffff")
 	)
 
-func _on_enemy_killed(xp_amount: int, pos: Vector2):
-	"""敌人死亡时掉落金币"""
-	# 基础金币 = 经验值/5，最少1个
+func _on_enemy_killed(_enemy: Node2D, xp_amount: int, pos: Vector2):
+	"""敌人死亡时的回调"""
+	# 增加転流（杀敌数）
+	add_tenryu(1)
 	var base_coins = max(1, xp_amount / 5)
 
 	# 应用金币加成
@@ -212,6 +213,12 @@ func _on_enemy_killed(xp_amount: int, pos: Vector2):
 	var final_coins = int(base_coins * (1.0 + coin_bonus))
 
 	add_coins(final_coins)
+
+func add_tenryu(amount: int):
+	"""转发给经验管理器处理"""
+	var exp_manager = get_tree().get_first_node_in_group("experience_manager")
+	if exp_manager and exp_manager.has_method("add_tenryu"):
+		exp_manager.add_tenryu(amount)
 
 func _on_shop_available():
 	"""波次间隙，商店可用"""

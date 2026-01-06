@@ -374,7 +374,7 @@ func _start_combat_room():
 	# 一次性生成所有敌人
 	SignalBus.spawn_wave.emit(target_kills, current_room_index)
 
-func _on_enemy_killed(xp_value, position):
+func _on_enemy_killed(_enemy, xp_value, position):
 	"""敌人被击杀"""
 	if current_room_type != RoomType.NORMAL and current_room_type != RoomType.BOSS:
 		return

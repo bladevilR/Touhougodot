@@ -74,13 +74,108 @@ var mokou_textures = {
 	"down": [],    # 向下移动帧
 	"stand": null, # 站立
 	"kick": [],    # 飞踢动画帧（5x5雪碧图）
-	"punch": []    # 出拳动画帧（26帧）
+	"punch": [],   # 出拳动画帧（26帧）- 旧版，保留兼容
+	"punch_light": [],   # 轻拳（29帧）
+	"punch_heavy": [],   # 重拳（29帧）
+	"punch_combo1": [],  # 连击第一段（26帧）
+	"punch_combo2": [],  # 连击第二段（26帧）
+	"punch_combo3": [],  # 连击第三段（23帧）
+	"punch_recycle": []  # 循环出拳（28帧）
 }
 var is_attacking: bool = false # 是否正在播放攻击动画
 var current_attack_id: int = 0 # 攻击动画实例ID
 var animation_frame: int = 0
 var animation_timer: float = 0.0
 const ANIMATION_SPEED: float = 0.08  # 每帧持续时间
+
+# ==================== COMBO SYSTEM ====================
+var combo_state: int = 0  # 0=无连击, 1=第一段, 2=第二段, 3=第三段
+var combo_timer: float = 0.0
+const COMBO_WINDOW: float = 0.6  # 连击窗口时间（秒）
+var is_long_pressing: bool = false  # 是否长按攻击键
+var long_press_timer: float = 0.0
+const LONG_PRESS_THRESHOLD: float = 0.3  # 长按阈值（秒）
+var is_recycling: bool = false  # 是否正在循环出拳
+
+# ==================== COMBAT STATE SYSTEM ====================
+var in_combat: bool = false  # 是否在战斗状态
+var combat_exit_timer: float = 0.0
+const COMBAT_EXIT_DELAY: float = 5.0  # 脱战延迟（秒）
+
+# ==================== INPUT BUFFER SYSTEM ====================
+var buffered_input: String = "" # 缓存的输入指令 ("light", "heavy")
+var input_buffer_timer: float = 0.0
+const INPUT_BUFFER_WINDOW: float = 0.4 # 输入缓存窗口期（秒）
+
+# ==================== PUNCH ATTACK CONFIGS (FRAME DATA) ====================
+# 三段式设计：
+# 1. Startup (前摇): 动作起手，给玩家预判。慢。
+# 2. Active (判定): 伤害判定瞬间。极快，打击感来源。
+# 3. Recovery (后摇): 收招动作。慢，可被Cancel。
+const PUNCH_CONFIGS = {
+	"light": {
+		"damage": 20.0,
+		"knockback": 300.0,
+		"range": 80.0,
+		"stun_duration": 0.2,
+		"hitstop": 0.08,
+		"frame_skip": 2, # 跳帧加速：29帧 -> 15帧
+		# 阶段帧数比例 (0.0-1.0)
+		"phase_ratios": {"startup": 0.3, "active": 0.2, "recovery": 0.5}, 
+		# 各阶段每帧持续时间 (秒) - 0.016约为1帧(60FPS)
+		"phase_speeds": {"startup": 0.03, "active": 0.016, "recovery": 0.04}
+	},
+	"heavy": {
+		"damage": 60.0,
+		"knockback": 700.0,
+		"range": 100.0,
+		"stun_duration": 0.5,
+		"hitstop": 0.15,
+		"frame_skip": 2, # 跳帧加速
+		"phase_ratios": {"startup": 0.4, "active": 0.2, "recovery": 0.4},
+		"phase_speeds": {"startup": 0.05, "active": 0.02, "recovery": 0.06}
+	},
+	"combo1": {
+		"damage": 20.0,
+		"knockback": 250.0,
+		"range": 80.0,
+		"stun_duration": 0.15,
+		"hitstop": 0.06,
+		"frame_skip": 2,
+		"phase_ratios": {"startup": 0.2, "active": 0.3, "recovery": 0.5},
+		"phase_speeds": {"startup": 0.03, "active": 0.016, "recovery": 0.04}
+	},
+	"combo2": {
+		"damage": 25.0,
+		"knockback": 300.0,
+		"range": 85.0,
+		"stun_duration": 0.2,
+		"hitstop": 0.08,
+		"frame_skip": 2,
+		"phase_ratios": {"startup": 0.2, "active": 0.3, "recovery": 0.5},
+		"phase_speeds": {"startup": 0.03, "active": 0.016, "recovery": 0.04}
+	},
+	"combo3": {
+		"damage": 40.0,
+		"knockback": 500.0,
+		"range": 90.0,
+		"stun_duration": 0.4,
+		"hitstop": 0.12,
+		"frame_skip": 2,
+		"phase_ratios": {"startup": 0.3, "active": 0.2, "recovery": 0.5},
+		"phase_speeds": {"startup": 0.04, "active": 0.016, "recovery": 0.05}
+	},
+	"recycle": {
+		"damage": 15.0,
+		"knockback": 200.0,
+		"range": 75.0,
+		"stun_duration": 0.1,
+		"hitstop": 0.05,
+		"frame_skip": 3, # 欧拉欧拉需要极快
+		"phase_ratios": {"startup": 0.1, "active": 0.5, "recovery": 0.4},
+		"phase_speeds": {"startup": 0.02, "active": 0.016, "recovery": 0.02}
+	}
+}
 
 # 蓄力攻击变量
 var charge_start_time: float = 0.0
@@ -118,11 +213,10 @@ func _ready():
 	bond_system = get_node_or_null("BondSystem")
 	player_viewport = get_node_or_null("PlayerViewport")
 
-	# 确保精灵可见 (仅当没有3D模型时)
-	if sprite and not player_viewport:
+	# 暂时启用2D精灵显示（3D模型系统未完成）
+	if sprite:
 		sprite.visible = true
-	elif sprite and player_viewport:
-		sprite.visible = false
+		print("[Player] 使用2D精灵显示")
 
 	# 初始化妹红数据
 	_load_mokou_data()
@@ -143,10 +237,8 @@ func _ready():
 	# 创建蓄力条
 	_create_charge_bar()
 
-	# 显示精灵（角色数据已加载）
-	if sprite and not player_viewport:
-		sprite.visible = true
-		# 复位 Sprite，不再尝试上移
+	# 设置精灵位置和纹理过滤
+	if sprite:
 		sprite.position = Vector2.ZERO
 		# 从地图系统读取纹理过滤模式，如果没有则使用 NEAREST
 		var map_system = get_tree().get_first_node_in_group("map_system")
@@ -300,34 +392,31 @@ func _setup_collision_layers():
 		collision_mask = 2 + 4 + 16 + 32  # 墙壁(Layer 2) + 敌人(Layer 3) + 敌人子弹(Layer 5) + 拾取物(Layer 6)
 
 func _input(event):
-	# 妹红攻击输入处理
-	if weapon_system:
-		# 鼠标输入
-		if event is InputEventMouseButton:
-			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-				# 左键出拳
-				if not is_attacking:
-					_trigger_punch_attack()
-			elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-				# 右键重击
-				weapon_system.try_fire_weapon("mokou_kick_heavy")
+	# 妹红拳击输入处理
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_on_light_attack_pressed()
+			else:
+				_on_light_attack_released()
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			if event.pressed:
+				_on_heavy_attack_pressed()
+			else:
+				_on_heavy_attack_released()
 
-		# 键盘输入 (J/K)
-		if event is InputEventKey:
-			if event.keycode == KEY_J and event.pressed:
-				# J键出拳
-				if not is_attacking:
-					_trigger_punch_attack()
-			elif event.keycode == KEY_K and event.pressed:
-				# K键重踢
-				var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-				if input_dir.length() < 0.1:
-					if sprite and sprite.flip_h: input_dir = Vector2.LEFT
-					else: input_dir = Vector2.RIGHT
-				else:
-					input_dir = input_dir.normalized()
-
-				weapon_system.try_fire_weapon("mokou_kick_heavy", input_dir)
+	# 键盘输入 (J/K)
+	if event is InputEventKey:
+		if event.keycode == KEY_J:
+			if event.pressed and not event.echo:
+				_on_light_attack_pressed()
+			elif not event.pressed:
+				_on_light_attack_released()
+		elif event.keycode == KEY_K:
+			if event.pressed and not event.echo:
+				_on_heavy_attack_pressed()
+			elif not event.pressed:
+				_on_heavy_attack_released()
 
 func _physics_process(delta):
 	# 同步影子视觉 (每帧更新)
@@ -343,6 +432,34 @@ func _physics_process(delta):
 	# 更新接触伤害冷却
 	if contact_damage_cooldown > 0:
 		contact_damage_cooldown -= delta
+
+	# 更新输入缓存计时器
+	if input_buffer_timer > 0:
+		input_buffer_timer -= delta
+	else:
+		buffered_input = "" # 缓存过期
+
+	# ==================== 更新连击系统 ====================
+	# 更新连击计时器
+	if combo_timer > 0:
+		combo_timer -= delta
+		if combo_timer <= 0:
+			combo_state = 0  # 重置连击
+
+	# 更新长按计时器
+	if is_long_pressing:
+		long_press_timer += delta
+		# 达到长按阈值，触发循环出拳
+		if long_press_timer >= LONG_PRESS_THRESHOLD and not is_recycling:
+			print("[Punch] Long press threshold reached, triggering recycle")
+			_trigger_recycle_punch()
+
+	# ==================== 更新战斗状态 ====================
+	if in_combat:
+		combat_exit_timer += delta
+		if combat_exit_timer >= COMBAT_EXIT_DELAY:
+			in_combat = false
+			print("[Combat] Exited combat state")
 
 	# ==================== 蓄力视觉反馈 ====================
 	var charge_bar = get_node_or_null("ChargeBar")
@@ -452,8 +569,8 @@ func _physics_process(delta):
 	_update_mokou_animation(delta, input_dir)
 
 	# 翻转精灵（面向移动方向）
-	# 妹红的翻转由_update_mokou_animation处理
-	if sprite and sprite is Sprite2D and input_dir.x != 0:
+	# 攻击时不要翻转，避免贴图崩坏
+	if sprite and sprite is Sprite2D and input_dir.x != 0 and not is_attacking and not is_recycling:
 		sprite.flip_h = input_dir.x < 0
 		
 	# Update 3D Model Logic
@@ -903,6 +1020,73 @@ func _load_mokou_textures():
 	else:
 		print("警告：出拳动画帧未加载！")
 
+	# 加载新的拳击动画系统
+	print("Loading new punch animation system...")
+	_load_punch_animations()
+
+func _load_punch_animations():
+	"""加载新的拳击动画系统（light/heavy/combo1/2/3/recycle）"""
+	# 使用绝对路径映射
+	var base_dir = "E:/game/public/punch/"
+
+	# 定义动画配置：文件夹名 -> 目标数组
+	var animation_configs = {
+		"light": "punch_light",
+		"heavy": "punch_heavy",
+		"1": "punch_combo1",
+		"2": "punch_combo2",
+		"3": "punch_combo3",
+		"recycle": "punch_recycle"
+	}
+
+	for folder_name in animation_configs.keys():
+		var target_key = animation_configs[folder_name]
+		var folder_path = base_dir + folder_name + "/"
+
+		# 获取文件夹中的所有PNG文件
+		var files = _get_png_files_in_directory(folder_path)
+
+		if files.size() > 0:
+			# 按文件名排序（确保正确的播放顺序）
+			files.sort()
+
+			# 加载所有帧
+			for filename in files:
+				var full_path = folder_path + filename
+				# 直接使用 Image 和 ImageTexture 加载
+				var img = Image.new()
+				var err = img.load(full_path)
+				if err == OK:
+					var tex = ImageTexture.create_from_image(img)
+					if tex:
+						mokou_textures[target_key].append(tex)
+				else:
+					print("  Error loading: %s (error code: %d)" % [full_path, err])
+
+			print("  [%s] loaded: %d frames" % [target_key, mokou_textures[target_key].size()])
+		else:
+			print("  Warning: No frames found in %s" % folder_path)
+
+func _get_png_files_in_directory(dir_path: String) -> Array:
+	"""获取目录中的所有PNG文件"""
+	var files = []
+	var dir = DirAccess.open(dir_path)
+
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+
+		while file_name != "":
+			if not dir.current_is_dir() and file_name.ends_with(".png"):
+				files.append(file_name)
+			file_name = dir.get_next()
+
+		dir.list_dir_end()
+	else:
+		print("  Error: Cannot open directory: %s" % dir_path)
+
+	return files
+
 func _update_mokou_animation(delta: float, input_dir: Vector2):
 	"""更新妹红的动画帧"""
 	# 状态 1: 攻击 (Attack) - 由 play_attack_animation 控制
@@ -1000,8 +1184,16 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 				sprite.scale = Vector2(TARGET_HEIGHT / 720.0, TARGET_HEIGHT / 720.0) * scene_scale_multiplier
 	else:
 		animation_timer = 0.0
-		if mokou_textures.stand:
-			sprite.texture = mokou_textures.stand
+
+		# 战斗状态下使用攻击第一帧作为待机图
+		var idle_texture = null
+		if in_combat and mokou_textures.punch_light.size() > 0:
+			idle_texture = mokou_textures.punch_light[0]
+		elif mokou_textures.stand:
+			idle_texture = mokou_textures.stand
+
+		if idle_texture:
+			sprite.texture = idle_texture
 
 			# 确保纹理过滤模式正确（站立状态）
 			var map_system = get_tree().get_first_node_in_group("map_system")
@@ -1010,7 +1202,7 @@ func _update_mokou_animation(delta: float, input_dir: Vector2):
 
 			# Use dynamic scaling based on actual texture height
 			# 并应用场景缩放系数
-			var tex_height = mokou_textures.stand.get_height()
+			var tex_height = idle_texture.get_height()
 			if tex_height > 0:
 				var scale_factor = TARGET_HEIGHT / float(tex_height)
 				sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier
@@ -1221,6 +1413,485 @@ func _create_particle_texture() -> ImageTexture:
 	
 	return ImageTexture.create_from_image(image)
 
+# ==================== PUNCH ATTACK INPUT HANDLERS ====================
+
+func _on_light_attack_pressed():
+	"""轻拳按下"""
+	print("[Punch] Light attack pressed")
+	if is_attacking or is_recycling:
+		print("[Punch] Already attacking, buffering input: light")
+		buffered_input = "light"
+		input_buffer_timer = INPUT_BUFFER_WINDOW
+		return
+
+	# 开始长按计时
+	is_long_pressing = true
+	long_press_timer = 0.0
+
+func _on_light_attack_released():
+	"""轻拳释放"""
+	print("[Punch] Light attack released, long_press_timer: %.2f" % long_press_timer)
+	is_long_pressing = false
+
+	# 如果正在循环出拳，停止
+	if is_recycling:
+		print("[Punch] Stopping recycle punch")
+		is_recycling = false
+		is_attacking = false
+		return
+
+	# 如果长按时间小于阈值，触发单次攻击
+	if long_press_timer < LONG_PRESS_THRESHOLD and not is_attacking:
+		print("[Punch] Triggering single light punch")
+		_trigger_light_punch()
+
+func _on_heavy_attack_pressed():
+	"""重拳按下"""
+	if is_attacking or is_recycling:
+		print("[Punch] Already attacking, buffering input: heavy")
+		buffered_input = "heavy"
+		input_buffer_timer = INPUT_BUFFER_WINDOW
+		return
+
+	_trigger_heavy_punch()
+
+func _on_heavy_attack_released():
+	"""重拳释放"""
+	pass  # 重拳不需要释放处理
+
+# ==================== PUNCH ATTACK TRIGGERS ====================
+
+func _trigger_light_punch():
+	"""触发轻拳攻击（支持连击）"""
+	print("[Punch] _trigger_light_punch called, combo_state: %d" % combo_state)
+
+	if is_attacking or is_recycling:
+		print("[Punch] Already attacking, aborting")
+		return
+
+	# 进入战斗状态（在攻击开始时）
+	_enter_combat()
+
+	# 自动吸附到敌人
+	var locked = _auto_lock_to_enemy(150.0)
+	print("[Punch] Auto-lock result: %s" % str(locked))
+
+	# 根据连击状态决定使用哪个动画
+	var attack_type = ""
+	var animation_frames = []
+
+	# 修正逻辑：combo_state表示下一次应该用哪个动画
+	if combo_state == 0:
+		attack_type = "light"
+		animation_frames = mokou_textures.punch_light
+	elif combo_state == 1:
+		attack_type = "combo1"
+		animation_frames = mokou_textures.punch_combo1
+	elif combo_state == 2:
+		attack_type = "combo2"
+		animation_frames = mokou_textures.punch_combo2
+	else:  # combo_state == 3
+		attack_type = "combo3"
+		animation_frames = mokou_textures.punch_combo3
+
+	# 检查动画是否加载
+	print("[Punch] Attack type: %s, frames loaded: %d" % [attack_type, animation_frames.size()])
+	if animation_frames.size() == 0:
+		print("警告：%s 动画未加载！" % attack_type)
+		return
+
+	# 获取攻击配置
+	var config = PUNCH_CONFIGS.get(attack_type, PUNCH_CONFIGS.light)
+
+	# 播放攻击动画
+	print("[Punch] Starting animation playback")
+	_play_new_punch_animation(animation_frames, config, attack_type)
+
+	# 更新连击状态（递增，循环）
+	combo_state = (combo_state + 1) % 4  # 0->1->2->3->0
+	combo_timer = COMBO_WINDOW
+	print("[Punch] Updated combo_state to: %d" % combo_state)
+
+func _trigger_heavy_punch():
+	"""触发重拳攻击"""
+	if is_attacking or is_recycling:
+		return
+
+	# 进入战斗状态
+	_enter_combat()
+
+	# 自动吸附到敌人
+	_auto_lock_to_enemy(150.0)
+
+	# 检查动画是否加载
+	if mokou_textures.punch_heavy.size() == 0:
+		print("警告：heavy 动画未加载！")
+		return
+
+	# 获取攻击配置
+	var config = PUNCH_CONFIGS.heavy
+
+	# 播放攻击动画
+	_play_new_punch_animation(mokou_textures.punch_heavy, config, "heavy")
+
+	# 重置连击状态
+	combo_state = 0
+	combo_timer = 0.0
+
+func _trigger_recycle_punch():
+	"""触发循环出拳"""
+	print("[Punch] _trigger_recycle_punch called")
+
+	# 检查动画是否加载
+	if mokou_textures.punch_recycle.size() == 0:
+		print("警告：recycle 动画未加载！")
+		return
+
+	# 进入战斗状态
+	_enter_combat()
+
+	# 自动吸附到敌人
+	_auto_lock_to_enemy(150.0)
+
+	# 打断当前攻击，进入循环出拳状态
+	is_recycling = true
+	is_attacking = true
+	current_attack_id += 1  # 打断旧的攻击动画
+
+	# 获取攻击配置
+	var config = PUNCH_CONFIGS.recycle
+
+	# ���始循环播放
+	print("[Punch] Starting recycle animation")
+	_play_recycle_animation(config)
+
+# ==================== AUTO LOCK-ON SYSTEM ====================
+
+func _auto_lock_to_enemy(attack_range: float = 150.0) -> bool:
+	"""
+	自动吸附到最近的敌人（平滑位移+残影）
+	返回: 是否成功吸附
+	"""
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	var closest_enemy = null
+	var closest_distance = attack_range
+
+	# 获取攻击方向
+	var attack_direction = _get_attack_direction()
+
+	# 查找最近的敌人（在攻击方向前方）
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		var to_enemy = enemy.global_position - global_position
+		var distance = to_enemy.length()
+
+		# 检查是否在攻击方向前方（120度范围）
+		var dot = attack_direction.dot(to_enemy.normalized())
+		if dot > 0.5 and distance < closest_distance:
+			closest_enemy = enemy
+			closest_distance = distance
+
+	# 如果找到敌人，平滑吸附过去
+	if closest_enemy:
+		var target_pos = closest_enemy.global_position
+		var offset = attack_direction * -50.0  # 站在敌人前方50像素
+		var final_pos = target_pos + offset
+
+		# 启动平滑位移协程
+		_smooth_dash_to_position(final_pos, attack_direction)
+
+		return true
+
+	return false
+
+func _smooth_dash_to_position(target_pos: Vector2, direction: Vector2):
+	"""平滑冲刺到目标位置（带残影效果）"""
+	var start_pos = global_position
+	var distance = start_pos.distance_to(target_pos)
+	var dash_duration = 0.1  # 冲刺持续时间（秒）
+	var elapsed = 0.0
+
+	# 更新朝向
+	if sprite:
+		sprite.flip_h = direction.x < 0
+
+	# 生成残影
+	_spawn_afterimage()
+
+	while elapsed < dash_duration:
+		elapsed += get_physics_process_delta_time()
+		var t = elapsed / dash_duration
+		# 使用ease-out曲线，开始快后面慢
+		var eased_t = 1.0 - pow(1.0 - t, 3.0)
+		global_position = start_pos.lerp(target_pos, eased_t)
+
+		# 每隔几帧生成一个残影
+		if int(elapsed * 100) % 2 == 0:
+			_spawn_afterimage()
+
+		await get_tree().process_frame
+
+	# 确保到达目标位置
+	global_position = target_pos
+
+func _spawn_afterimage():
+	"""生成残影效果"""
+	if not sprite or not sprite.texture:
+		return
+
+	var afterimage = Sprite2D.new()
+	afterimage.texture = sprite.texture
+	afterimage.global_position = global_position
+	afterimage.scale = sprite.scale
+	afterimage.flip_h = sprite.flip_h
+	afterimage.modulate = Color(1, 1, 1, 0.5)  # 半透明
+	afterimage.z_index = sprite.z_index - 1
+
+	# 添加到场景
+	get_tree().current_scene.add_child(afterimage)
+
+	# 淡出动画
+	var tween = create_tween()
+	tween.tween_property(afterimage, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(afterimage.queue_free)
+
+func _get_attack_direction() -> Vector2:
+	"""获取攻击方向"""
+	var mouse_pos = get_global_mouse_position()
+	var to_mouse = mouse_pos - global_position
+
+	if to_mouse.length() > 10.0:
+		return to_mouse.normalized()
+	elif last_move_direction.length() > 0.1:
+		return last_move_direction.normalized()
+	elif sprite and sprite.flip_h:
+		return Vector2.LEFT
+	else:
+		return Vector2.RIGHT
+
+# ==================== NEW PUNCH ANIMATION SYSTEM ====================
+
+func _play_new_punch_animation(frames: Array, config: Dictionary, attack_type: String):
+	"""播放新的拳击动画（三段式：前摇-判定-后摇 + 输入缓存）"""
+	if not sprite or frames.size() == 0:
+		return
+
+	# 锁定攻击状态
+	current_attack_id += 1
+	var my_id = current_attack_id
+	is_attacking = true
+	
+	# 重置缓存（防止旧缓存触发）
+	buffered_input = ""
+
+	# 保存当前缩放
+	var restore_scale = sprite.scale
+
+	# 获取攻击方向并锁定
+	var attack_direction = _get_attack_direction()
+	var locked_flip_h = attack_direction.x < 0
+
+	# 1. 计算三段式帧数范围
+	var total_frames = frames.size()
+	var frame_skip = config.get("frame_skip", 1)
+	
+	var ratios = config.get("phase_ratios", {"startup": 0.3, "active": 0.2, "recovery": 0.5})
+	var speeds = config.get("phase_speeds", {"startup": 0.06, "active": 0.03, "recovery": 0.1})
+	
+	var startup_end_idx = int(total_frames * ratios.startup)
+	var active_end_idx = startup_end_idx + int(total_frames * ratios.active)
+	# 确保至少有1帧判定
+	if active_end_idx <= startup_end_idx: active_end_idx = startup_end_idx + 1
+	
+	var damage_dealt = false # 确保每个Active阶段只造成一次伤害
+
+	# 2. 播放动画循环
+	for i in range(0, total_frames, frame_skip):
+		if current_attack_id != my_id: # 如果被打断（如受伤、死亡）
+			is_attacking = false
+			return # 直接退出，不执行后续逻辑
+
+		# 确定当前阶段和速度
+		var phase = "startup"
+		var frame_duration = speeds.startup
+		
+		if i >= startup_end_idx and i < active_end_idx:
+			phase = "active"
+			frame_duration = speeds.active
+		elif i >= active_end_idx:
+			phase = "recovery"
+			frame_duration = speeds.recovery
+			
+		# 渲染帧
+		if sprite and is_instance_valid(sprite):
+			sprite.hframes = 1
+			sprite.vframes = 1
+			sprite.frame = 0
+			sprite.texture = frames[i]
+
+			var map_system = get_tree().get_first_node_in_group("map_system")
+			if map_system and "character_texture_filter" in map_system:
+				sprite.texture_filter = map_system.character_texture_filter
+
+			var target_height = 100.0
+			if frames[i].get_height() > 0:
+				var scale_factor = target_height / frames[i].get_height()
+				sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier
+			else:
+				sprite.scale = Vector2(0.15, 0.15) * scene_scale_multiplier
+
+			sprite.flip_h = locked_flip_h
+
+		# 3. 伤害判定逻辑 (Active阶段触发)
+		if phase == "active" and not damage_dealt:
+			damage_dealt = true
+			# 触发伤害
+			_check_new_punch_damage(config, attack_type)
+			
+		# 4. 后摇取消逻辑 (可选：如果这里检测到闪避键，可以直接 break)
+		# 目前只实现输入缓存，不实现闪避取消
+			
+		await get_tree().create_timer(frame_duration).timeout
+		if not is_instance_valid(self):
+			return
+
+	# 恢复状态
+	if current_attack_id == my_id:
+		is_attacking = false
+		if sprite:
+			sprite.scale = restore_scale
+			
+		# 5. 输入缓存检查 (Input Buffer)
+		# 动画结束，如果有缓存的输入，立即执行下一次攻击
+		if buffered_input != "":
+			print("[Punch] Executing buffered input: %s" % buffered_input)
+			if buffered_input == "light":
+				buffered_input = ""
+				_trigger_light_punch()
+			elif buffered_input == "heavy":
+				buffered_input = ""
+				_trigger_heavy_punch()
+
+func _play_recycle_animation(config: Dictionary):
+	"""播放循环出拳动画（支持跳帧）"""
+	if not sprite or mokou_textures.punch_recycle.size() == 0:
+		return
+
+	var frames = mokou_textures.punch_recycle
+	var restore_scale = sprite.scale
+	var attack_direction = _get_attack_direction()
+	var locked_flip_h = attack_direction.x < 0
+
+	# 获取跳帧设置
+	var frame_skip = config.get("frame_skip", 1)
+	var total_frames = frames.size()
+	var actual_frame_count = ceil(float(total_frames) / float(frame_skip))
+	# 循环攻击主要使用 Active 阶段的速度
+	var frame_duration = config.get("phase_speeds", {}).get("active", 0.03)
+
+	while is_recycling:
+		for i in range(0, total_frames, frame_skip):
+			if not is_recycling or not is_instance_valid(self):
+				break
+
+			if sprite and is_instance_valid(sprite):
+				sprite.hframes = 1
+				sprite.vframes = 1
+				sprite.frame = 0
+				sprite.texture = frames[i]
+
+				var map_system = get_tree().get_first_node_in_group("map_system")
+				if map_system and "character_texture_filter" in map_system:
+					sprite.texture_filter = map_system.character_texture_filter
+
+				var target_height = 100.0  # 与待机图保持一致
+				if frames[i].get_height() > 0:
+					var scale_factor = target_height / frames[i].get_height()
+					sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier
+				else:
+					sprite.scale = Vector2(0.15, 0.15) * scene_scale_multiplier
+
+				sprite.flip_h = locked_flip_h
+
+			# 每个循环的中段触发伤害
+			if i == int(total_frames * 0.5):
+				_check_new_punch_damage(config, "recycle")
+
+			await get_tree().create_timer(frame_duration).timeout
+			if not is_instance_valid(self):
+				return
+
+	# 恢复状态
+	is_attacking = false
+	if sprite:
+		sprite.scale = restore_scale
+
+# ==================== ENHANCED DAMAGE SYSTEM ====================
+
+func _check_new_punch_damage(config: Dictionary, attack_type: String):
+	"""增强的拳击伤害判定（支持硬直和打击感）"""
+	var punch_range = config.range
+	var punch_damage = config.damage
+	var knockback_force = config.knockback
+	var stun_duration = config.stun_duration
+	var hitstop_duration = config.hitstop
+
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	var attack_direction = _get_attack_direction()
+	var hit_count = 0
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		var distance = global_position.distance_to(enemy.global_position)
+		if distance > punch_range:
+			continue
+
+		# 检查敌人是否在出拳方向上
+		var to_enemy = (enemy.global_position - global_position).normalized()
+		var dot = attack_direction.dot(to_enemy)
+
+		# 前方的敌人（120度范围）
+		if dot > 0.5:
+			hit_count += 1
+
+			# 造成伤害
+			if enemy.has_method("take_damage"):
+				enemy.take_damage(punch_damage)
+
+			# 应用硬直效果（关键！）
+			if enemy.has_method("apply_stun"):
+				enemy.apply_stun(stun_duration)
+
+			# 击退
+			if enemy.has_method("apply_knockback"):
+				enemy.apply_knockback(attack_direction, knockback_force)
+
+			# 视觉反馈：粒子特效
+			SignalBus.spawn_death_particles.emit(enemy.global_position, Color("#ffaa00"), 15)
+
+	# 如果击中敌人，播放打击反馈并进入战斗状态
+	if hit_count > 0:
+		# 进入战斗状态
+		_enter_combat()
+
+		# 顿帧效果
+		hitstop(hitstop_duration)
+
+		# 屏幕震动（根据攻击类型调整强度）
+		var shake_intensity = 5.0 + (punch_damage / 10.0)
+		SignalBus.screen_shake.emit(hitstop_duration, shake_intensity)
+
+func _enter_combat():
+	"""进入战斗状态"""
+	if not in_combat:
+		print("[Combat] Entered combat state")
+	in_combat = true
+	combat_exit_timer = 0.0  # 重置脱战计时器
+
 func _spawn_dash_fire_particles():
 	"""生成冲刺火焰粒子"""
 	var particles = CPUParticles2D.new()
@@ -1339,7 +2010,7 @@ func _play_kick_sprite_animation(total_duration: float, attack_id: int):
 
 			# 计算合适的缩放（假设原图大小，调整到合适的显示尺寸）
 			# 并应用场景缩放系数
-			var target_height = 120.0  # 稍微大一点的显示高度
+			var target_height = 100.0  # 与待机图保持一致
 			if mokou_textures.kick[i].get_height() > 0:
 				var scale_factor = target_height / mokou_textures.kick[i].get_height()
 				sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier
@@ -1407,7 +2078,7 @@ func _play_punch_animation(total_duration: float, attack_id: int):
 				sprite.texture_filter = map_system.character_texture_filter
 
 			# 计算合适的缩放
-			var target_height = 120.0
+			var target_height = 100.0  # 与待机图保持一致
 			if mokou_textures.punch[i].get_height() > 0:
 				var scale_factor = target_height / mokou_textures.punch[i].get_height()
 				sprite.scale = Vector2(scale_factor, scale_factor) * scene_scale_multiplier

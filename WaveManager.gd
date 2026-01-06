@@ -160,7 +160,7 @@ func _announce_wave(wave_number: int):
 		print("⚔️ ", description)
 	# 不再打印普通波次信息
 
-func _on_enemy_killed(xp_amount: int, pos: Vector2):
+func _on_enemy_killed(_enemy: Node2D, xp_amount: int, pos: Vector2):
 	"""敌人被击杀"""
 	enemies_killed_this_wave += 1
 

@@ -12,6 +12,12 @@ var xp_required = 100
 # 転流货币系统（杀敌数）
 var tenryu: int = 0  # 当前転流数量
 
+func add_tenryu(amount: int):
+	"""增加転流（杀敌数）"""
+	tenryu += amount
+	SignalBus.tenryu_changed.emit(tenryu)
+	print("获得転流: ", amount, " 当前总计: ", tenryu)
+
 # 预加载场景
 var gem_scene = preload("res://ExperienceGem.tscn")
 var chest_scene = preload("res://TreasureChest.tscn")
@@ -35,13 +41,10 @@ func _ready():
 	# 初始化元素数据
 	ElementData.initialize()
 
-func _on_enemy_killed(xp_amount, pos):
-	# 掉落经验球（P点）
+func _on_enemy_killed(_enemy, xp_amount, pos):
+	"""敌人被击杀时的处理"""
+	# 在敌人位置生成经验球
 	spawn_gem(xp_amount, pos)
-
-	# 増加転流（杀敌数）- 额外的货币维度
-	tenryu += 1
-	SignalBus.tenryu_changed.emit(tenryu)
 
 func spawn_gem(xp_amount: int, pos: Vector2):
 	"""在指定位置生成经验球"""

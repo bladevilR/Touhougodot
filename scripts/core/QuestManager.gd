@@ -197,7 +197,7 @@ func _grant_quest_rewards(quest_id: String) -> void:
 				print("[QuestManager] 获得物品: %s x%d" % [item_id, amount])
 
 ## 事件处理
-func _on_enemy_killed(xp_value: float, position: Vector2) -> void:
+func _on_enemy_killed(enemy: Node2D, xp_value: float, position: Vector2) -> void:
 	# 更新所有"击杀敌人"类型的任务目标
 	for quest_id in active_quests:
 		var quest_data = QuestData.get_quest(quest_id)
