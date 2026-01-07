@@ -23,7 +23,8 @@ var equipped_armor: String = ""
 var equipped_accessory: String = ""
 
 func _ready():
-	print("[InventoryManager] 背包系统初始化完成")
+	# print("[InventoryManager] 背包系统初始化完成")
+	pass
 
 ## 添加物品
 func add_item(item_id: String, amount: int = 1) -> bool:
@@ -53,6 +54,7 @@ func add_item(item_id: String, amount: int = 1) -> bool:
 		else:
 			items[item_id] = new_amount
 	else:
+		pass
 		# 检查是否有空格子
 		if get_used_slots() >= MAX_SLOTS:
 			push_warning("[InventoryManager] 背包已满")
@@ -61,7 +63,7 @@ func add_item(item_id: String, amount: int = 1) -> bool:
 
 		items[item_id] = min(amount, max_stack)
 
-	print("[InventoryManager] 添加物品: %s x%d" % [item_id, amount])
+	# print("[InventoryManager] 添加物品: %s x%d" % [item_id, amount])
 	item_added.emit(item_id, amount)
 	inventory_changed.emit()
 	return true
@@ -87,7 +89,7 @@ func remove_item(item_id: String, amount: int = 1) -> bool:
 	if items[item_id] <= 0:
 		items.erase(item_id)
 
-	print("[InventoryManager] 移除物品: %s x%d" % [item_id, amount])
+	# print("[InventoryManager] 移除物品: %s x%d" % [item_id, amount])
 	item_removed.emit(item_id, amount)
 	inventory_changed.emit()
 	return true
@@ -134,7 +136,8 @@ func _use_consumable(item_id: String, item_data: Dictionary) -> void:
 
 	# 消耗物品
 	remove_item(item_id, 1)
-	print("[InventoryManager] 使用消耗品: %s" % item_id)
+	# print("[InventoryManager] 使用消耗品: %s" % item_id)
+	pass
 
 ## 装备物品
 func _equip_item(item_id: String, item_data: Dictionary) -> void:
@@ -157,14 +160,16 @@ func _equip_item(item_id: String, item_data: Dictionary) -> void:
 
 	# 从背包移除
 	remove_item(item_id, 1)
-	print("[InventoryManager] 装备物品: %s" % item_id)
+	# print("[InventoryManager] 装备物品: %s" % item_id)
+	pass
 
 ## 治疗玩家
 func _heal_player(amount: int) -> void:
 	var player_data = GameStateManager.player_data
 	player_data.current_hp = min(player_data.current_hp + amount, player_data.max_hp)
 	SignalBus.player_health_changed.emit(player_data.current_hp, player_data.max_hp)
-	print("[InventoryManager] 治疗 HP +%d (当前: %d/%d)" % [amount, player_data.current_hp, player_data.max_hp])
+	# print("[InventoryManager] 治疗 HP +%d (当前: %d/%d)" % [amount, player_data.current_hp, player_data.max_hp])
+	pass
 
 ## 检查是否拥有物品
 func has_item(item_id: String, amount: int = 1) -> bool:
@@ -191,7 +196,8 @@ func clear_inventory() -> void:
 	equipped_armor = ""
 	equipped_accessory = ""
 	inventory_changed.emit()
-	print("[InventoryManager] 背包已清空")
+	# print("[InventoryManager] 背包已清空")
+	pass
 
 ## 存档相关
 func get_save_data() -> Dictionary:
@@ -208,4 +214,4 @@ func load_save_data(data: Dictionary) -> void:
 	equipped_armor = data.get("equipped_armor", "")
 	equipped_accessory = data.get("equipped_accessory", "")
 	inventory_changed.emit()
-	print("[InventoryManager] 背包数据已加载")
+	# print("[InventoryManager] 背包数据已加载")

@@ -35,7 +35,7 @@ func _ready():
 	# 监听打开/关闭信号
 	SignalBus.quest_log_opened.connect(_on_quest_log_opened)
 
-	print("[QuestUI] 任务日志界面初始化完成")
+	# print("[QuestUI] 任务日志界面初始化完成")
 
 func _input(event):
 	if event.is_action_pressed("ui_cancel") and visible:

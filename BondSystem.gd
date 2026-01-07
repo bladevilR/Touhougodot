@@ -119,7 +119,8 @@ func _bond_id_to_char_id(bond_id: String) -> int:
 func set_bond(bond_char_id: int):
 	"""设置羁绊角色"""
 	if not BOND_CONFIGS.has(bond_char_id):
-		print("无效的羁绊角色ID: ", bond_char_id)
+		pass
+		# print("无效的羁绊角色ID: ", bond_char_id)
 		return
 
 	current_bond_id = bond_char_id
@@ -129,20 +130,22 @@ func set_bond(bond_char_id: int):
 	# 应用被动效果
 	_apply_passive_effect(bond_char_id)
 
-	print("羁绊设置: ", config.name, " - ", config.passive_name)
+	# print("羁绊设置: ", config.name, " - ", config.passive_name)
 
 func activate_bond_skill():
 	"""激活羁绊主动技能"""
 	if skill_cooldown > 0:
-		print("羁绊技能冷却中... 剩余: %.1f秒" % skill_cooldown)
+		pass
+		# print("羁绊技能冷却中... 剩余: %.1f秒" % skill_cooldown)
 		return
 
 	if current_bond_id < 0:
-		print("未选择羁绊角色")
+		pass
+		# print("未选择羁绊角色")
 		return
 
 	var config = BOND_CONFIGS[current_bond_id]
-	print("发动羁绊技能: ", config.skill_name)
+	# print("发动羁绊技能: ", config.skill_name)
 
 	match current_bond_id:
 		GameConstants.CharacterId.REIMU:
@@ -178,7 +181,7 @@ func _skill_reimu_dream_seal():
 	if player and player.has_method("set_invulnerable"):
 		player.set_invulnerable(5.0)
 
-	print("梦想封印！消除所有敌弹，无敌5秒！")
+	# print("梦想封印！消除所有敌弹，无敌5秒！")
 
 func _skill_marisa_master_spark():
 	"""魔理沙羁绊：极限火花 - 全屏激光300伤害"""
@@ -190,7 +193,7 @@ func _skill_marisa_master_spark():
 	# 触发屏幕震动
 	SignalBus.screen_shake.emit(0.5, 20.0)
 
-	print("极限火花！全屏300伤害！")
+	# print("极限火花！全屏300伤害！")
 
 func _skill_mokou_phoenix_flame():
 	"""妹红羁绊：凯风快晴 - 全屏点燃80伤害+燃烧"""
@@ -201,7 +204,7 @@ func _skill_mokou_phoenix_flame():
 		if enemy.has_method("apply_burn"):
 			enemy.apply_burn(10.0, 5.0)  # 10伤害/秒，持续5秒
 
-	print("凯风快晴！全屏80伤害+燃烧！")
+	# print("凯风快晴！全屏80伤害+燃烧！")
 
 func _skill_sakuya_time_stop():
 	"""咲夜羁绊：杀人玩偶 - 全屏时停5秒"""
@@ -236,7 +239,7 @@ func _skill_sakuya_time_stop():
 			bullet.set_physics_process(true)
 
 	SignalBus.time_resumed.emit()
-	print("时停结束！")
+	# print("时停结束！")
 
 func _skill_yuma_gluttony():
 	"""尤魔羁绊：暴食盛宴 - 吞噬敌弹回血50HP"""
@@ -255,7 +258,7 @@ func _skill_yuma_gluttony():
 		if health_comp.has_method("heal"):
 			health_comp.heal(heal_amount)
 
-	print("暴食盛宴！吞噬%d发敌弹，回复%.0f HP！" % [bullet_count, heal_amount])
+	# print("暴食盛宴！吞噬%d发敌弹，回复%.0f HP！" % [bullet_count, heal_amount])
 
 func _skill_koishi_unconscious():
 	"""恋恋羁绊：本我解放 - 隐身、穿墙、移速翻倍5秒"""
@@ -281,7 +284,7 @@ func _skill_koishi_unconscious():
 	if player.has_method("set_invulnerable"):
 		player.set_invulnerable(5.0)
 
-	print("本我解放！隐身+穿墙+移速翻倍 5秒！")
+	# print("本我解放！隐身+穿墙+移速翻倍 5秒！")
 
 	# 5秒后恢复
 	await get_tree().create_timer(5.0).timeout
@@ -293,7 +296,7 @@ func _skill_koishi_unconscious():
 			player.speed = original_speed
 		player.collision_mask = original_collision_mask
 
-	print("本我解放结束！")
+	# print("本我解放结束！")
 
 # ============================================
 # 羁绊被动效果

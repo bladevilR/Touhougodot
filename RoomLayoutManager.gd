@@ -31,7 +31,8 @@ func _ready():
 
 func _on_room_entered(room_type_name: String, room_index: int):
 	"""进入新房间时应用布局"""
-	print("RoomLayoutManager: Applying layout for room ", room_index, " (", room_type_name, ")")
+	# print("RoomLayoutManager: Applying layout for room ", room_index, " (", room_type_name, ")")
+	pass
 
 	# 清理旧布局
 	_clear_current_layout()
@@ -107,7 +108,8 @@ func _clear_bamboo_at_doors(active_directions: Array):
 				cleared_count += 1
 				break
 				
-	print("RoomLayoutManager: Cleared ", cleared_count, " bamboos at doors.")
+	# print("RoomLayoutManager: Cleared ", cleared_count, " bamboos at doors.")
+	pass
 
 func _spawn_bamboo_cluster(pos: Vector2, size: int):
 	"""在指定位置生成竹林簇"""
@@ -168,30 +170,44 @@ func _create_simple_bamboo(pos: Vector2):
 	spawned_objects.append(body)
 
 func _spawn_decoration(pos: Vector2, type: String):
-	"""生成装饰物 - 委托给 MapSystem 统一处理"""
+	"""生成装饰物"""
 	if not map_system: return
 
 	var obj = null
 	match type:
 		"flower":
-			var textures = map_system.decoration_textures.get("flowers", [])
-			if not textures.is_empty():
-				var tex = textures[randi() % textures.size()]
-				# 花草：Z-Index -1 (在脚下)，无特殊阴影偏移
-				obj = map_system.create_decoration_sprite(tex, pos, 0.08 + randf_range(-0.02, 0.02), -1, Vector2(0, 0))
+			# 加载可采集花场景
+			var flower_scene = load("res://scenes/harvestables/Flower.tscn")
+			if flower_scene:
+				obj = flower_scene.instantiate()
+				obj.global_position = pos
+
+				# 随机选择花的贴图
+				var flower_types = map_system.decoration_textures.get("flowers", [])
+				if not flower_types.is_empty():
+					var tex_path = flower_types[randi() % flower_types.size()]
+					var tex = load(tex_path)
+					if tex:
+						var sprite = obj.get_node("Sprite2D")
+						if sprite:
+							sprite.texture = tex
+							# 根据目标高度 30 像素计算缩放
+							var target_h = 30.0 * randf_range(0.9, 1.1)
+							var s = target_h / float(tex.get_height())
+							sprite.scale = Vector2(s, s)
+							sprite.offset = Vector2(-tex.get_width() * 0.5, -tex.get_height())
+
+				game_objects_parent.add_child(obj)
 		"rock":
 			var textures = map_system.decoration_textures.get("rocks", [])
 			if not textures.is_empty():
 				var tex = textures[randi() % textures.size()]
-				# 石头：实体碰撞，Z-Index 0，阴影偏移 -20
 				if map_system.has_method("create_solid_rock"):
-					# 传入目标高度 60.0 像素（带波动），而不是缩放倍数
 					obj = map_system.create_solid_rock(tex, pos, 60.0 * randf_range(0.85, 1.15))
 		"shoot":
 			var textures = map_system.decoration_textures.get("shoots", [])
 			if not textures.is_empty():
 				var tex = textures[randi() % textures.size()]
-				# 竹笋：Z-Index -1
 				obj = map_system.create_decoration_sprite(tex, pos, 0.08, -1, Vector2(0, 0))
 
 	if obj:

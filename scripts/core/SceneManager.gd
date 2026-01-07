@@ -31,7 +31,7 @@ var transition_overlay: ColorRect
 func _ready():
 	# 创建过渡覆盖层
 	_create_transition_overlay()
-	print("[SceneManager] 场景管理器初始化完成")
+	# print("[SceneManager] 场景管理器初始化完成")
 
 ## 创建过渡覆盖层（淡入淡出效果）
 func _create_transition_overlay() -> void:
@@ -61,7 +61,7 @@ func change_scene(scene_key: String, spawn_point: String = "") -> void:
 	previous_scene_name = current_scene_name
 	current_scene_name = scene_key
 
-	print("[SceneManager] 开始切换场景: %s -> %s" % [previous_scene_name, current_scene_name])
+	# print("[SceneManager] 开始切换场景: %s -> %s" % [previous_scene_name, current_scene_name])
 
 	# 开始过渡
 	await _fade_out()
@@ -89,7 +89,7 @@ func change_scene(scene_key: String, spawn_point: String = "") -> void:
 	await _fade_in()
 
 	is_transitioning = false
-	print("[SceneManager] 场景切换完成: %s" % current_scene_name)
+	# print("[SceneManager] 场景切换完成: %s" % current_scene_name)
 
 ## 直接切换（无动画）
 func change_scene_instant(scene_key: String) -> void:
@@ -181,7 +181,7 @@ func _set_player_spawn_point(spawn_point: String) -> void:
 
 	# 设置玩家位置
 	player.global_position = spawn_node.global_position
-	print("[SceneManager] 玩家位置设置为: %s" % str(spawn_node.global_position))
+	# print("[SceneManager] 玩家位置设置为: %s" % str(spawn_node.global_position))
 
 ## 保存主世界状态
 func _save_overworld_state() -> void:
@@ -189,9 +189,9 @@ func _save_overworld_state() -> void:
 	if player:
 		GameStateManager.player_data.position = player.global_position
 		GameStateManager.player_data.current_scene = "res://scenes/overworld/%s/%s.tscn" % [previous_scene_name.capitalize(), previous_scene_name.capitalize()]
-	print("[SceneManager] 主世界状态已保存")
+	# print("[SceneManager] 主世界状态已保存")
 
 ## 恢复主世界状态
 func _restore_overworld_state() -> void:
 	# 恢复玩家位置在场景加载后处理
-	print("[SceneManager] 主世界状态已恢复")
+	# print("[SceneManager] 主世界状态已恢复")

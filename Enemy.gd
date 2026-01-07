@@ -178,7 +178,9 @@ func _ready():
 	
 	if map_system and map_system.has_method("add_dynamic_shadow"):
 		# 根据敌人缩放调整阴影大小
-		var enemy_scale = sprite.scale.x if sprite else 1.0
+		var enemy_scale = 1.0
+		if sprite:
+			enemy_scale = sprite.scale.x
 		
 		# [修复] 毛玉影子巨大问题：毛玉这种圆形且缩放极大的单位，强行使用椭圆影子而非反转影子
 		if enemy_type == GameConstants.EnemyType.KEDAMA:
@@ -207,9 +209,9 @@ func _setup_collision_layers():
 
 func setup_as_boss(boss_config):
 	"""设置为Boss"""
-	print("[Enemy] 设置为Boss: ", boss_config.enemy_name)
-	print("[Enemy] Boss type: ", boss_config.boss_type)
-	print("[Enemy] Attack patterns: ", boss_config.attack_patterns)
+	# print("[Enemy] 设置为Boss: ", boss_config.enemy_name)
+	# print("[Enemy] Boss type: ", boss_config.boss_type)
+	# print("[Enemy] Attack patterns: ", boss_config.attack_patterns)
 
 	# 0. 先获取节点引用（防止在add_child之前调用导致组件为空）
 	if not health_comp:
@@ -228,7 +230,7 @@ func setup_as_boss(boss_config):
 
 	# 设置Boss攻击计时器
 	boss_attack_timer = 2.0  # Boss生成2秒后开始攻击
-	print("[Enemy] Boss攻击计时器已设置: 2秒后开始")
+	# print("[Enemy] Boss攻击计时器已设置: 2秒后开始")
 
 	# 设置Boss属性
 	var current_hp = boss_config.hp
@@ -257,15 +259,15 @@ func setup_as_boss(boss_config):
 		var texture_path = _get_boss_texture_path(boss_config.boss_type)
 		if ResourceLoader.exists(texture_path):
 			sprite.texture = load(texture_path)
-			print("[Enemy] Loaded boss texture: ", texture_path)
+			# print("[Enemy] Loaded boss texture: ", texture_path)
 		else:
-			print("[Enemy] Warning: Boss texture not found: ", texture_path)
+			# print("[Enemy] Warning: Boss texture not found: ", texture_path)
 			# [修复] 如果辉夜纹理不存在，尝试使用4C.png作为备用
 			if boss_config.boss_type == GameConstants.BossType.KAGUYA:
 				var fallback_path = "res://assets/characters/4C.png"
 				if ResourceLoader.exists(fallback_path):
 					sprite.texture = load(fallback_path)
-					print("[Enemy] Using fallback texture for Kaguya: ", fallback_path)
+					# print("[Enemy] Using fallback texture for Kaguya: ", fallback_path)
 
 	# 设置缩放（Boss更大）
 	# [修复] 智能缩放：根据纹理实际大小计算缩放，确保Boss高度约为120像素
@@ -275,7 +277,7 @@ func setup_as_boss(boss_config):
 		if tex_height > 0:
 			var auto_scale = target_height / tex_height
 			sprite.scale = Vector2(auto_scale, auto_scale)
-			print("[Enemy] Boss auto-scaled to: ", auto_scale, " (Texture height: ", tex_height, ")")
+			# print("[Enemy] Boss auto-scaled to: ", auto_scale, " (Texture height: ", tex_height, ")")
 		else:
 			sprite.scale = Vector2(0.1, 0.1) # 保底
 			
@@ -309,8 +311,8 @@ func setup_as_boss(boss_config):
 			sprite.visible = true
 			sprite.modulate.a = 1.0
 			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)  # 强制白色不透明
-			print("[Enemy] Kaguya visibility enforced - Visible:", sprite.visible, " Alpha:", sprite.modulate.a)
-		print("[Enemy] Boss sprite visibility check - Visible:", sprite.visible, " Modulate:", sprite.modulate, " Texture:", sprite.texture != null)
+			# print("[Enemy] Kaguya visibility enforced - Visible:", sprite.visible, " Alpha:", sprite.modulate.a)
+		# print("[Enemy] Boss sprite visibility check - Visible:", sprite.visible, " Modulate:", sprite.modulate, " Texture:", sprite.texture != null)
 
 	# 强制确保可见性
 	modulate.a = 1.0
@@ -318,7 +320,7 @@ func setup_as_boss(boss_config):
 	# [修复] 初始化 original_color，防止状态效果结束后颜色重置错误
 	original_color = boss_config.color
 
-	print("[Enemy] Boss设置完成: ", boss_config.enemy_name, " HP=", max_hp)
+	# print("[Enemy] Boss设置完成: ", boss_config.enemy_name, " HP=", max_hp)
 
 func _physics_process(delta):
 	# 死亡物理效果（尸体飞出）
@@ -395,7 +397,8 @@ func _physics_process(delta):
 		if global_position.distance_to(target.global_position) < 600.0:
 			shoot_timer -= delta
 			if shoot_timer <= 0:
-				print("[Enemy] Pew! Shooting at target.")
+				pass
+				# print("[Enemy] Pew! Shooting at target.")
 				shoot_timer = enemy_data.shoot_interval
 				_shoot_at_target()
 
@@ -434,15 +437,12 @@ func _physics_process(delta):
 				# 辉夜瞬移逻辑 - [调试] 暂时禁用瞬移，排查模型消失问题
 				boss_teleport_timer -= delta
 				if boss_teleport_timer <= 0:
+					pass
 					# _boss_teleport()
 					boss_teleport_timer = randf_range(5.0, 8.0)
 					
 				# 强制将速度设为0
 				current_speed = 0.0
-				
-				# [调试] 打印辉夜状态
-				if Engine.get_physics_frames() % 60 == 0:
-					print("[Boss Debug] Pos:", global_position, " Vis:", visible, " Mod:", modulate, " SprVis:", sprite.visible if sprite else "NoSprite", " SprMod:", sprite.modulate if sprite else "N/A")
 
 		if not is_static_boss:
 			var to_target = target.global_position - global_position
@@ -567,7 +567,8 @@ func _shoot_at_target():
 func _process_boss_attacks(delta: float):
 	# 放宽检查：只要有attack_patterns属性就视为Boss配置
 	if not enemy_data:
-		print("[Boss] No enemy_data!")
+		pass
+		# print("[Boss] No enemy_data!")
 		return
 
 	# 尝试访问 attack_patterns
@@ -586,6 +587,7 @@ func _process_boss_attacks(delta: float):
 		patterns = enemy_data.attack_patterns
 		
 	if patterns == null or patterns.size() == 0:
+		pass
 		# 辉夜保底逻辑：如果找不到配置，强制使用辉夜的技能
 		if enemy_data:
 			var e_name = enemy_data.get("enemy_name")
@@ -593,6 +595,7 @@ func _process_boss_attacks(delta: float):
 				patterns = ["impossible_bullet_hell", "circle_big_bullet", "time_stop"]
 				
 	if patterns == null or patterns.size() == 0:
+		pass
 		# print("[Boss] No attack_patterns found or empty!")
 		return
 
@@ -603,7 +606,7 @@ func _process_boss_attacks(delta: float):
 		# 传递模式给执行函数
 		var pattern_name = patterns[current_attack_index % patterns.size()]
 		current_attack_index += 1
-		print("[Boss] Kaguya Attack Triggered! Pattern: ", pattern_name, " Index: ", current_attack_index)
+		# print("[Boss] Kaguya Attack Triggered! Pattern: ", pattern_name, " Index: ", current_attack_index)
 		_execute_boss_attack_by_name(pattern_name)
 
 func _execute_boss_attack_by_name(pattern_name: String):
@@ -618,7 +621,8 @@ func _execute_boss_attack_by_name(pattern_name: String):
 		"circle_big_bullet": _attack_circle_big_bullet()
 		"time_stop": _attack_time_stop()
 		_:
-			print("[Boss] Unknown attack pattern: ", pattern_name)
+			pass
+			# print("[Boss] Unknown attack pattern: ", pattern_name)
 
 func _spawn_boss_bullet(pos: Vector2, dir: Vector2, speed_val: float, weapon_id: String, color: Color, props: Dictionary = {}):
 	var bullet_scene = load("res://Bullet.tscn")
@@ -915,7 +919,7 @@ func _start_charge_attack():
 	is_charging = true
 	charge_timer = 0.0
 	charge_direction = global_position.direction_to(target.global_position)
-	print("[Kedama] 开始蓄力撞击！")
+	# print("[Kedama] 开始蓄力撞击！")
 
 func _check_dash_hit_player():
 	"""检查冲刺攻击是否击中玩家"""
@@ -937,7 +941,7 @@ func _check_dash_hit_player():
 			if player.has_method("take_damage"):
 				var damage = enemy_data.damage if enemy_data else 10.0
 				player.take_damage(damage)
-				print("[Kedama] 撞击命中！造成", damage, "点伤害")
+				# print("[Kedama] 撞击命中！造成", damage, "点伤害")
 
 			# 击退玩家
 			if player.has_method("apply_knockback"):
@@ -1007,7 +1011,7 @@ func apply_knockback(direction: Vector2, force: float):
 		# 初始速度设为很小（慢镜头开始）
 		knockback_velocity = knockback_target_velocity * 0.1
 
-	print("[Enemy] 击飞! 方向:", direction, " 力度:", force, " 目标速度:", knockback_target_velocity.length())
+	# print("[Enemy] 击飞! 方向:", direction, " 力度:", force, " 目标速度:", knockback_target_velocity.length())
 
 	# Cap maximum knockback velocity - 大幅提高上限以允许超级击飞
 	var max_knockback = 20000.0  # 从15000提高到20000
@@ -1048,7 +1052,7 @@ func start_spiral_trail(duration: float):
 	spiral_trail_points.clear()
 	spiral_trail.modulate.a = 1.0
 
-	print("[Enemy] 螺旋破空特效已启动, 持续时间:", duration, "秒")
+	# print("[Enemy] 螺旋破空特效已启动, 持续时间:", duration, "秒")
 
 # 停止螺旋线特效
 func _stop_spiral_trail():
@@ -1060,7 +1064,7 @@ func _stop_spiral_trail():
 		spiral_trail.queue_free()
 		spiral_trail = null
 
-	print("[Enemy] 螺旋线特效已停止")
+	# print("[Enemy] 螺旋线特效已停止")
 
 # ==================== VISUAL EFFECTS ====================
 # 子弹打中敌人时，调用这个函数
@@ -1131,7 +1135,7 @@ func die():
 
 	# Boss死亡特殊处理：发出boss_defeated信号
 	if enemy_type == GameConstants.EnemyType.BOSS:
-		print("[Enemy] Boss defeated! Emitting boss_defeated signal...")
+		# print("[Enemy] Boss defeated! Emitting boss_defeated signal...")
 		SignalBus.boss_defeated.emit()
 
 	# 禁用碰撞和AI，但保留物理移动以便播放击飞效果
@@ -1263,7 +1267,7 @@ func setup_from_config(config: EnemyData.EnemyConfig):
 	jump_interval = config.jump_interval
 	
 	_update_health_bar()
-	print("[Enemy] Setup from config: ", config.enemy_name, " CanShoot:", config.can_shoot)
+	# print("[Enemy] Setup from config: ", config.enemy_name, " CanShoot:", config.can_shoot)
 
 func _get_enemy_type_from_string(enemy_type_str: String) -> int:
 	"""将字符串敌人类型转换为GameConstants枚举"""
@@ -1422,7 +1426,7 @@ func setup(config_or_type, wave: int = 1):
 		# 更新血量条
 		_update_health_bar()
 
-		print("[Enemy] 设置完成: ", enemy_data.enemy_name, " (类型:", type, ", 跳跃:", can_jump, ")")
+		# print("[Enemy] 设置完成: ", enemy_data.enemy_name, " (类型:", type, ", 跳跃:", can_jump, ")")
 
 # ==================== STATUS EFFECT APPLICATION METHODS ====================
 # These methods are called by Bullet.gd when status effects are applied
@@ -1783,4 +1787,4 @@ func _boss_teleport():
 	
 	SignalBus.spawn_death_particles.emit(global_position, Color.GOLD, 20) # 新位置出现金光
 	
-	print("[Boss] Kaguya teleporting to ", target_pos)
+	# print("[Boss] Kaguya teleporting to ", target_pos)

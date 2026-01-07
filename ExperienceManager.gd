@@ -16,7 +16,7 @@ func add_tenryu(amount: int):
 	"""增加転流（杀敌数）"""
 	tenryu += amount
 	SignalBus.tenryu_changed.emit(tenryu)
-	print("获得転流: ", amount, " 当前总计: ", tenryu)
+	# print("获得転流: ", amount, " 当前总计: ", tenryu)
 
 # 预加载场景
 var gem_scene = preload("res://ExperienceGem.tscn")
@@ -79,7 +79,7 @@ func level_up():
 	# 通知全世界：升级了！
 	# 玩家脚本听到了可以回满血，UI听到了可以弹窗，武器系统听到了可以重置CD
 	SignalBus.level_up.emit(current_level)
-	print("升级到 Lv.", current_level, "！需要经验: ", xp_required)
+	# print("升级到 Lv.", current_level, "！需要经验: ", xp_required)
 
 func _on_treasure_chest_spawn(pos: Vector2):
 	"""在指定位置生成宝箱"""
@@ -92,7 +92,7 @@ func spawn_chest(pos: Vector2):
 
 	# 添加到当前场景
 	get_tree().current_scene.call_deferred("add_child", chest)
-	print("宝箱已生成在位置: ", pos)
+	# print("宝箱已生成在位置: ", pos)
 
 func _on_element_enchant_spawn(pos: Vector2, element_type: int):
 	"""在指定位置生成指定元素的附魔道具"""
@@ -115,7 +115,7 @@ func spawn_enchant(pos: Vector2, element_type: int = -1):
 
 	var element_item = ElementData.get_element_item(enchant.element_type)
 	var element_name = element_item.item_name if element_item else "未知元素"
-	print("元素附魔道具已生成: ", element_name, " 位置: ", pos)
+	# print("元素附魔道具已生成: ", element_name, " 位置: ", pos)
 
 func _spawn_random_enchant():
 	"""在玩家附近随机位置生成元素附魔道具"""

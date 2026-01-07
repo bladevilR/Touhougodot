@@ -127,7 +127,8 @@ func _ready():
 	
 	if not game_objects_parent:
 		game_objects_parent = self
-		print("MapSystem WARNING: game_objects_parent not found, using self.")
+	# print("MapSystem WARNING: game_objects_parent not found, using self.")
+	pass
 
 	setup_layers()
 	create_background()
@@ -135,14 +136,15 @@ func _ready():
 	
 	# 生成内部竹子和装饰物 (确保调用)
 	create_interior_bamboo()
-	create_decorations_designed()
+	# create_decorations_designed()  # 已禁用：改用 RoomLayoutManager 生成可采集的花
 	
 	# 初始化光照 (默认外围)
 	create_lighting("outskirts")
 	
 	setup_camera_limits()
 	spawn_nitori_npc() # 恢复河童
-	print("DEBUG: MapSystem _ready finished")
+	# print("DEBUG: MapSystem _ready finished")
+	pass
 
 func _register_critical_zones():
 	"""注册所有需要避让的关键区域"""
@@ -169,8 +171,9 @@ func clear_bamboo_for_door(door_position: Vector2, door_direction: int):
 				bamboo.queue_free()
 
 	# 从数组中移除已删除的竹子
-	border_bamboos = border_bamboos.filter(func(b): return is_instance_valid(b))
-	wall_bodies = wall_bodies.filter(func(b): return is_instance_valid(b))
+	var is_valid = func(b): return is_instance_valid(b)
+	border_bamboos = border_bamboos.filter(is_valid)
+	wall_bodies = wall_bodies.filter(is_valid)
 
 func is_position_valid(pos: Vector2) -> bool:
 	"""检查位置是否有效（不在关键区域内）"""
@@ -395,7 +398,7 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 # ==================== 内部装饰竹子 (Perlin Noise) ====================
 func create_interior_bamboo():
 	"""使用柏林噪声生成自然分布的内部竹林"""
-	print("MapSystem: Generating interior bamboo (Walls + Scatter)...")
+	# print("MapSystem: Generating interior bamboo (Walls + Scatter)...")
 	var count = 0
 	
 	# 遍历地图网格点
@@ -425,7 +428,8 @@ func create_interior_bamboo():
 				create_interior_bamboo_varied(pos, ["single", "small"])
 				count += 1
 	
-	print("MapSystem: Generated ", count, " interior bamboos.")
+	# print("MapSystem: Generated ", count, " interior bamboos.")
+	pass
 
 func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	# ... (逻辑与之前类似，这里简化重写以确保清晰) ...
@@ -503,21 +507,21 @@ func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
 	return 1
 
 # ==================== 装饰物生成 ====================
-func create_decorations_designed():
-	"""使用噪声在空地生成装饰物"""
-	var step = 100
-	for x in range(WALL_THICKNESS, MAP_WIDTH - WALL_THICKNESS, step):
-		for y in range(WALL_THICKNESS, MAP_HEIGHT - WALL_THICKNESS, step):
-			var pos = Vector2(x, y)
-			var noise_val = bamboo_noise.get_noise_2d(pos.x, pos.y)
-			
-			# 在空地 (noise < 0) 生成装饰物
-			if noise_val < 0.0:
-				if randf() < 0.2: # 20% 概率生成花簇
-					_create_flower_cluster(pos + Vector2(randf_range(-30,30), randf_range(-30,30)), randi_range(3, 5), 30.0)
-				elif randf() < 0.1: # 10% 概率生成石头
-					_create_rock_group(pos + Vector2(randf_range(-20,20), randf_range(-20,20)), randi_range(1, 2), 60.0)
-
+#func create_decorations_designed():
+#	"""使用噪声在空地生成装饰物"""
+#	var step = 100
+#	for x in range(WALL_THICKNESS, MAP_WIDTH - WALL_THICKNESS, step):
+#		for y in range(WALL_THICKNESS, MAP_HEIGHT - WALL_THICKNESS, step):
+#			var pos = Vector2(x, y)
+#			var noise_val = bamboo_noise.get_noise_2d(pos.x, pos.y)
+#			
+#			# 在空地 (noise < 0) 生成装饰物
+#			if noise_val < 0.0:
+#				if randf() < 0.2: # 20% 概率生成花簇
+#					_create_flower_cluster(pos + Vector2(randf_range(-30,30), randf_range(-30,30)), randi_range(3, 5), 30.0)
+#				elif randf() < 0.1: # 10% 概率生成石头
+#					_create_rock_group(pos + Vector2(randf_range(-20,20), randf_range(-20,20)), randi_range(1, 2), 60.0)
+#
 func _create_flower_cluster(center: Vector2, count: int, target_h: float) -> int:
 	var flower_types = decoration_textures["flowers"]
 	var created = 0
@@ -655,7 +659,8 @@ func _clear_lighting():
 
 func _create_lighting_outskirts():
 	"""竹林外围 - 明亮通透，高对比度"""
-	print("MapSystem: Creating OUTSKIRTS lighting (CanvasModulate)...")
+	# print("MapSystem: Creating OUTSKIRTS lighting (CanvasModulate)...")
+	pass
 	
 	# 1. CanvasModulate (压暗一点，增加氛围)
 	var modulate = CanvasModulate.new()
@@ -751,7 +756,8 @@ func set_fog_density(density: float):
 
 func _create_lighting_deep_forest_beam():
 	"""竹林深处 - 幽暗，世界空间固定光柱"""
-	print("MapSystem: Creating DEEP FOREST BEAM lighting...")
+	# print("MapSystem: Creating DEEP FOREST BEAM lighting...")
+	pass
 	
 	# 1. CanvasModulate (压暗)
 	var modulate = CanvasModulate.new()
@@ -765,6 +771,7 @@ func _create_lighting_deep_forest_beam():
 	mat_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	
 	for i in range(beam_count):
+		pass
 		# 随机位置
 		var pos = Vector2(
 			randf_range(100, MAP_WIDTH - 100),
@@ -809,7 +816,8 @@ func _create_lighting_deep_forest_beam():
 
 func _create_lighting_deep_forest_mist():
 	"""竹林深处 - 雾气"""
-	print("MapSystem: Creating DEEP FOREST MIST lighting...")
+	# print("MapSystem: Creating DEEP FOREST MIST lighting...")
+	pass
 	
 	# 1. CanvasModulate (压暗)
 	var modulate = CanvasModulate.new()
@@ -965,6 +973,7 @@ func create_shadow_for_entity(parent: Node2D, size: Vector2 = Vector2(40, 20), o
 		shadow.skew = SHADOW_SKEW 
 		
 	else:
+		pass
 		# Fallback: Generic Ellipse
 		shadow = Sprite2D.new()
 		shadow.texture = _create_shadow_texture(int(size.x), int(size.y))

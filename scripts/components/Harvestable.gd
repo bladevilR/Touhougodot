@@ -40,7 +40,7 @@ func _ready():
 	interaction_label = get_node_or_null("InteractionLabel")
 
 	# 设置碰撞层
-	collision_layer = 8  # Layer 8: Harvestable
+	collision_layer = 0  # Layer 8: Harvestable
 	collision_mask = 1   # 只检测玩家 (Layer 1)
 
 	# 连接信号
@@ -58,19 +58,15 @@ func _ready():
 	# 添加到组
 	add_to_group("harvestable")
 
-	print("[Harvestable] %s 初始化完成" % name)
+	# print("[Harvestable] %s 初始化完成" % name)
+	pass
 
 func _process(_delta):
 	# 更新交互提示
 	if interaction_label:
 		if player_nearby and is_harvestable:
 			interaction_label.visible = true
-			# 根据是否需要工具显示不同提示
-			if require_tool != "":
-				var tool_name = _get_tool_display_name(require_tool)
-				interaction_label.text = "[E] 采集 (需要%s)" % tool_name
-			else:
-				interaction_label.text = "[E] 采集"
+			interaction_label.text = "E"
 		else:
 			interaction_label.visible = false
 
@@ -86,6 +82,7 @@ func _try_harvest():
 
 	# 检查是否需要工具
 	if require_tool != "" and nearby_player:
+		pass
 		# TODO: 检查玩家是否装备了所需工具
 		# if not nearby_player.has_tool(require_tool):
 		#     _show_message("需要 %s" % _get_tool_display_name(require_tool))
@@ -125,7 +122,8 @@ func _harvest():
 	# 标记为已采集
 	is_harvestable = false
 
-	print("[Harvestable] 采集 %s x%d，物品将从世界中移除" % [item_id, amount])
+	# print("[Harvestable] 采集 %s x%d，物品将从世界中移除" % [item_id, amount])
+	pass
 
 ## 重生
 func _respawn():
@@ -138,7 +136,8 @@ func _respawn():
 	# 重生动画
 	_play_respawn_animation()
 
-	print("[Harvestable] %s 已重生" % name)
+	# print("[Harvestable] %s 已重生" % name)
+	pass
 
 ## 更新外观
 func _update_appearance():
@@ -146,32 +145,43 @@ func _update_appearance():
 		return
 
 	if is_harvestable:
+		pass
 		# 恢复正常纹理
 		if sprite_normal:
 			sprite.texture = sprite_normal
 		sprite.modulate = Color.WHITE
 	else:
+		pass
 		# 采集后纹理
 		if sprite_harvested:
 			sprite.texture = sprite_harvested
 		else:
+			pass
 			# 如果没有采集后纹理，变暗
 			sprite.modulate = Color(0.5, 0.5, 0.5, 0.5)
 
 ## 播放采集动画
 func _play_harvest_animation():
-	if not sprite:
+	if not sprite or not nearby_player:
 		return
 
+	# 获取玩家位置
+	var player_pos = nearby_player.global_position
+
 	var tween = create_tween()
-	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_ease(Tween.EASE_IN_OUT)
+	tween.set_trans(Tween.TRANS_CUBIC)
 
-	# 缩小消失
-	tween.tween_property(sprite, "scale", Vector2(0.5, 0.5), 0.2)
-	tween.parallel().tween_property(sprite, "modulate:a", 0.0, 0.2)
+	# 先向上弹起一点
+	tween.tween_property(sprite, "position", sprite.position + Vector2(0, -30), 0.15)
+	# 然后飞向玩家（使用 global_position 进行插值）
+	tween.parallel().tween_property(self, "global_position", player_pos, 0.4)
+	# 在飞行过程中缩小
+	tween.parallel().tween_property(sprite, "scale", Vector2(0.3, 0.3), 0.4)
+	# 同时淡出
+	tween.parallel().tween_property(sprite, "modulate:a", 0.5, 0.4)
 
-	# 长期RPG：采完直接删除节点
+	# 到达玩家后完全消失
 	tween.tween_callback(func():
 		if is_instance_valid(self):
 			queue_free()  # 完全移除这个可采集物
@@ -261,11 +271,12 @@ func _on_body_entered(body: Node2D):
 	if body.is_in_group("player"):
 		player_nearby = true
 		nearby_player = body
-		print("[Harvestable] 玩家进入 %s 范围" % name)
+		# print("[Harvestable] 玩家进入 %s 范围" % name)
+	pass
 
 ## 玩家离开范围
 func _on_body_exited(body: Node2D):
 	if body.is_in_group("player"):
 		player_nearby = false
 		nearby_player = null
-		print("[Harvestable] 玩家离开 %s 范围" % name)
+		# print("[Harvestable] 玩家离开 %s 范围" % name)

@@ -28,7 +28,7 @@ var current_elite_interval: float = ELITE_SPAWN_INTERVAL
 var room_wave_enemies_to_spawn: int = 0
 var room_wave_spawned: int = 0
 var room_wave_spawn_timer: float = 0.0
-const ROOM_WAVE_SPAWN_INTERVAL: float = 0.5  # 每0.5秒生成一个敌人
+const ROOM_WAVE_SPAWN_INTERVAL: float = 1.0  # 每0.5秒生成一个敌人
 
 var spawn_warning_scene = preload("res://SpawnWarning.tscn")
 
@@ -108,8 +108,6 @@ func _spawn_next_room_enemy():
 		if warning_instance:
 			warning_instance.global_position = spawn_pos
 			game_objects_parent.add_child(warning_instance)
-	else:
-		print("Error: spawn_warning_scene is null")
 	
 	# 减少待生成计数（即使还没真正生成，避免重复触发）
 	room_wave_enemies_to_spawn -= 1
@@ -127,13 +125,13 @@ func _spawn_next_room_enemy():
 		else:
 			warning_instance.queue_free()
 	
-	print("EnemySpawner: Spawning enemy at ", spawn_pos)
+	# print("EnemySpawner: Spawning enemy at ", spawn_pos)
 	spawn_enemy(null, spawn_pos)
 	room_wave_spawned += 1
 
 func _on_spawn_wave(count: int, room_index: int):
 	"""接收来自 RoomManager 的生成信号"""
-	print("[EnemySpawner] 收到生成请求: ", count, " 个敌人")
+	# print("[EnemySpawner] 收到生成请求: ", count, " 个敌人")
 	room_wave_enemies_to_spawn = count
 	room_wave_spawned = 0
 	room_wave_spawn_timer = ROOM_WAVE_SPAWN_INTERVAL # 立即开始生成第一个
@@ -156,6 +154,7 @@ func spawn_enemy(config = null, pos_override = null):
 	if pos_override != null:
 		spawn_pos = pos_override
 	else:
+		pass
 		# 随机位置（在玩家周围的一定距离）
 		var random_angle = randf() * PI * 2.0
 		spawn_pos = player.global_position + Vector2(cos(random_angle), sin(random_angle)) * spawn_distance
@@ -171,6 +170,7 @@ func spawn_enemy(config = null, pos_override = null):
 	if enemy.has_method("setup_from_config"):
 		enemy.setup_from_config(config)
 	elif enemy.has_method("setup"):
+		pass
 		# 尝试为了兼容性（虽然可能会失败如果setup只接受int）
 		enemy.setup(config)
 	
@@ -179,7 +179,8 @@ func spawn_enemy(config = null, pos_override = null):
 
 func spawn_boss(boss_config):
 	"""生成BOSS"""
-	print("[EnemySpawner] 正在生成BOSS: ", boss_config.enemy_name)
+	# print("[EnemySpawner] 正在生成BOSS: ", boss_config.enemy_name)
+	pass
 	
 	if not player: return
 	

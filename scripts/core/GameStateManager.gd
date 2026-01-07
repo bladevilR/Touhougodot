@@ -44,14 +44,15 @@ var combat_data = {
 }
 
 func _ready():
-	print("[GameStateManager] 初始化完成")
+	# print("[GameStateManager] 初始化完成")
+	pass
 
 ## 切换游戏模式
 func change_mode(new_mode: GameMode) -> void:
 	var old_mode = current_mode
 	current_mode = new_mode
 	game_mode_changed.emit(old_mode, new_mode)
-	print("[GameStateManager] 模式切换: %s -> %s" % [_mode_to_string(old_mode), _mode_to_string(new_mode)])
+	# print("[GameStateManager] 模式切换: %s -> %s" % [_mode_to_string(old_mode), _mode_to_string(new_mode)])
 
 	# 根据模式执行特定逻辑
 	match new_mode:
@@ -93,7 +94,7 @@ func _apply_combat_rewards() -> void:
 	# TODO: 根据击杀数、通关时间等计算奖励
 	var reward_coins = combat_data.kills * 10
 	player_data.coins += reward_coins
-	print("[GameStateManager] 战斗奖励: +%d 金币" % reward_coins)
+	# print("[GameStateManager] 战斗奖励: +%d 金币" % reward_coins)
 
 ## 进入对话
 func start_dialogue() -> void:
@@ -115,10 +116,12 @@ func can_open_menu() -> bool:
 
 ## 私有方法
 func _on_combat_start() -> void:
-	print("[GameStateManager] 战斗开始 - 楼层 %d" % combat_data.floor)
+	# print("[GameStateManager] 战斗开始 - 楼层 %d" % combat_data.floor)
+	pass
 
 func _on_return_to_overworld() -> void:
-	print("[GameStateManager] 返回主世界")
+	# print("[GameStateManager] 返回主世界")
+	pass
 
 func _mode_to_string(mode: GameMode) -> String:
 	match mode:

@@ -378,7 +378,7 @@ static func _generate_decorations(style: LayoutStyle, map_system) -> Array:
 		LayoutStyle.DENSE, LayoutStyle.MAZE:
 			cluster_count = randi_range(50, 70) # 极大丰富
 		_:
-			cluster_count = randi_range(40, 60) # 丰富
+			cluster_count = randi_range(8, 12) # 丰富
 
 	for i in range(cluster_count):
 		var center_pos = Vector2(
@@ -390,7 +390,7 @@ static func _generate_decorations(style: LayoutStyle, map_system) -> Array:
 		var type_roll = randf()
 		
 		if type_roll < 0.6: # 60% 概率是花簇 (增加)
-			var count = randi_range(4, 8)
+			var count = randi_range(2, 4)
 			for j in range(count):
 				var angle = randf() * TAU
 				var dist = randf_range(10, 50)

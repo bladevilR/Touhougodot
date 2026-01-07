@@ -7,7 +7,7 @@ class_name ExitDoor
 signal door_entered(from_direction: int)  # 传递进入方向
 
 var player_in_range: bool = false
-var is_active: bool = false  # 初始关闭状态
+var is_active: bool = true  # 门始终开启，可随时进出
 
 # 视觉效果
 var fog_seal_rect: ColorRect = null # 雾门封印
@@ -39,9 +39,9 @@ func _ready():
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 
-	# 创建竹林封印（初始状态：封闭）
-	_create_bamboo_seal()
-	_create_fog_seal() # 添加雾门效果
+# 	# 创建竹林封印（初始状态：封闭）
+# 	_create_bamboo_seal()
+# 	_create_fog_seal() # 添加雾门效果
 
 	# 添加碰撞形状 (Deferred to avoid physics state errors)
 	call_deferred("_create_collision_shape")

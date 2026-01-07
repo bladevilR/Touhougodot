@@ -7,18 +7,27 @@ extends Node
 var inventory_ui: Control = null
 var quest_ui: Control = null
 
+# UI容器层
+var ui_layer: CanvasLayer = null
+
 func _ready():
-	print("[GlobalUIManager] 全局UI管理器初始化完成")
+	# print("[GlobalUIManager] 全局UI管理器初始化完成")
 	# 延迟加载UI，确保其他系统先初始化
 	call_deferred("_load_global_ui")
 
 func _load_global_ui():
+	# 创建UI层
+	ui_layer = CanvasLayer.new()
+	ui_layer.name = "GlobalUILayer"
+	ui_layer.layer = 100  # 确保在最上层
+	add_child(ui_layer)
+
 	# 加载背包UI
 	var inventory_scene = load("res://scenes/ui/global/InventoryUI.tscn")
 	if inventory_scene:
 		inventory_ui = inventory_scene.instantiate()
-		add_child(inventory_ui)
-		print("[GlobalUIManager] InventoryUI 已加载")
+		ui_layer.add_child(inventory_ui)
+		# print("[GlobalUIManager] InventoryUI 已加载")
 	else:
 		push_error("[GlobalUIManager] 无法加载 InventoryUI.tscn")
 
@@ -26,8 +35,8 @@ func _load_global_ui():
 	# var quest_scene = load("res://scenes/ui/global/QuestUI.tscn")
 	# if quest_scene:
 	# 	quest_ui = quest_scene.instantiate()
-	# 	add_child(quest_ui)
-	# 	print("[GlobalUIManager] QuestUI 已加载")
+	# 	ui_layer.add_child(quest_ui)
+	# 	# print("[GlobalUIManager] QuestUI 已加载")
 
 func _input(event):
 	# 处理全局UI快捷键
@@ -72,8 +81,10 @@ func close_all():
 ## 设置UI引用（由场景在加载时调用）
 func register_inventory_ui(ui: Control):
 	inventory_ui = ui
-	print("[GlobalUIManager] InventoryUI 已注册")
+	# print("[GlobalUIManager] InventoryUI 已注册")
+	pass
 
 func register_quest_ui(ui: Control):
 	quest_ui = ui
-	print("[GlobalUIManager] QuestUI 已注册")
+	# print("[GlobalUIManager] QuestUI 已注册")
+	pass

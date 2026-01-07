@@ -116,9 +116,9 @@ const PUNCH_CONFIGS = {
 	"light": {
 		"damage": 20.0,
 		"knockback": 300.0,
-		"range": 120.0,
-		"stun_duration": 0.3,
-		"hitstop": 0.10,
+		"range": 80.0,
+		"stun_duration": 0.2,
+		"hitstop": 0.08,
 		"frame_skip": 2, # 跳帧加速：29帧 -> 15帧
 		# 阶段帧数比例 (0.0-1.0)
 		"phase_ratios": {"startup": 0.3, "active": 0.2, "recovery": 0.5}, 
@@ -128,9 +128,9 @@ const PUNCH_CONFIGS = {
 	"heavy": {
 		"damage": 60.0,
 		"knockback": 700.0,
-		"range": 150.0,
-		"stun_duration": 0.6,
-		"hitstop": 0.20,
+		"range": 100.0,
+		"stun_duration": 0.5,
+		"hitstop": 0.15,
 		"frame_skip": 2, # 跳帧加速
 		"phase_ratios": {"startup": 0.4, "active": 0.2, "recovery": 0.4},
 		"phase_speeds": {"startup": 0.05, "active": 0.02, "recovery": 0.06}
@@ -138,9 +138,9 @@ const PUNCH_CONFIGS = {
 	"combo1": {
 		"damage": 20.0,
 		"knockback": 250.0,
-		"range": 120.0,
-		"stun_duration": 0.2,
-		"hitstop": 0.08,
+		"range": 80.0,
+		"stun_duration": 0.15,
+		"hitstop": 0.06,
 		"frame_skip": 2,
 		"phase_ratios": {"startup": 0.2, "active": 0.3, "recovery": 0.5},
 		"phase_speeds": {"startup": 0.03, "active": 0.016, "recovery": 0.04}
@@ -148,9 +148,9 @@ const PUNCH_CONFIGS = {
 	"combo2": {
 		"damage": 25.0,
 		"knockback": 300.0,
-		"range": 130.0,
-		"stun_duration": 0.25,
-		"hitstop": 0.10,
+		"range": 85.0,
+		"stun_duration": 0.2,
+		"hitstop": 0.08,
 		"frame_skip": 2,
 		"phase_ratios": {"startup": 0.2, "active": 0.3, "recovery": 0.5},
 		"phase_speeds": {"startup": 0.03, "active": 0.016, "recovery": 0.04}
@@ -158,9 +158,9 @@ const PUNCH_CONFIGS = {
 	"combo3": {
 		"damage": 40.0,
 		"knockback": 500.0,
-		"range": 140.0,
-		"stun_duration": 0.5,
-		"hitstop": 0.15,
+		"range": 90.0,
+		"stun_duration": 0.4,
+		"hitstop": 0.12,
 		"frame_skip": 2,
 		"phase_ratios": {"startup": 0.3, "active": 0.2, "recovery": 0.5},
 		"phase_speeds": {"startup": 0.04, "active": 0.016, "recovery": 0.05}
@@ -168,8 +168,8 @@ const PUNCH_CONFIGS = {
 	"recycle": {
 		"damage": 15.0,
 		"knockback": 200.0,
-		"range": 110.0,
-		"stun_duration": 0.15,
+		"range": 75.0,
+		"stun_duration": 0.1,
 		"hitstop": 0.05,
 		"frame_skip": 3, # 欧拉欧拉需要极快
 		"phase_ratios": {"startup": 0.1, "active": 0.5, "recovery": 0.4},
@@ -265,7 +265,7 @@ func _initialize_shadow():
 		# 强制清理旧影子
 		if has_node("Shadow"):
 			get_node("Shadow").queue_free()
-
+			
 		# 创建新影子，偏移量设为 SHADOW_OFFSET 以贴合脚底
 		shadow_sprite = map_system.create_shadow_for_entity(self, SHADOW_SIZE, SHADOW_OFFSET)
 		if shadow_sprite:
@@ -292,32 +292,32 @@ func _sync_shadow_visuals():
 	# 计算尺寸（对于 AtlasTexture，get_width/height 会返回 region 的大小）
 	var frame_height = sprite.texture.get_height() / sprite.vframes
 	var frame_width = sprite.texture.get_width() / sprite.hframes
-
+	
 	# 关键修正：将锚点设为底部中心，确保翻转后从脚底延伸
 	shadow_sprite.centered = false
 	shadow_sprite.offset = Vector2(-frame_width / 2.0, -frame_height)
-
+	
 	# 计算脚底位置 (假设Sprite中心在0,0)
 	var player_scale_y = abs(sprite.scale.y)
 	# [修复] 之前减去的是纹理像素，乘缩放后几乎为0。
 	# 现在改为减去 15.0 屏幕像素，强行向上提，消除缝隙。
 	var feet_y = (frame_height * player_scale_y) / 2.0 - 15.0
-
+	
 	# 将影子节点定位到脚底
 	shadow_sprite.position = Vector2(0, feet_y)
-
+	
 	# 垂直翻转缩放 (向下投影)
 	shadow_sprite.scale = Vector2(abs(sprite.scale.x), -player_scale_y * 0.5)
-
+	
 	# 同步水平翻转
 	shadow_sprite.flip_h = sprite.flip_h or (sprite.scale.x < 0)
-
+	
 	# 获取环境倾斜值
 	var map_skew = 0.5
 	var map_system = get_tree().get_first_node_in_group("map_system")
 	if map_system and "SHADOW_SKEW" in map_system:
 		map_skew = map_system.SHADOW_SKEW
-
+		
 	# 应用倾斜 (与环境保持一致，不再取反)
 	shadow_sprite.skew = map_skew
 
@@ -367,7 +367,7 @@ func _load_mokou_data():
 	if camera:
 		camera.zoom = Vector2(1.5, 1.5)  # 适中的zoom值，人物清晰可见
 		camera.make_current() # Ensure camera follows player
-
+		
 		# 动态添加屏幕震动组件
 		var camera_shake = Node.new()
 		camera_shake.name = "CameraShake"
@@ -463,14 +463,14 @@ func _physics_process(delta):
 
 	# ==================== 蓄力视觉反馈 ====================
 	var charge_bar = get_node_or_null("ChargeBar")
-
+	
 	if is_weapon_charging and sprite:
 		var current_time = Time.get_ticks_msec() / 1000.0
 		var duration = current_time - charge_start_time
 		# 变红变亮：从白色渐变到高亮红
 		var t = clamp(duration / 1.5, 0.0, 1.0)
 		sprite.modulate = Color.WHITE.lerp(Color(3.0, 0.5, 0.2), t)
-
+		
 		# 更新蓄力条
 		if charge_bar:
 			charge_bar.visible = true
@@ -489,7 +489,7 @@ func _physics_process(delta):
 				charge_bar.modulate = Color(2.0, 0.2, 0.2) # 发光红
 			else:
 				charge_bar.modulate = Color.WHITE
-
+		
 		# 聚气粒子 (每0.1秒生成一次)
 		if Engine.get_physics_frames() % 6 == 0:
 			_spawn_charging_particles(t)
@@ -527,7 +527,7 @@ func _physics_process(delta):
 
 	# 获取输入方向
 	var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-
+	
 	if input_dir.length() > 0.1:
 		last_move_direction = input_dir.normalized()
 
@@ -572,16 +572,16 @@ func _physics_process(delta):
 	# 攻击时不要翻转，避免贴图崩坏
 	if sprite and sprite is Sprite2D and input_dir.x != 0 and not is_attacking and not is_recycling:
 		sprite.flip_h = input_dir.x < 0
-
+		
 	# Update 3D Model Logic
 	if player_viewport:
 		# Sync orientation with movement or input
 		var dir = velocity.normalized()
 		if dir.length() < 0.1:
 			dir = last_move_direction
-
+			
 		player_viewport.set_orientation(dir)
-
+		
 		# Sync Animation with hysteresis to prevent stutter
 		# Use a higher threshold to enter run, lower to exit
 		if velocity.length() > 20.0:
@@ -659,15 +659,15 @@ func take_damage(amount: float, should_shake: bool = true):
 	var final_damage = amount
 	if has_meta("shop_passives"):
 		var passives = get_meta("shop_passives")
-
+		
 		# 1. 减法防御力 (测试通行证)
 		var defense = passives.get("defense", 0.0)
 		final_damage -= defense
-
+		
 		# 2. 百分比护甲 (河童甲壳)
 		var armor_reduction = passives.get("armor", 0.0)
 		final_damage *= (1.0 - armor_reduction)
-
+		
 	# 确保至少造成 1 点伤害 (除非是测试通行证这种超强防御，我们甚至可以允许 0 伤害)
 	# 为了爽快感，如果防御力 > 900，我们允许 0 伤害
 	if final_damage < 0:
@@ -734,7 +734,7 @@ func _check_dash_damage():
 	# 使用区域检测而不是碰撞检测
 	var dash_detection_radius = 120.0 # 扩大判定范围 (原80)
 	var enemies = get_tree().get_nodes_in_group("enemy")
-
+	
 	# 妹红特效：生成火墙（简化版，不需要Area2D，只作为视觉或瞬时伤害）
 	# 实际上，如果用 Dash CD，那么频率很高，不需要持久火墙，瞬时燃烧更好
 	if Engine.get_physics_frames() % 3 == 0:
@@ -767,7 +767,7 @@ func _check_dash_damage():
 
 			if enemy.has_method("apply_knockback"):
 				enemy.apply_knockback(dash_direction, 1000.0)  # 超强力击飞
-
+				
 			# 施加燃烧
 			if enemy.has_method("apply_burn"):
 				enemy.apply_burn(10.0, 5.0) # 强力燃烧
@@ -816,7 +816,7 @@ func start_dash():
 	can_dash = false
 	dash_timer = DASH_DURATION
 	dash_cooldown_timer = DASH_COOLDOWN
-
+	
 	# Determine dash direction
 	var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	if input_dir.length() > 0.1: 
@@ -1222,7 +1222,7 @@ func _create_charge_bar():
 	bar.max_value = 1.5 # 满蓄力时间
 	bar.step = 0.01 # 允许平滑的小数变化
 	bar.visible = false
-
+	
 	# 创建纯色纹理 (竖向)
 	var w = 12
 	var h = 60
@@ -1230,10 +1230,10 @@ func _create_charge_bar():
 	img_bg.fill(Color(0, 0, 0, 0.5))
 	var img_fill = Image.create(w, h, false, Image.FORMAT_RGBA8)
 	img_fill.fill(Color(1.0, 0.5, 0.0)) # 橙色
-
+	
 	bar.texture_under = ImageTexture.create_from_image(img_bg)
 	bar.texture_progress = ImageTexture.create_from_image(img_fill)
-
+	
 	# 位置：右侧身边
 	bar.position = Vector2(35, -40)
 	add_child(bar)
@@ -1258,7 +1258,7 @@ func _spawn_charging_particles(intensity: float):
 	p.material = mat
 	# 设置平滑纹理，告别像素方块
 	p.texture = _create_soft_circle_texture(32)
-
+	
 	p.emitting = true
 	p.one_shot = true
 	p.amount = int(8 + 25 * intensity)
@@ -1268,20 +1268,20 @@ func _spawn_charging_particles(intensity: float):
 	p.gravity = Vector2(0, -20)
 	p.radial_accel_min = -100.0 * (1.0 + intensity)
 	p.radial_accel_max = -150.0 * (1.0 + intensity)
-
+	
 	# 动态大小
 	p.scale_amount_min = 0.05 + (0.1 * intensity)
 	p.scale_amount_max = 0.15 + (0.2 * intensity)
-
+	
 	var grad = Gradient.new()
 	grad.add_point(0.0, Color(1.0, 0.9, 0.3, 0.8)) # 亮黄
 	grad.add_point(1.0, Color(1.0, 0.2, 0.0, 0.0)) # 深红透明
 	p.color_ramp = grad
-
+	
 	p.position = Vector2(0, -20)
 	p.z_index = 1
 	add_child(p)
-
+	
 	await get_tree().create_timer(0.6).timeout
 	if is_instance_valid(p): p.queue_free()
 
@@ -1293,7 +1293,7 @@ func _spawn_release_burst(intensity: float):
 	burst.material = mat
 	burst.texture = _create_soft_circle_texture(64) # 更大的爆发粒子纹理
 	add_child(burst)
-
+	
 	burst.amount = int(30 + 70 * intensity)
 	burst.one_shot = true
 	burst.explosiveness = 0.9
@@ -1302,11 +1302,11 @@ func _spawn_release_burst(intensity: float):
 	burst.gravity = Vector2.ZERO
 	burst.initial_velocity_min = 150 * intensity
 	burst.initial_velocity_max = 500 * intensity
-
+	
 	# 随蓄力变大
 	burst.scale_amount_min = 0.2 * intensity
 	burst.scale_amount_max = 0.6 * intensity
-
+	
 	var grad = Gradient.new()
 	# 满蓄力时核心发白
 	if intensity > 0.9:
@@ -1315,10 +1315,10 @@ func _spawn_release_burst(intensity: float):
 		grad.add_point(0.0, Color(1.5, 0.8, 0.2, 1.0))
 	grad.add_point(1.0, Color(0.8, 0.1, 0.0, 0.0))
 	burst.color_ramp = grad
-
+	
 	# 反馈：震动强度随时间增加
 	SignalBus.screen_shake.emit(0.2 * intensity, 20.0 * intensity)
-
+	
 	await get_tree().create_timer(0.7).timeout
 	if is_instance_valid(burst): burst.queue_free()
 
@@ -1401,7 +1401,7 @@ func _create_particle_texture() -> ImageTexture:
 	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var center = Vector2(size / 2.0, size / 2.0)
 	var max_dist = size / 2.0
-
+	
 	for x in range(size):
 		for y in range(size):
 			var dist = Vector2(x, y).distance_to(center)
@@ -1410,7 +1410,7 @@ func _create_particle_texture() -> ImageTexture:
 			var brightness = 1.0 - pow(t, 1.8)
 			# 白色粒子，亮度由alpha控制
 			image.set_pixel(x, y, Color(1, 1, 1, brightness))
-
+	
 	return ImageTexture.create_from_image(image)
 
 # ==================== PUNCH ATTACK INPUT HANDLERS ====================
@@ -1682,7 +1682,7 @@ func _play_new_punch_animation(frames: Array, config: Dictionary, attack_type: S
 	current_attack_id += 1
 	var my_id = current_attack_id
 	is_attacking = true
-
+	
 	# 重置缓存（防止旧缓存触发）
 	buffered_input = ""
 
@@ -1696,15 +1696,15 @@ func _play_new_punch_animation(frames: Array, config: Dictionary, attack_type: S
 	# 1. 计算三段式帧数范围
 	var total_frames = frames.size()
 	var frame_skip = config.get("frame_skip", 1)
-
+	
 	var ratios = config.get("phase_ratios", {"startup": 0.3, "active": 0.2, "recovery": 0.5})
 	var speeds = config.get("phase_speeds", {"startup": 0.06, "active": 0.03, "recovery": 0.1})
-
+	
 	var startup_end_idx = int(total_frames * ratios.startup)
 	var active_end_idx = startup_end_idx + int(total_frames * ratios.active)
 	# 确保至少有1帧判定
 	if active_end_idx <= startup_end_idx: active_end_idx = startup_end_idx + 1
-
+	
 	var damage_dealt = false # 确保每个Active阶段只造成一次伤害
 
 	# 2. 播放动画循环
@@ -1716,14 +1716,14 @@ func _play_new_punch_animation(frames: Array, config: Dictionary, attack_type: S
 		# 确定当前阶段和速度
 		var phase = "startup"
 		var frame_duration = speeds.startup
-
+		
 		if i >= startup_end_idx and i < active_end_idx:
 			phase = "active"
 			frame_duration = speeds.active
 		elif i >= active_end_idx:
 			phase = "recovery"
 			frame_duration = speeds.recovery
-
+			
 		# 渲染帧
 		if sprite and is_instance_valid(sprite):
 			sprite.hframes = 1
@@ -1749,10 +1749,10 @@ func _play_new_punch_animation(frames: Array, config: Dictionary, attack_type: S
 			damage_dealt = true
 			# 触发伤害
 			_check_new_punch_damage(config, attack_type)
-
+			
 		# 4. 后摇取消逻辑 (可选：如果这里检测到闪避键，可以直接 break)
 		# 目前只实现输入缓存，不实现闪避取消
-
+			
 		await get_tree().create_timer(frame_duration).timeout
 		if not is_instance_valid(self):
 			return
@@ -1762,7 +1762,7 @@ func _play_new_punch_animation(frames: Array, config: Dictionary, attack_type: S
 		is_attacking = false
 		if sprite:
 			sprite.scale = restore_scale
-
+			
 		# 5. 输入缓存检查 (Input Buffer)
 		# 动画结束，如果有缓存的输入，立即执行下一次攻击
 		if buffered_input != "":
@@ -1912,7 +1912,7 @@ func _spawn_dash_fire_particles():
 	particles.color_ramp.add_point(1.0, Color(1.0, 0.2, 0.0, 0.0))
 	particles.z_index = 5
 	get_tree().current_scene.add_child(particles)
-
+	
 	# 自动清理
 	await get_tree().create_timer(1.0).timeout
 	if is_instance_valid(particles):
