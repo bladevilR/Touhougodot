@@ -22,7 +22,6 @@ var auto_save_timer: float = 0.0
 func _ready():
 	# 确保存档目录存在
 	_ensure_save_directory()
-	# print("[SaveSystem] 存档系统初始化完成")
 
 func _process(delta):
 	if not auto_save_enabled:
@@ -61,7 +60,6 @@ func save_game(slot: int = 1) -> bool:
 	file.store_string(json_string)
 	file.close()
 
-	# print("[SaveSystem] 游戏已保存到槽位 %d" % slot)
 	save_completed.emit(slot)
 	return true
 
@@ -96,16 +94,14 @@ func load_game(slot: int = 1) -> bool:
 	var save_data = json.data
 	_apply_save_data(save_data)
 
-	# print("[SaveSystem] 存档已加载，槽位 %d" % slot)
 	load_completed.emit(slot)
 	return true
 
 ## 自动保存
 func auto_save() -> void:
 	save_game(AUTO_SAVE_SLOT)
-	# print("[SaveSystem] 自动保存完成")
 
-## 检查���档是否存在
+## 检查存档是否存在
 func has_save(slot: int) -> bool:
 	var file_path = _get_save_file_path(slot)
 	return FileAccess.file_exists(file_path)
@@ -124,7 +120,6 @@ func delete_save(slot: int) -> bool:
 		push_error("[SaveSystem] 删除存档失败: %s" % file_path)
 		return false
 
-	# print("[SaveSystem] 存档已删除，槽位 %d" % slot)
 	return true
 
 ## 获取存档信息（用于显示存档列表）

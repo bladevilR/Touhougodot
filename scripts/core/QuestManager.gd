@@ -33,7 +33,6 @@ var completed_quests: Array[String] = []
 func _ready():
 	# 监听游戏事件来更新任务进度
 	_connect_game_signals()
-	# print("[QuestManager] 任务系统初始化完成")
 
 ## 连接游戏信号
 func _connect_game_signals() -> void:
@@ -78,7 +77,6 @@ func start_quest(quest_id: String) -> bool:
 		"started_time": Time.get_ticks_msec() / 1000.0
 	}
 
-	# print("[QuestManager] 任务开始: %s - %s" % [quest_id, quest_data.get("title", "未命名")])
 	quest_started.emit(quest_id)
 	return true
 
@@ -103,8 +101,6 @@ func update_quest_progress(quest_id: String, objective_index: int, amount: int =
 	var required = objectives[objective_index].get("required", 1)
 	quest_state.progress[objective_index] = min(current_progress + amount, required)
 
-	# print("[QuestManager] 任务更新: %s - 目标 %d: %d/%d" % [quest_id, objective_index, quest_state.progress[objective_index], required])
-
 	quest_updated.emit(quest_id, objective_index)
 
 	# 检查目标是否完成
@@ -128,7 +124,6 @@ func complete_quest(quest_id: String) -> void:
 	# 发放奖励
 	_grant_quest_rewards(quest_id)
 
-	# print("[QuestManager] 任务完成: %s" % quest_id)
 	quest_completed.emit(quest_id)
 
 	# 从活动列表移除（延迟移除，让UI有时间显示）
@@ -143,7 +138,6 @@ func fail_quest(quest_id: String) -> void:
 	var quest_state = active_quests[quest_id]
 	quest_state.status = QuestStatus.FAILED
 
-	# print("[QuestManager] 任务失败: %s" % quest_id)
 	quest_failed.emit(quest_id)
 
 	# 移除任务
@@ -176,13 +170,11 @@ func _grant_quest_rewards(quest_id: String) -> void:
 	if rewards.has("exp"):
 		pass
 		# TODO: 添加经验到玩家
-		# print("[QuestManager] 获得经验: %d" % rewards.exp)
 
 	# 金币奖励
 	if rewards.has("coins"):
 		GameStateManager.player_data.coins += rewards.coins
 		SignalBus.coins_changed.emit(GameStateManager.player_data.coins)
-		# print("[QuestManager] 获得金币: %d" % rewards.coins)
 
 	# 物品奖励
 	if rewards.has("items"):
@@ -190,7 +182,6 @@ func _grant_quest_rewards(quest_id: String) -> void:
 			var amount = rewards.items[item_id]
 			if has_node("/root/InventoryManager"):
 				InventoryManager.add_item(item_id, amount)
-				# print("[QuestManager] 获得物品: %s x%d" % [item_id, amount])
 
 ## 事件处理
 func _on_enemy_killed(enemy: Node2D, xp_value: float, position: Vector2) -> void:
@@ -245,4 +236,3 @@ func get_save_data() -> Dictionary:
 func load_save_data(data: Dictionary) -> void:
 	active_quests = data.get("active_quests", {})
 	completed_quests = data.get("completed_quests", [])
-	# print("[QuestManager] 任务数据已加载")

@@ -104,9 +104,8 @@ func _load_character_portrait():
 
 	if ResourceLoader.exists(portrait_path):
 		character_portrait.texture = load(portrait_path)
-		# print("[GameUI] 角色头像加载成功: ", portrait_path)
 	else:
-		# print("[GameUI] 警告: 找不到头像 ", portrait_path)
+		pass
 		# 尝试备用路径
 		if ResourceLoader.exists("res://assets/characters/1C.png"):
 			character_portrait.texture = load("res://assets/characters/1C.png")
@@ -117,7 +116,6 @@ func _load_character_portrait():
 			var img = Image.create(128, 128, false, Image.FORMAT_RGBA8)
 			img.fill(Color(0.2, 0.2, 0.2, 0.8))
 			character_portrait.texture = ImageTexture.create_from_image(img)
-			# print("[GameUI] 使用纯色占位符作为头像")
 
 func _ready():
 	add_to_group("ui")
@@ -182,10 +180,8 @@ func _create_status_panel():
 		var status_panel = StatusPanelScript.new()
 		status_panel.name = "CharacterStatusPanel"
 		add_child(status_panel)
-		# print("[GameUI] 角色状态面板已创建")
 	else:
 		pass
-		# print("[GameUI] 错误: 无法加载 CharacterStatusPanel.gd")
 
 func _process(_delta):
 	# 更新元素附魔计时器显示
@@ -289,15 +285,10 @@ func update_coins(amount: int):
 
 func on_level_up(new_level):
 	pass
-	# 这里可以弹出一个升级选择窗口
-	# print("UI: 升级到 Lv.", new_level, "！")
-	# TODO: 显示升级选择窗口
 
 func on_game_over():
 	if is_restarting: return
 	is_restarting = true
-	
-	# print("UI: Game Over received")
 
 	# 获取 SceneTree 引用，防止 await 期间节点被移除导致 get_tree() 失败
 	var tree = get_tree()
@@ -1051,7 +1042,6 @@ func _create_room_map_ui():
 		room_map_panel.add_child(room_map_canvas)
 	else:
 		pass
-		# print("[GameUI] Error: Could not load RoomMapCanvas.gd")
 
 func _on_boss_dialogue(boss_name: String, dialogue: String):
 	"""Boss对话显示 - 使用对话立绘系统"""
@@ -1107,10 +1097,8 @@ func _create_pause_menu():
 		var pause_menu = PauseMenuScript.new()
 		pause_menu.name = "PauseMenu"
 		add_child(pause_menu)
-		# print("[GameUI] 暂停菜单已创建")
 	else:
 		pass
-		# print("[GameUI] 错误: 无法加载 PauseMenu.gd")
 
 # 标记当前是否为简洁模式
 var is_minimal_mode: bool = false
@@ -1153,10 +1141,7 @@ func set_minimal_mode(enabled: bool):
 	# 隐藏货币相关（如果需要）
 	if coins_label: coins_label.visible = hide_visibility
 	if tenryu_label: tenryu_label.visible = hide_visibility
-	
-	# print("[GameUI] 简洁模式: ", "开启" if enabled else "关闭")
 
 func _on_settings_changed():
 	"""设置改变时响应"""
 	_apply_settings()
-	# print("[GameUI] 设置已更新")

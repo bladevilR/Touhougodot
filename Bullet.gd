@@ -518,7 +518,7 @@ func _create_premium_aura_texture(radius: float, color: Color) -> ImageTexture:
 	return ImageTexture.create_from_image(image)
 
 func _create_sweep_texture(length: float, width: float, color: Color) -> ImageTexture:
-	"""创建横扫效果���理（拉长的矩形带渐变）"""
+	"""创建横扫效果纹理（拉长的矩形带渐变）"""
 	var w = int(length)
 	var h = int(width)
 	var image = Image.create(w, h, false, Image.FORMAT_RGBA8)

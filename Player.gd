@@ -204,7 +204,7 @@ const WALL_AVOIDANCE_DISTANCE: float = 50.0
 func _ready():
 	add_to_group("player")
 
-	# 获取子节点���用
+	# 获取子节点引用
 	health_comp = get_node_or_null("HealthComponent")
 	sprite = get_node_or_null("Sprite2D")
 	weapon_system = get_node_or_null("WeaponSystem")
@@ -702,7 +702,7 @@ func _check_enemy_contact_damage():
 	if contact_damage_cooldown > 0:
 		return
 
-	# 检查与敌��的碰撞
+	# 检查与敌人的碰撞
 	for i in range(get_slide_collision_count()):
 		var collision = get_slide_collision(i)
 		var collider = collision.get_collider()
@@ -1561,7 +1561,7 @@ func _trigger_recycle_punch():
 	# 获取攻击配置
 	var config = PUNCH_CONFIGS.recycle
 
-	# ���始循环播放
+	# 开始循环播放
 	print("[Punch] Starting recycle animation")
 	_play_recycle_animation(config)
 

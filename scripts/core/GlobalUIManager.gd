@@ -11,7 +11,6 @@ var quest_ui: Control = null
 var ui_layer: CanvasLayer = null
 
 func _ready():
-	# print("[GlobalUIManager] 全局UI管理器初始化完成")
 	# 延迟加载UI，确保其他系统先初始化
 	call_deferred("_load_global_ui")
 
@@ -27,7 +26,6 @@ func _load_global_ui():
 	if inventory_scene:
 		inventory_ui = inventory_scene.instantiate()
 		ui_layer.add_child(inventory_ui)
-		# print("[GlobalUIManager] InventoryUI 已加载")
 	else:
 		push_error("[GlobalUIManager] 无法加载 InventoryUI.tscn")
 
@@ -36,7 +34,6 @@ func _load_global_ui():
 	# if quest_scene:
 	# 	quest_ui = quest_scene.instantiate()
 	# 	ui_layer.add_child(quest_ui)
-	# 	# print("[GlobalUIManager] QuestUI 已加载")
 
 func _input(event):
 	# 处理全局UI快捷键
@@ -81,10 +78,8 @@ func close_all():
 ## 设置UI引用（由场景在加载时调用）
 func register_inventory_ui(ui: Control):
 	inventory_ui = ui
-	# print("[GlobalUIManager] InventoryUI 已注册")
 	pass
 
 func register_quest_ui(ui: Control):
 	quest_ui = ui
-	# print("[GlobalUIManager] QuestUI 已注册")
 	pass

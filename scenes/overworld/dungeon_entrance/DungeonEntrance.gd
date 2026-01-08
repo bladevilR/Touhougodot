@@ -70,7 +70,7 @@ func show_dungeon_info(level: int):
 	for diff in available_difficulties:
 		if diff.level == level:
 			print("[DungeonEntrance] 难度: %s - %s" % [diff.name, diff.description])
-			# TODO: 更新 UI ��示
+			# TODO: 更新 UI 显示
 			break
 
 func _input(event):

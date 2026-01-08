@@ -60,7 +60,6 @@ func try_fire_weapon(weapon_id: String, override_direction: Vector2 = Vector2.ZE
 	if weapon_data.config.weapon_type == GameConstants.WeaponType.MELEE:
 		var current_cd = melee_cooldowns.get(weapon_id, 0.0)
 		if current_cd <= 0:
-			print("DEBUG: Firing MELEE weapon: ", weapon_id)
 			fire_weapon(weapon_id, override_direction)
 			# 设置冷却
 			var stats = _get_player_stats()
@@ -68,7 +67,6 @@ func try_fire_weapon(weapon_id: String, override_direction: Vector2 = Vector2.ZE
 			melee_cooldowns[weapon_id] = weapon_data.config.cooldown_max * stats.cooldown * level_cooldown_mult
 			return true
 		else:
-			# print("DEBUG: Weapon cooldown: ", weapon_id, " Time: ", current_cd)
 			return false
 	
 	return false # 非近战武器由_process自动发射
@@ -1178,8 +1176,6 @@ func _fire_melee_light(weapon_id: String, config: WeaponData.WeaponConfig, stats
 
 func _fire_melee_heavy(weapon_id: String, config: WeaponData.WeaponConfig, stats: Dictionary, override_direction: Vector2 = Vector2.ZERO):
 	"""近战攻击 - 强力踢击 (范围击退 + 最近敌人旋转击飞)"""
-	print("DEBUG: _fire_melee_heavy CALLED for ", weapon_id)
-	
 	# 伤害计算
 	var final_damage = config.base_damage * stats.might * 8.0 
 

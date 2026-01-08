@@ -31,7 +31,6 @@ func _ready():
 
 func _on_room_entered(room_type_name: String, room_index: int):
 	"""进入新房间时应用布局"""
-	# print("RoomLayoutManager: Applying layout for room ", room_index, " (", room_type_name, ")")
 	pass
 
 	# 清理旧布局
@@ -107,8 +106,7 @@ func _clear_bamboo_at_doors(active_directions: Array):
 				body.queue_free()
 				cleared_count += 1
 				break
-				
-	# print("RoomLayoutManager: Cleared ", cleared_count, " bamboos at doors.")
+
 	pass
 
 func _spawn_bamboo_cluster(pos: Vector2, size: int):

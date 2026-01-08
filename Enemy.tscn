@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://enemy001"]
+[gd_scene load_steps=5 format=3 uid="uid://enemy001"]
 
 [ext_resource type="Script" path="res://Enemy.gd" id="1"]
 [ext_resource type="Script" path="res://HealthComponent.gd" id="2"]
 [ext_resource type="Texture2D" path="res://assets/elf.png" id="3"]
+[ext_resource type="Script" path="res://scripts/components/StatusEffectComponent.gd" id="4"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_1"]
 radius = 8.0
@@ -33,3 +34,6 @@ offset_bottom = -14.0
 max_value = 100.0
 value = 100.0
 show_percentage = false
+
+[node name="StatusEffectComponent" type="Node" parent="."]
+script = ExtResource("4")

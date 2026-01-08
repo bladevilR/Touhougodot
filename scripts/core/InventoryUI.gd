@@ -33,9 +33,6 @@ func _ready():
 	# 监听打开/关闭信号
 	SignalBus.inventory_opened.connect(_on_inventory_opened)
 
-	# print("[InventoryUI] 背包界面初始化完成")
-	pass
-
 func _input(event):
 	if event.is_action_pressed("ui_cancel") and visible:
 		close()

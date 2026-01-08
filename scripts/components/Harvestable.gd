@@ -58,9 +58,6 @@ func _ready():
 	# 添加到组
 	add_to_group("harvestable")
 
-	# print("[Harvestable] %s 初始化完成" % name)
-	pass
-
 func _process(_delta):
 	# 更新交互提示
 	if interaction_label:
@@ -122,9 +119,6 @@ func _harvest():
 	# 标记为已采集
 	is_harvestable = false
 
-	# print("[Harvestable] 采集 %s x%d，物品将从世界中移除" % [item_id, amount])
-	pass
-
 ## 重生
 func _respawn():
 	is_harvestable = true
@@ -135,9 +129,6 @@ func _respawn():
 
 	# 重生动画
 	_play_respawn_animation()
-
-	# print("[Harvestable] %s 已重生" % name)
-	pass
 
 ## 更新外观
 func _update_appearance():
@@ -260,7 +251,7 @@ func _get_tool_display_name(tool_id: String) -> String:
 		"axe":
 			return "斧头"
 		"sickle":
-			return "���刀"
+			return "镰刀"
 		"fishing_rod":
 			return "钓鱼竿"
 		_:
@@ -271,12 +262,9 @@ func _on_body_entered(body: Node2D):
 	if body.is_in_group("player"):
 		player_nearby = true
 		nearby_player = body
-		# print("[Harvestable] 玩家进入 %s 范围" % name)
-	pass
 
 ## 玩家离开范围
 func _on_body_exited(body: Node2D):
 	if body.is_in_group("player"):
 		player_nearby = false
 		nearby_player = null
-		# print("[Harvestable] 玩家离开 %s 范围" % name)

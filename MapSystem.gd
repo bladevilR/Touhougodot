@@ -124,10 +124,9 @@ func _ready():
 		game_objects_parent = world.get_game_objects_parent()
 	else:
 		game_objects_parent = get_parent()
-	
+
 	if not game_objects_parent:
 		game_objects_parent = self
-	# print("MapSystem WARNING: game_objects_parent not found, using self.")
 	pass
 
 	setup_layers()
@@ -140,10 +139,9 @@ func _ready():
 	
 	# 初始化光照 (默认外围)
 	create_lighting("outskirts")
-	
+
 	setup_camera_limits()
 	spawn_nitori_npc() # 恢复河童
-	# print("DEBUG: MapSystem _ready finished")
 	pass
 
 func _register_critical_zones():
@@ -398,9 +396,8 @@ func _create_forest_bamboo_enhanced(pos: Vector2, depth_ratio: float, has_collis
 # ==================== 内部装饰竹子 (Perlin Noise) ====================
 func create_interior_bamboo():
 	"""使用柏林噪声生成自然分布的内部竹林"""
-	# print("MapSystem: Generating interior bamboo (Walls + Scatter)...")
 	var count = 0
-	
+
 	# 遍历地图网格点
 	var step = 80 # 采样步长
 	for x in range(WALL_THICKNESS, MAP_WIDTH - WALL_THICKNESS, step):
@@ -427,8 +424,7 @@ func create_interior_bamboo():
 			elif noise_val < -0.3 and randf() < 0.01: # 稀疏散布 (1% 概率)
 				create_interior_bamboo_varied(pos, ["single", "small"])
 				count += 1
-	
-	# print("MapSystem: Generated ", count, " interior bamboos.")
+
 	pass
 
 func create_interior_bamboo_varied(pos: Vector2, allowed_types: Array) -> int:
@@ -659,9 +655,8 @@ func _clear_lighting():
 
 func _create_lighting_outskirts():
 	"""竹林外围 - 明亮通透，高对比度"""
-	# print("MapSystem: Creating OUTSKIRTS lighting (CanvasModulate)...")
 	pass
-	
+
 	# 1. CanvasModulate (压暗一点，增加氛围)
 	var modulate = CanvasModulate.new()
 	modulate.color = Color(0.75, 0.75, 0.8) # 稍微偏冷的暗色
@@ -756,9 +751,8 @@ func set_fog_density(density: float):
 
 func _create_lighting_deep_forest_beam():
 	"""竹林深处 - 幽暗，世界空间固定光柱"""
-	# print("MapSystem: Creating DEEP FOREST BEAM lighting...")
 	pass
-	
+
 	# 1. CanvasModulate (压暗)
 	var modulate = CanvasModulate.new()
 	modulate.color = Color(0.4, 0.45, 0.55) # 蓝调黑暗
@@ -816,9 +810,8 @@ func _create_lighting_deep_forest_beam():
 
 func _create_lighting_deep_forest_mist():
 	"""竹林深处 - 雾气"""
-	# print("MapSystem: Creating DEEP FOREST MIST lighting...")
 	pass
-	
+
 	# 1. CanvasModulate (压暗)
 	var modulate = CanvasModulate.new()
 	modulate.color = Color(0.6, 0.65, 0.7)

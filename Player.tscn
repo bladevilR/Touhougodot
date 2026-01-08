@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://player001"]
+[gd_scene load_steps=11 format=3 uid="uid://player001"]
 
 [ext_resource type="Script" uid="uid://74mhr117ffrn" path="res://Player.gd" id="1"]
 [ext_resource type="Script" uid="uid://13vi052pjy5r" path="res://HealthComponent.gd" id="2"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://bf5xvb3sf5y28" path="res://NitoriShop.gd" id="8"]
 [ext_resource type="Script" uid="uid://chnx1ac5kywxq" path="res://CharacterSkills.gd" id="9"]
 [ext_resource type="PackedScene" uid="uid://playerviewport01" path="res://PlayerViewport.tscn" id="10_viewport"]
+[ext_resource type="Script" path="res://scripts/components/PunchSystem.gd" id="11_punch"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_1"]
 radius = 20.0
@@ -51,3 +52,6 @@ script = ExtResource("8")
 script = ExtResource("9")
 
 [node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="PunchSystem" type="Node" parent="."]
+script = ExtResource("11_punch")

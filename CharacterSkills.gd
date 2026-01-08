@@ -568,7 +568,7 @@ func spawn_landing_explosion(pos: Vector2):
 
 	# 视觉效果：爆炸扩散动画（0.3秒）- 圆形扩大并淡出 [修复] 绑定到 circle 的生命周期
 	var tween = circle.create_tween()
-	tween.tween_property(circle, "scale", Vector2(2.0, 2.0), 0.3)  # ���大2倍
+	tween.tween_property(circle, "scale", Vector2(2.0, 2.0), 0.3)  # 放大2倍
 	tween.parallel().tween_property(circle, "color:a", 0.0, 0.3)  # 淡出
 	tween.tween_callback(func():
 		if is_instance_valid(explosion):

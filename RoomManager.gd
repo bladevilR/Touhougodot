@@ -77,7 +77,6 @@ func _on_game_started():
 
 func reset_dungeon():
 	"""重置地牢并重新生成地图"""
-	# print("RoomManager: 重置地牢...")
 	randomize() # 更新随机种子
 	
 	# 重置状态
@@ -196,7 +195,6 @@ func _generate_room_map():
 		if next_depth_rooms.size() > 0:
 			current_depth_rooms = next_depth_rooms
 		else:
-			# print("警告：深度 ", d, " 生成中断！")
 			break
 
 	# 3. 深度6：Boss房间
@@ -218,8 +216,6 @@ func _generate_room_map():
 		boss_room.connected_rooms.append(boss_entry.id)
 		room_map.append(boss_room)
 		max_depth = 6
-	
-	# print("新地图生成完成，共 ", room_map.size(), " 个房间")
 
 func get_active_directions() -> Array:
 	"""获取当前房间的活动连接方向 (用于地图生成避让)"""
@@ -259,18 +255,14 @@ func _start_room(room_index: int):
 	get_tree().call_group("fire_wall", "queue_free") # 火墙残留
 	get_tree().call_group("npc", "queue_free") # 清理NPC (河童)
 	get_tree().call_group("enchant_shop", "queue_free") # 清理附魔店 (魔理沙)
-	
+
 	if room_index >= room_map.size():
-		pass
-		# print("警告：房间索引超出范围")
 		return
 
 	current_room_index = room_index
 	var current_room_node = room_map[room_index]
-	
+
 	if not current_room_node:
-		pass
-		# print("严重错误：房间节点为空！")
 		return
 	
 	current_kills = 0
@@ -283,7 +275,6 @@ func _start_room(room_index: int):
 
 	current_room_type = current_room_node.type
 
-	# print("进入房间 ", room_index + 1, " 类型: ", _get_room_type_name(current_room_type), " 深度: ", current_room_node.depth)
 	room_entered.emit(_get_room_type_name(current_room_type), room_index)
 
 	# 更新光照环境
@@ -303,7 +294,6 @@ func _start_room(room_index: int):
 
 	# 增加进入房间计数
 	entered_room_count += 1
-	# print("已进入第 ", entered_room_count, " 个房间")
 
 	var npc_spawned = false
 
@@ -324,7 +314,6 @@ func _start_room(room_index: int):
 
 	# 如果生成了NPC，该房间变为安全房（直接清理）
 	if npc_spawned:
-		# print("重要NPC出现，房间转为安全区")
 		_on_room_cleared()
 		# 确保门已生成
 		if exit_doors.size() == 0:
@@ -351,12 +340,10 @@ func _start_room(room_index: int):
 	if is_room_cleared:
 		_spawn_exit_doors()
 		door_opened.emit()
-		# print("房间已清理，生成门")
 	else:
 		# 用户要求：所有门始终开启
 		_spawn_exit_doors()
 		door_opened.emit()
-		# print("所有门已开启")
 
 	# 在起始房间生成教程触发器
 	if room_index == 0:
@@ -366,8 +353,6 @@ func _start_combat_room():
 	"""开始战斗房间 - 基于击杀数"""
 	target_kills = ENEMIES_PER_ROOM_BASE + (current_room_index * ENEMIES_INCREASE_PER_ROOM)
 	current_kills = 0
-
-	# print("战斗房间：需要击败 ", target_kills, " 个敌人")
 
 	# 发送UI更新
 	SignalBus.wave_info_updated.emit(0, target_kills)  # 重用波次信号显示击杀进度
@@ -387,8 +372,6 @@ func _on_enemy_killed(_enemy, xp_value, position):
 	kill_progress_updated.emit(current_kills, target_kills)
 	SignalBus.wave_info_updated.emit(current_kills, target_kills)
 
-	# print("击杀进度: ", current_kills, "/", target_kills)
-
 	# 检查是否完成击杀目标
 	if current_kills >= target_kills:
 		_on_room_cleared()
@@ -405,14 +388,11 @@ func _on_room_cleared():
 	_spawn_clear_reward_chest()
 
 	room_cleared.emit()
-	# print("房间清理完成!")
 
 func _spawn_clear_reward_chest():
 	"""生成房间通关奖励宝箱"""
 	var chest_scene = load("res://TreasureChest.tscn")
 	if not chest_scene:
-		pass
-		# print("警告：无法加载 TreasureChest.tscn")
 		return
 
 	var current_room = room_map[current_room_index]
@@ -420,7 +400,6 @@ func _spawn_clear_reward_chest():
 	var chest = chest_scene.instantiate()
 	chest.position = Vector2(1200, 900)
 	get_parent().call_deferred("add_child", chest)
-	# print("通关宝箱已生成！")
 
 func _spawn_exit_doors():
 	"""生成出口门/传送门 - 根据连接房间的相对位置 (修复拓扑)"""
@@ -432,8 +411,6 @@ func _spawn_exit_doors():
 
 	var door_scene = load("res://ExitDoor.tscn")
 	if not door_scene:
-		pass
-		# print("警告：无法加载 ExitDoor.tscn")
 		return
 
 	var current_room = room_map[current_room_index]
@@ -496,11 +473,8 @@ func _spawn_exit_doors():
 		# 打开门
 		door.call_deferred("open_door")
 
-	# print("生成了 ", exit_doors.size(), " 个定向出口门")
-
 func _on_door_entered(from_direction: int, target_room_id: int):
 	"""玩家进入传送门"""
-	# print("从方向 ", from_direction, " 进入传送门，前往房间 ", target_room_id)
 
 	# 根据进入方向设置玩家在新房间的位置
 	# 从北门进入 → 出现在南侧
@@ -518,7 +492,6 @@ func _on_door_entered(from_direction: int, target_room_id: int):
 				player.global_position = Vector2(300, 900)
 			3:  # WEST - 从西门进入，出现在新房间东侧 (远离东门)
 				player.global_position = Vector2(2100, 900)
-		# print("玩家位置设置为: ", player.global_position)
 
 	# 清理门
 	for door in exit_doors:
@@ -538,7 +511,6 @@ func _on_door_entered(from_direction: int, target_room_id: int):
 
 func _start_shop_room():
 	"""商店房间 - 商店开业"""
-	# print("商店房间 - 商店开业")
 	# 注意：河童现在只在第3个房间出现，普通商店房可能只是装饰或空的
 	
 	# 商店房间直接打开出口
@@ -548,7 +520,6 @@ func _start_shop_room():
 
 func _spawn_nitori_shop():
 	"""生成河童商店"""
-	# print("河童出现了！")
 	var nitori_scene = load("res://NitoriNPC.tscn")
 	if nitori_scene:
 		var npc = nitori_scene.instantiate()
@@ -562,8 +533,7 @@ func _spawn_nitori_shop():
 
 func _start_boss_room():
 	"""BOSS房间 - 根据玩家到达时间选择Boss"""
-	# print("BOSS房间 - 准备战斗!")
-	
+
 	# [修复] 强制清理所有残留小怪，确保Boss战纯净
 	get_tree().call_group("enemy", "queue_free")
 	
@@ -590,9 +560,6 @@ func _start_boss_room():
 		boss_type = GameConstants.BossType.YOUMU
 		boss_dialogue = "抱歉 暂时不能让你打扰幽幽子大人她们的计划，我来做你的对手"
 	# 否则是琪露诺（10分钟后）
-
-	# print("Boss出现: ", _get_boss_name(boss_type), " (", int(minutes), " 分钟)")
-	# print("Boss台词: ", boss_dialogue)
 
 	# 显示对话（通过UI信号） - 替换为新的对话系统
 	# SignalBus.emit_signal("boss_dialogue", _get_boss_name(boss_type), boss_dialogue)
@@ -633,7 +600,6 @@ func _start_boss_room():
 
 func _start_enchant_room():
 	"""附魔房间"""
-	# print("附魔房间 - 使用転流购买元素附魔")
 
 	# 生附魔商店
 	var enchant_shop_scene = load("res://EnchantShop.tscn")
@@ -649,7 +615,6 @@ func _start_enchant_room():
 
 func _start_treasure_room():
 	"""宝箱房间"""
-	# print("宝箱房间 - 获取奖励!")
 
 	# 生成宝箱
 	var chest_scene = load("res://TreasureChest.tscn")
@@ -665,7 +630,6 @@ func _start_treasure_room():
 
 func _start_rest_room():
 	"""休息房间"""
-	# print("休息房间 - 回复生命值")
 
 	# 恢复玩家生命
 	var player = get_tree().get_first_node_in_group("player")
@@ -675,7 +639,8 @@ func _start_rest_room():
 
 	# 延迟开门
 	await get_tree().create_timer(1.0).timeout
-	_on_room_cleared()
+	if is_instance_valid(self):
+		_on_room_cleared()
 
 # ==================== 工具函数 ====================
 
@@ -686,7 +651,6 @@ func _play_dialogue(data: Array):
 		dm.show_sequence(data)
 		await dm.dialogue_finished
 	else:
-		# print("Error: Dialogue Manager not found!")
 		await get_tree().create_timer(1.0).timeout
 
 func _get_dialogue_manager() -> Node:
@@ -760,8 +724,6 @@ func _spawn_tutorial_trigger():
 	# 加载教程触发器场景/脚本
 	var TutorialTriggerScript = load("res://TutorialTrigger.gd")
 	if not TutorialTriggerScript:
-		pass
-		# print("警告：无法加载 TutorialTrigger.gd")
 		return
 
 	var trigger = TutorialTriggerScript.new()
@@ -777,11 +739,9 @@ func _spawn_tutorial_trigger():
 	var world = get_parent()
 	if world:
 		world.call_deferred("add_child", trigger)
-		# print("教程触发器已生成在起始房间")
 
 func _spawn_marisa_shop():
 	"""生成魔理沙附魔店"""
-	# print("竹林深处 - 魔理沙出现了！")
 	var enchant_shop_scene = load("res://EnchantShop.tscn")
 	if enchant_shop_scene:
 		var shop = enchant_shop_scene.instantiate()
@@ -789,4 +749,3 @@ func _spawn_marisa_shop():
 		get_parent().call_deferred("add_child", shop)
 	else:
 		pass
-		# print("警告：无法加载 EnchantShop")

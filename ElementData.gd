@@ -84,7 +84,7 @@ static func initialize():
 	ELEMENT_ITEMS[GameConstants.ElementType.LIGHTNING] = ElementItem.new(
 		GameConstants.ElementType.LIGHTNING,
 		"永江衣玖的披肩",
-		"弹幕命中时产生连锁��电，跳跃至附近3个敌人（每跳-30%伤害）。",
+		"弹幕命中时产生连锁闪电，跳跃至附近3个敌人（每跳-30%伤害）。",
 		Color("#ffd700"),
 		"⚡"
 	)

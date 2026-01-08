@@ -170,7 +170,7 @@ func _create_ui():
 
 	# 当前任务
 	var mission_title = Label.new()
-	mission_title.text = "◆ ��前任务"
+	mission_title.text = "◆ 当前任务"
 	mission_title.add_theme_font_size_override("font_size", 22)
 	mission_title.add_theme_color_override("font_color", Color(0.2, 0.2, 0.6))  # 深蓝色
 	info_container.add_child(mission_title)

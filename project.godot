@@ -35,6 +35,7 @@ QuestManager="*res://scripts/core/QuestManager.gd"
 ItemData="*res://scripts/data/ItemData.gd"
 QuestData="*res://scripts/data/QuestData.gd"
 GlobalUIManager="*res://scripts/core/GlobalUIManager.gd"
+Logger="*res://scripts/core/autoloads/Logger.gd"
 
 [display]
 

@@ -407,7 +407,7 @@ func _apply_consumable_effect(item: ShopItem, player: Node):
 				if enemy.has_method("take_damage"):
 					enemy.take_damage(9999)
 			SignalBus.screen_shake.emit(0.3, 15.0)
-			print("河��炸弹！清除所有敌人！")
+			print("河童炸弹！清除所有敌人！")
 
 		"exp":
 			SignalBus.xp_pickup.emit(effect.amount)

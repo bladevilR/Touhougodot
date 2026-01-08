@@ -29,7 +29,7 @@ func _on_spawn_death_particles(pos: Vector2, color: Color, count: int):
 		particle.global_position = pos
 		particle.modulate = color
 
-		# 随机��度和方向
+		# 随机速度和方向
 		var angle = randf() * TAU
 		var speed = randf_range(200.0, 400.0)
 		var velocity = Vector2(cos(angle), sin(angle)) * speed
