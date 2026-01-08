@@ -371,7 +371,7 @@ func _load_mokou_data():
 		# 动态添加屏幕震动组件
 		var camera_shake = Node.new()
 		camera_shake.name = "CameraShake"
-		camera_shake.set_script(load("res://CameraShake.gd"))
+		camera_shake.set_script(load("res://scripts/gameplay/combat/effects/CameraShake.gd"))
 		camera.add_child(camera_shake)
 
 func _setup_collision_layers():

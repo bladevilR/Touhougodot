@@ -123,7 +123,7 @@ func _get_dialogue_manager() -> Node:
 	layer.name = "DialogueLayer"
 	get_tree().root.add_child(layer)
 
-	var DialoguePortraitScript = load("res://DialoguePortrait.gd")
+	var DialoguePortraitScript = load("res://scripts/ui/gameplay/DialoguePortrait.gd")
 	var dm = DialoguePortraitScript.new()
 	dm.name = "DialogueManager"
 	layer.add_child(dm)

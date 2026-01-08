@@ -172,7 +172,7 @@ func _on_settings_pressed():
 	"""打开设置菜单"""
 	if not settings_menu:
 		# 动态创建设置菜单
-		var SettingsMenuScript = load("res://SettingsMenu.gd")
+		var SettingsMenuScript = load("res://scripts/ui/menus/SettingsMenu.gd")
 		if SettingsMenuScript:
 			settings_menu = SettingsMenuScript.new()
 			add_child(settings_menu)

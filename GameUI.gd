@@ -175,7 +175,7 @@ func _ready():
 
 func _create_status_panel():
 	"""创建角色状态面板"""
-	var StatusPanelScript = load("res://CharacterStatusPanel.gd")
+	var StatusPanelScript = load("res://scripts/ui/gameplay/CharacterStatusPanel.gd")
 	if StatusPanelScript:
 		var status_panel = StatusPanelScript.new()
 		status_panel.name = "CharacterStatusPanel"
@@ -1033,7 +1033,7 @@ func _create_room_map_ui():
 	room_map_panel.add_child(title)
 
 	# 创建绘制画布 - 使用自定义RoomMapCanvas类
-	var RoomMapCanvasScript = load("res://RoomMapCanvas.gd")
+	var RoomMapCanvasScript = load("res://scripts/gameplay/dungeons/RoomMapCanvas.gd")
 	if RoomMapCanvasScript:
 		room_map_canvas = RoomMapCanvasScript.new()
 		room_map_canvas.name = "RoomMapCanvas"
@@ -1049,7 +1049,7 @@ func _on_boss_dialogue(boss_name: String, dialogue: String):
 	var dialogue_system = get_node_or_null("DialoguePortrait")
 	if not dialogue_system:
 		# 创建对话系统
-		var DialoguePortraitScript = load("res://DialoguePortrait.gd")
+		var DialoguePortraitScript = load("res://scripts/ui/gameplay/DialoguePortrait.gd")
 		if DialoguePortraitScript:
 			dialogue_system = DialoguePortraitScript.new()
 			dialogue_system.name = "DialoguePortrait"
@@ -1092,7 +1092,7 @@ func _on_tenryu_changed(current_tenryu: int):
 
 func _create_pause_menu():
 	"""创建暂停菜单"""
-	var PauseMenuScript = load("res://PauseMenu.gd")
+	var PauseMenuScript = load("res://scripts/ui/menus/PauseMenu.gd")
 	if PauseMenuScript:
 		var pause_menu = PauseMenuScript.new()
 		pause_menu.name = "PauseMenu"

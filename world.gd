@@ -60,7 +60,7 @@ func _show_opening_dialogue():
 	if not dialogue_system:
 		print("[World] 创建DialoguePortrait...")
 		# 创建对话系统
-		var DialoguePortraitScript = load("res://DialoguePortrait.gd")
+		var DialoguePortraitScript = load("res://scripts/ui/gameplay/DialoguePortrait.gd")
 		if DialoguePortraitScript:
 			dialogue_system = DialoguePortraitScript.new()
 			dialogue_system.name = "DialoguePortrait"
