@@ -1,20 +1,13 @@
 extends Node
-## 场景管理器 - 统一管理场景切换和转换动画
-##
-## 功能:
-## - 场景加载和卸载
-## - 场景转换动画（淡入淡出）
-## - 场景状态保存和恢复
-## - 支持多地图架构
-##
-## 使用示例:
-##   # 切换到战斗场景
-##   SceneManager.change_scene(SceneManager.Scene.BATTLE)
-##
-##   # 切换到小镇场景（带淡出效果）
-##   SceneManager.change_scene(SceneManager.Scene.TOWN, "fade", 0.5)
+## SceneManager - 统一场景管理器
+## 合并了枚举式和字符串式两种API
 
-# 场景枚举
+signal scene_loading_started()
+signal scene_loading_finished()
+signal transition_started()
+signal transition_finished()
+
+# ==================== 场景枚举（向后兼容） ====================
 enum Scene {
 	MAIN_MENU,
 	TOWN,
@@ -22,168 +15,307 @@ enum Scene {
 	SETTINGS,
 	GAME_OVER,
 	VICTORY,
-	LOADING
+	LOADING,
+	FARM,
+	DUNGEON_ENTRANCE
 }
 
-# 场景路径映射
+# ==================== 场景路径映射 ====================
+# 枚举到路径映射
 var scene_paths: Dictionary = {
-	Scene.MAIN_MENU: "res://MainMenu.tscn",
-	Scene.TOWN: "res://TownWorld.tscn",
+	Scene.MAIN_MENU: "res://TitleScreen.tscn",
+	Scene.TOWN: "res://scenes/overworld/town/Town.tscn",
 	Scene.BATTLE: "res://world.tscn",
 	Scene.SETTINGS: "res://SettingsMenu.tscn",
 	Scene.GAME_OVER: "res://GameOverScreen.tscn",
 	Scene.VICTORY: "res://VictoryScreen.tscn",
-	Scene.LOADING: "res://LoadingScreen.tscn"
+	Scene.LOADING: "res://LoadingScreen.tscn",
+	Scene.FARM: "res://scenes/overworld/farm/Farm.tscn",
+	Scene.DUNGEON_ENTRANCE: "res://scenes/overworld/dungeon_entrance/DungeonEntrance.tscn"
 }
 
-# 当前场景
+# 字符串到路径映射
+const SCENES: Dictionary = {
+	"menu": "res://TitleScreen.tscn",
+	"town": "res://scenes/overworld/town/Town.tscn",
+	"farm": "res://scenes/overworld/farm/Farm.tscn",
+	"dungeon_entrance": "res://scenes/overworld/dungeon_entrance/DungeonEntrance.tscn",
+	"combat": "res://world.tscn",
+	"battle": "res://world.tscn",
+	"settings": "res://SettingsMenu.tscn",
+	"game_over": "res://GameOverScreen.tscn",
+	"victory": "res://VictoryScreen.tscn",
+	"loading": "res://LoadingScreen.tscn"
+}
+
+# ==================== 状态变量 ====================
 var current_scene: Node = null
 var current_scene_type: Scene = Scene.MAIN_MENU
+var current_scene_name: String = ""
+var previous_scene_name: String = ""
 
-# 转换层
+var is_transitioning: bool = false
+var transition_duration: float = 0.5
+
+# 场景状态保存
+var scene_states: Dictionary = {}
+
+# 过渡层
 var transition_layer: CanvasLayer = null
 var transition_rect: ColorRect = null
 
-# 场景状态字典（用于保存和恢复场景状态）
-var scene_states: Dictionary = {}
-
-func _ready():
-	print("SceneManager: 初始化中...")
+func _ready() -> void:
+	print("[SceneManager] 初始化中...")
 	_setup_transition_layer()
 
-	# 获取当前场景
 	var root = get_tree().root
 	current_scene = root.get_child(root.get_child_count() - 1)
-	print("SceneManager: 初始化完成")
+	print("[SceneManager] 初始化完成")
 
-## 设置转换层
+# ==================== 过渡层设置 ====================
 func _setup_transition_layer() -> void:
 	transition_layer = CanvasLayer.new()
-	transition_layer.layer = 100  # 最高层
+	transition_layer.layer = 100
 	transition_layer.name = "TransitionLayer"
 
 	transition_rect = ColorRect.new()
 	transition_rect.color = Color(0, 0, 0, 0)
-	transition_rect.anchor_right = 1.0
-	transition_rect.anchor_bottom = 1.0
+	transition_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	transition_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	transition_layer.add_child(transition_rect)
-	
-	# Use call_deferred to avoid "Parent node is busy setting up children" error during initialization
 	get_tree().root.call_deferred("add_child", transition_layer)
 
-## 切换场景
-## @param scene_type: Scene 枚举类型
-## @param transition_type: 转换类型 ("fade", "instant", "slide")
-## @param duration: 转换时长（秒）
-## @param preserve_state: 是否保存当前场景状态
-func change_scene(scene_type: Scene, transition_type: String = "fade", duration: float = 0.5, preserve_state: bool = false) -> void:
-	print("SceneManager: 切换场景到 %s" % get_scene_name(scene_type))
+# ==================== 场景切换（字符串API） ====================
+## 使用字符串key切换场景
+func change_scene(scene_key, spawn_point: String = "", transition_type: String = "fade", duration: float = 0.5) -> void:
+	# 支持Scene枚举或字符串
+	var scene_path: String = ""
+	var scene_name: String = ""
 
-	# 1. 保存状态（如需要）
-	if preserve_state and current_scene:
-		_save_scene_state(current_scene_type)
+	if scene_key is int:  # Scene枚举
+		scene_path = scene_paths.get(scene_key, "")
+		scene_name = get_scene_name(scene_key)
+	elif scene_key is String:  # 字符串key
+		scene_path = SCENES.get(scene_key, scene_key)  # 如果不在字典中，假设是路径
+		scene_name = scene_key
+	else:
+		push_error("[SceneManager] 无效的场景key类型")
+		return
 
-	# 2. 播放退出动画
+	if scene_path.is_empty():
+		push_error("[SceneManager] 场景不存在: %s" % str(scene_key))
+		return
+
+	if is_transitioning:
+		push_warning("[SceneManager] 正在切换场景，忽略新请求")
+		return
+
+	is_transitioning = true
+	previous_scene_name = current_scene_name
+	current_scene_name = scene_name
+
+	print("[SceneManager] 切换场景到: %s" % scene_name)
+
+	# 过渡动画
 	match transition_type:
 		"fade":
-			await fade_out(duration)
+			await _fade_out(duration)
 		"instant":
 			pass
 		_:
-			await fade_out(duration)
+			await _fade_out(duration)
 
-	# 3. 清理当前场景
+	# 清理当前场景
+	scene_loading_started.emit()
 	if current_scene and is_instance_valid(current_scene):
 		current_scene.queue_free()
 		await get_tree().process_frame
 
-	# 4. 加载新场景
-	var scene_path = get_scene_path(scene_type)
-	if scene_path.is_empty():
-		push_error("SceneManager: 场景类型 %d 没有对应的路径" % scene_type)
-		return
-
+	# 加载新场景
 	var new_scene_resource = load(scene_path)
 	if not new_scene_resource:
-		push_error("SceneManager: 无法加载场景 '%s'" % scene_path)
+		push_error("[SceneManager] 无法加载场景: %s" % scene_path)
+		is_transitioning = false
 		return
 
 	current_scene = new_scene_resource.instantiate()
 	get_tree().root.add_child(current_scene)
 	get_tree().current_scene = current_scene
-	current_scene_type = scene_type
 
-	# 5. 播放进入动画
+	# 更新枚举类型
+	current_scene_type = _name_to_scene_type(scene_name)
+
+	scene_loading_finished.emit()
+
+	# 设置出生点
+	if spawn_point != "":
+		await get_tree().process_frame
+		_set_player_spawn_point(spawn_point)
+
+	# 淡入
 	match transition_type:
 		"fade":
-			await fade_in(duration)
+			await _fade_in(duration)
 		"instant":
 			pass
 		_:
-			await fade_in(duration)
+			await _fade_in(duration)
 
-	# 6. 发送信号
-	SignalBus.scene_changed.emit(get_scene_name(scene_type))
-	print("SceneManager: 场景切换完成")
+	is_transitioning = false
 
-## 淡出动画
-func fade_out(duration: float = 0.5) -> void:
+	# 发送信号
+	if SignalBus:
+		SignalBus.scene_changed.emit(scene_name)
+
+	print("[SceneManager] 场景切换完成")
+
+## 直接切换（无动画）
+func change_scene_instant(scene_key) -> void:
+	var scene_path: String = ""
+	var scene_name: String = ""
+
+	if scene_key is int:
+		scene_path = scene_paths.get(scene_key, "")
+		scene_name = get_scene_name(scene_key)
+	elif scene_key is String:
+		scene_path = SCENES.get(scene_key, scene_key)
+		scene_name = scene_key
+
+	if scene_path.is_empty():
+		push_error("[SceneManager] 场景不存在: %s" % str(scene_key))
+		return
+
+	previous_scene_name = current_scene_name
+	current_scene_name = scene_name
+	get_tree().change_scene_to_file(scene_path)
+
+# ==================== 战斗场景专用 ====================
+## 进入战斗
+func enter_combat(dungeon_level: int = 1) -> void:
+	_save_overworld_state()
+
+	if GameStateManager:
+		GameStateManager.start_combat(dungeon_level)
+
+	change_scene("combat")
+
+## 退出战斗
+func exit_combat(victory: bool) -> void:
+	if GameStateManager:
+		GameStateManager.end_combat(victory)
+
+	_restore_overworld_state()
+
+	if previous_scene_name in ["town", "farm", "dungeon_entrance"]:
+		change_scene(previous_scene_name)
+	else:
+		change_scene("town")
+
+# ==================== 过渡动画 ====================
+func _fade_out(duration: float = 0.5) -> void:
 	if not transition_rect:
 		return
 
+	transition_started.emit()
 	transition_rect.mouse_filter = Control.MOUSE_FILTER_STOP
+
 	var tween = create_tween()
 	tween.tween_property(transition_rect, "color:a", 1.0, duration)
 	await tween.finished
 
-## 淡入动画
-func fade_in(duration: float = 0.5) -> void:
+func _fade_in(duration: float = 0.5) -> void:
 	if not transition_rect:
 		return
 
 	var tween = create_tween()
 	tween.tween_property(transition_rect, "color:a", 0.0, duration)
 	await tween.finished
-	transition_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-## 获取场景路径
+	transition_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	transition_finished.emit()
+
+# 向后兼容的公共方法
+func fade_out(duration: float = 0.5) -> void:
+	await _fade_out(duration)
+
+func fade_in(duration: float = 0.5) -> void:
+	await _fade_in(duration)
+
+# ==================== 辅助方法 ====================
 func get_scene_path(scene_type: Scene) -> String:
 	return scene_paths.get(scene_type, "")
 
-## 获取场景名称
 func get_scene_name(scene_type: Scene) -> String:
 	match scene_type:
-		Scene.MAIN_MENU: return "主菜单"
-		Scene.TOWN: return "小镇"
-		Scene.BATTLE: return "战斗"
-		Scene.SETTINGS: return "设置"
-		Scene.GAME_OVER: return "游戏结束"
-		Scene.VICTORY: return "胜利"
-		Scene.LOADING: return "加载中"
-		_: return "未知场景"
+		Scene.MAIN_MENU: return "menu"
+		Scene.TOWN: return "town"
+		Scene.BATTLE: return "battle"
+		Scene.SETTINGS: return "settings"
+		Scene.GAME_OVER: return "game_over"
+		Scene.VICTORY: return "victory"
+		Scene.LOADING: return "loading"
+		Scene.FARM: return "farm"
+		Scene.DUNGEON_ENTRANCE: return "dungeon_entrance"
+		_: return "unknown"
 
-## 保存场景状态
-func _save_scene_state(scene_type: Scene) -> void:
-	if not current_scene:
+func _name_to_scene_type(name: String) -> Scene:
+	match name:
+		"menu", "main_menu": return Scene.MAIN_MENU
+		"town": return Scene.TOWN
+		"battle", "combat": return Scene.BATTLE
+		"settings": return Scene.SETTINGS
+		"game_over": return Scene.GAME_OVER
+		"victory": return Scene.VICTORY
+		"loading": return Scene.LOADING
+		"farm": return Scene.FARM
+		"dungeon_entrance": return Scene.DUNGEON_ENTRANCE
+		_: return Scene.MAIN_MENU
+
+func _set_player_spawn_point(spawn_point: String) -> void:
+	var spawn_node = get_tree().current_scene.find_child(spawn_point, true, false)
+	if spawn_node == null:
+		push_warning("[SceneManager] 出生点不存在: %s" % spawn_point)
 		return
 
-	var state = {}
-	# 这里可以添加保存逻辑，例如保存玩家位置、NPC状态等
-	# 具体实现取决于游戏需求
+	var player = get_tree().current_scene.find_child("Player", true, false)
+	if player == null:
+		push_warning("[SceneManager] 场景中没有玩家")
+		return
 
-	scene_states[scene_type] = state
-	print("SceneManager: 已保存场景 %s 的状态" % get_scene_name(scene_type))
+	player.global_position = spawn_node.global_position
 
-## 恢复场景状态
-func restore_scene_state(scene_type: Scene) -> void:
-	if scene_type in scene_states:
-		var state = scene_states[scene_type]
-		# 这里可以添加恢复逻辑
-		print("SceneManager: 已恢复场景 %s 的状态" % get_scene_name(scene_type))
+func _save_overworld_state() -> void:
+	var player = get_tree().current_scene.find_child("Player", true, false)
+	if player and GameStateManager:
+		GameStateManager.player_data.position = player.global_position
+		GameStateManager.player_data.current_scene = current_scene_name
+
+func _restore_overworld_state() -> void:
+	pass
+
+## 重新加载当前场景
+func reload_current_scene() -> void:
+	if current_scene_name == "":
+		push_warning("[SceneManager] 没有当前场景")
+		return
+	change_scene(current_scene_name)
+
+## 返回上一个场景
+func return_to_previous_scene() -> void:
+	if previous_scene_name == "":
+		push_warning("[SceneManager] 没有上一个场景")
+		return
+	change_scene(previous_scene_name)
 
 ## 注册自定义场景路径
 func register_scene(scene_type: Scene, scene_path: String) -> void:
 	scene_paths[scene_type] = scene_path
-	print("SceneManager: 已注册场景 %s -> %s" % [get_scene_name(scene_type), scene_path])
+
+## 保存/恢复场景状态
+func save_scene_state(scene_type: Scene) -> void:
+	scene_states[scene_type] = {}
+
+func restore_scene_state(scene_type: Scene) -> void:
+	if scene_type in scene_states:
+		pass
