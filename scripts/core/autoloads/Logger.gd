@@ -1,5 +1,5 @@
 extends Node
-class_name Logger
+class_name GameLogger
 
 ## Logger - 统一日志系统
 ## 提供分级日志输出，支持启用/禁用和过滤
