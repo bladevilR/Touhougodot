@@ -110,7 +110,7 @@ func _on_player_died() -> void:
 
 	# 切换到游戏结束场景
 	if SceneManager:
-		SceneManager.change_scene(SceneManager.Scene.GAME_OVER, "fade", 1.0)
+		SceneManager.change_scene(SceneManager.Scene.GAME_OVER, "", "fade", 1.0)
 
 ## 玩家升级
 func _on_player_leveled_up(new_level: int) -> void:
@@ -178,7 +178,7 @@ func _on_boss_defeated(boss_name: String) -> void:
 
 	# 切换到胜利场景
 	if SceneManager:
-		SceneManager.change_scene(SceneManager.Scene.VICTORY, "fade", 1.0)
+		SceneManager.change_scene(SceneManager.Scene.VICTORY, "", "fade", 1.0)
 
 ## 伤害造成
 func _on_damage_dealt(damage: float, position: Vector2, is_critical: bool, weapon_id: String = "") -> void:
@@ -238,4 +238,4 @@ func force_end_game() -> void:
 
 	# 切换到主菜单
 	if SceneManager:
-		SceneManager.change_scene(SceneManager.Scene.MAIN_MENU, "fade", 0.5)
+		SceneManager.change_scene(SceneManager.Scene.MAIN_MENU, "", "fade", 0.5)

@@ -13,7 +13,7 @@ func _ready():
 	initialize_game()
 
 	# 实例化RoomLayoutManager（随机地图系统）
-	var RoomLayoutManagerScript = load("res://RoomLayoutManager.gd")
+	var RoomLayoutManagerScript = load("res://scripts/gameplay/dungeons/RoomLayoutManager.gd")
 	if RoomLayoutManagerScript:
 		var room_layout_manager = RoomLayoutManagerScript.new()
 		room_layout_manager.name = "RoomLayoutManager"

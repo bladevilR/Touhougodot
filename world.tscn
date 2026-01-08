@@ -2,14 +2,14 @@
 
 [ext_resource type="Script" path="res://world.gd" id="1"]
 [ext_resource type="PackedScene" path="res://Player.tscn" id="2"]
-[ext_resource type="Script" path="res://ExperienceManager.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/gameplay/progression/experience/ExperienceManager.gd" id="3"]
 [ext_resource type="Script" path="res://EnemySpawner.gd" id="4"]
 [ext_resource type="PackedScene" path="res://GameUI.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://Enemy.tscn" id="6"]
-[ext_resource type="Script" path="res://MapSystem.gd" id="7"]
-[ext_resource type="Script" path="res://RoomManager.gd" id="8"]
-[ext_resource type="Script" path="res://DebugChecker.gd" id="9"]
-[ext_resource type="Script" path="res://RoomLayoutManager.gd" id="10"]
+[ext_resource type="Script" path="res://scripts/gameplay/dungeons/MapSystem.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/gameplay/dungeons/RoomManager.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/utils/DebugChecker.gd" id="9"]
+[ext_resource type="Script" path="res://scripts/gameplay/dungeons/RoomLayoutManager.gd" id="10"]
 
 [node name="World" type="Node2D"]
 y_sort_enabled = true
