@@ -25,10 +25,8 @@ enum Scene {
 var scene_paths: Dictionary = {
 	Scene.MAIN_MENU: "res://TitleScreen.tscn",
 	Scene.TOWN: "res://scenes/overworld/town/Town.tscn",
-	Scene.BATTLE: "res://world.tscn",
+	Scene.BATTLE: "res://scenes/combat/CombatArena.tscn",
 	Scene.SETTINGS: "res://SettingsMenu.tscn",
-	Scene.GAME_OVER: "res://GameOverScreen.tscn",
-	Scene.VICTORY: "res://VictoryScreen.tscn",
 	Scene.LOADING: "res://LoadingScreen.tscn",
 	Scene.FARM: "res://scenes/overworld/farm/Farm.tscn",
 	Scene.DUNGEON_ENTRANCE: "res://scenes/overworld/dungeon_entrance/DungeonEntrance.tscn"
@@ -40,11 +38,9 @@ const SCENES: Dictionary = {
 	"town": "res://scenes/overworld/town/Town.tscn",
 	"farm": "res://scenes/overworld/farm/Farm.tscn",
 	"dungeon_entrance": "res://scenes/overworld/dungeon_entrance/DungeonEntrance.tscn",
-	"combat": "res://world.tscn",
-	"battle": "res://world.tscn",
+	"combat": "res://scenes/combat/CombatArena.tscn",
+	"battle": "res://scenes/combat/CombatArena.tscn",
 	"settings": "res://SettingsMenu.tscn",
-	"game_over": "res://GameOverScreen.tscn",
-	"victory": "res://VictoryScreen.tscn",
 	"loading": "res://LoadingScreen.tscn"
 }
 

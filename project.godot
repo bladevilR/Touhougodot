@@ -15,6 +15,10 @@ run/main_scene="res://scenes/combat/CombatArena.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
+[audio]
+
+driver/output_latency=50
+
 [autoload]
 
 SignalBus="*res://SignalBus.gd"
@@ -36,10 +40,6 @@ ItemData="*res://scripts/data/ItemData.gd"
 QuestData="*res://scripts/data/QuestData.gd"
 GlobalUIManager="*res://scripts/core/GlobalUIManager.gd"
 Logger="*res://scripts/core/autoloads/Logger.gd"
-
-[audio]
-
-driver/output_latency=50
 
 [display]
 
