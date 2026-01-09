@@ -152,7 +152,7 @@ func _create_grid_visuals() -> void:
 			var debug_label = Label.new()
 			debug_label.name = "DebugLabel"
 			debug_label.scale = Vector2(0.5, 0.5)
-			debug_label.theme_override_colors["font_color"] = Color(1, 1, 1, 1)
+			debug_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 			plot_node.add_child(debug_label)
 
 			plot_nodes[plot_id] = plot_node
@@ -191,8 +191,8 @@ func _create_ui() -> void:
 	season_label = Label.new()
 	season_label.offset_left = 12
 	season_label.offset_top = 8
-	season_label.theme_override_font_sizes["font_size"] = 16
-	season_label.theme_override_colors["font_color"] = Color(1, 0.9, 0.3, 1) # 金色
+	season_label.add_theme_font_size_override("font_size", 16)
+	season_label.add_theme_color_override("font_color", Color(1, 0.9, 0.3, 1)) # 金色
 	top_panel.add_child(season_label)
 
 	# 左下角面板 - 当前工具和地块信息
@@ -217,8 +217,8 @@ func _create_ui() -> void:
 	var tool_title = Label.new()
 	tool_title.offset_left = 12
 	tool_title.offset_top = 8
-	tool_title.theme_override_font_sizes["font_size"] = 12
-	tool_title.theme_override_colors["font_color"] = Color(0.6, 0.9, 1, 1) # 蓝色
+	tool_title.add_theme_font_size_override("font_size", 12)
+	tool_title.add_theme_color_override("font_color", Color(0.6, 0.9, 1, 1)) # 蓝色
 	tool_title.text = "当前工具:"
 	left_panel.add_child(tool_title)
 
@@ -227,8 +227,8 @@ func _create_ui() -> void:
 	tool_label.offset_top = 22
 	tool_label.offset_right = 388
 	tool_label.offset_bottom = 40
-	tool_label.theme_override_font_sizes["font_size"] = 18
-	tool_label.theme_override_colors["font_color"] = Color(1, 1, 1, 1) # 白色
+	tool_label.add_theme_font_size_override("font_size", 18)
+	tool_label.add_theme_color_override("font_color", Color(1, 1, 1, 1)) # 白色
 	left_panel.add_child(tool_label)
 
 	# 地块信息
@@ -237,8 +237,8 @@ func _create_ui() -> void:
 	info_label.offset_top = 50
 	info_label.offset_right = 388
 	info_label.offset_bottom = 150
-	info_label.theme_override_font_sizes["font_size"] = 12
-	info_label.theme_override_colors["font_color"] = Color(0.8, 0.8, 0.8, 1) # 浅灰色
+	info_label.add_theme_font_size_override("font_size", 12)
+	info_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1)) # 浅灰色
 	left_panel.add_child(info_label)
 
 	# 右下角面板 - 控制说明
@@ -262,8 +262,8 @@ func _create_ui() -> void:
 	var controls_title = Label.new()
 	controls_title.offset_left = 12
 	controls_title.offset_top = 8
-	controls_title.theme_override_font_sizes["font_size"] = 12
-	controls_title.theme_override_colors["font_color"] = Color(0.4, 1, 0.4, 1) # 绿色
+	controls_title.add_theme_font_size_override("font_size", 12)
+	controls_title.add_theme_color_override("font_color", Color(0.4, 1, 0.4, 1)) # 绿色
 	controls_title.text = "控制说明:"
 	right_panel.add_child(controls_title)
 
@@ -272,8 +272,8 @@ func _create_ui() -> void:
 	help_label.offset_top = 22
 	help_label.offset_right = 618
 	help_label.offset_bottom = 150
-	help_label.theme_override_font_sizes["font_size"] = 11
-	help_label.theme_override_colors["font_color"] = Color(0.8, 0.8, 0.8, 1)
+	help_label.add_theme_font_size_override("font_size", 11)
+	help_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
 	help_label.text = "[1]手 [2]锄头 [3]水壶 [4]肥料 [5]番茄 [6]小麦 [7]南瓜 [8]红萝卜 | [SPACE]下一天"
 	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	right_panel.add_child(help_label)
