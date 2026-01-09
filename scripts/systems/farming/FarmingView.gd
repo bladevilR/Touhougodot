@@ -73,13 +73,13 @@ func _create_grid_visuals() -> void:
 		(get_viewport_rect().size.x - total_width) / 2,
 		(get_viewport_rect().size.y - total_height) / 2
 	)
-	
+
 	# 创建地块容器
 	var plots_container = Node2D.new()
 	plots_container.name = "PlotsContainer"
 	plots_container.position = offset
 	add_child(plots_container)
-	
+
 	var plot_id = 0
 	for y in range(grid_height):
 		for x in range(grid_width):
@@ -89,15 +89,23 @@ func _create_grid_visuals() -> void:
 				y * (cell_size.y + spacing)
 			)
 			plots_container.add_child(plot_node)
-			
-			# 1. 土地背景 (ColorRect)
+
+			# 1. 土地背景 (ColorRect) - 添加边框
 			var soil = ColorRect.new()
 			soil.name = "Soil"
 			soil.custom_minimum_size = cell_size
 			soil.size = cell_size
 			soil.color = Color(0.3, 0.5, 0.3) # 默认草地颜色
 			plot_node.add_child(soil)
-			
+
+			# 1.5 边框装饰
+			var border = ColorRect.new()
+			border.name = "Border"
+			border.size = cell_size
+			border.color = Color.TRANSPARENT
+			border.draw_behind = false
+			plot_node.add_child(border)
+
 			# 2. 作物 Sprite
 			var crop_sprite = Sprite2D.new()
 			crop_sprite.name = "CropSprite"
@@ -105,28 +113,56 @@ func _create_grid_visuals() -> void:
 			crop_sprite.scale = Vector2(0.8, 0.8)
 			crop_sprite.visible = false
 			plot_node.add_child(crop_sprite)
-			
+
 			# 3. 状态指示器 (例如：湿润的覆盖层)
 			var wet_overlay = ColorRect.new()
 			wet_overlay.name = "WetOverlay"
 			wet_overlay.size = cell_size
-			wet_overlay.color = Color(0.0, 0.0, 0.5, 0.3) # 半透明蓝色
+			wet_overlay.color = Color(0.0, 0.0, 0.8, 0.2) # 半透明蓝色
 			wet_overlay.visible = false
 			plot_node.add_child(wet_overlay)
 
-			# 4. 调试/信息 Label
+			# 4. 肥料指示器
+			var fertilizer_overlay = ColorRect.new()
+			fertilizer_overlay.name = "FertilizerOverlay"
+			fertilizer_overlay.size = cell_size
+			fertilizer_overlay.color = Color(0.8, 0.6, 0.2, 0.2) # 半透明棕色
+			fertilizer_overlay.visible = false
+			plot_node.add_child(fertilizer_overlay)
+
+			# 5. 生长进度条容器
+			var progress_container = Control.new()
+			progress_container.name = "ProgressContainer"
+			progress_container.offset_top = cell_size.y - 8
+			progress_container.custom_minimum_size = Vector2(cell_size.x, 6)
+			plot_node.add_child(progress_container)
+
+			var progress_bg = ColorRect.new()
+			progress_bg.size = Vector2(cell_size.x, 6)
+			progress_bg.color = Color(0, 0, 0, 0.5)
+			progress_container.add_child(progress_bg)
+
+			var progress_bar = ColorRect.new()
+			progress_bar.name = "ProgressBar"
+			progress_bar.size = Vector2(cell_size.x, 6)
+			progress_bar.color = Color(0.4, 0.8, 0.4, 0.8) # 绿色
+			progress_bar.visible = false
+			progress_container.add_child(progress_bar)
+
+			# 6. 调试/信息 Label
 			var debug_label = Label.new()
 			debug_label.name = "DebugLabel"
 			debug_label.scale = Vector2(0.5, 0.5)
+			debug_label.theme_override_colors["font_color"] = Color(1, 1, 1, 1)
 			plot_node.add_child(debug_label)
 
 			plot_nodes[plot_id] = plot_node
 			plot_id += 1
-			
+
 	# 创建鼠标悬停框
 	hover_rect = ColorRect.new()
 	hover_rect.size = cell_size
-	hover_rect.color = Color(1, 1, 1, 0.2)
+	hover_rect.color = Color(1, 1, 1, 0.15)
 	hover_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hover_rect.visible = false
 	plots_container.add_child(hover_rect)
@@ -134,34 +170,114 @@ func _create_grid_visuals() -> void:
 func _create_ui() -> void:
 	var canvas_layer = CanvasLayer.new()
 	add_child(canvas_layer)
-	
-	var vbox = VBoxContainer.new()
-	vbox.position = Vector2(20, 20)
-	canvas_layer.add_child(vbox)
-	
+
+	# 顶部面板 - 季节信息
+	var top_panel = Control.new()
+	top_panel.offset_left = 20
+	top_panel.offset_top = 20
+	top_panel.offset_right = 400
+	top_panel.offset_bottom = 80
+	canvas_layer.add_child(top_panel)
+
+	var top_bg = ColorRect.new()
+	top_bg.offset_right = 380
+	top_bg.offset_bottom = 60
+	top_bg.color = Color(0, 0, 0, 0.7)
+	top_bg.corner_radius_top_left = 8
+	top_bg.corner_radius_top_right = 8
+	top_bg.corner_radius_bottom_left = 8
+	top_bg.corner_radius_bottom_right = 8
+	top_panel.add_child(top_bg)
+
 	season_label = Label.new()
-	vbox.add_child(season_label)
-	
+	season_label.offset_left = 12
+	season_label.offset_top = 8
+	season_label.theme_override_font_sizes["font_size"] = 16
+	season_label.theme_override_colors["font_color"] = Color(1, 0.9, 0.3, 1) # 金色
+	top_panel.add_child(season_label)
+
+	# 左下角面板 - 当前工具和地块信息
+	var left_panel = Control.new()
+	left_panel.offset_left = 20
+	left_panel.offset_top = 900
+	left_panel.offset_right = 420
+	left_panel.offset_bottom = 1060
+	canvas_layer.add_child(left_panel)
+
+	var left_bg = ColorRect.new()
+	left_bg.offset_right = 400
+	left_bg.offset_bottom = 160
+	left_bg.color = Color(0, 0, 0, 0.7)
+	left_bg.corner_radius_top_left = 8
+	left_bg.corner_radius_top_right = 8
+	left_bg.corner_radius_bottom_left = 8
+	left_bg.corner_radius_bottom_right = 8
+	left_panel.add_child(left_bg)
+
+	# 工具标签
+	var tool_title = Label.new()
+	tool_title.offset_left = 12
+	tool_title.offset_top = 8
+	tool_title.theme_override_font_sizes["font_size"] = 12
+	tool_title.theme_override_colors["font_color"] = Color(0.6, 0.9, 1, 1) # 蓝色
+	tool_title.text = "当前工具:"
+	left_panel.add_child(tool_title)
+
 	tool_label = Label.new()
-	vbox.add_child(tool_label)
-	
+	tool_label.offset_left = 12
+	tool_label.offset_top = 22
+	tool_label.offset_right = 388
+	tool_label.offset_bottom = 40
+	tool_label.theme_override_font_sizes["font_size"] = 18
+	tool_label.theme_override_colors["font_color"] = Color(1, 1, 1, 1) # 白色
+	left_panel.add_child(tool_label)
+
+	# 地块信息
 	info_label = Label.new()
-	vbox.add_child(info_label)
-	
+	info_label.offset_left = 12
+	info_label.offset_top = 50
+	info_label.offset_right = 388
+	info_label.offset_bottom = 150
+	info_label.theme_override_font_sizes["font_size"] = 12
+	info_label.theme_override_colors["font_color"] = Color(0.8, 0.8, 0.8, 1) # 浅灰色
+	left_panel.add_child(info_label)
+
+	# 右下角面板 - 控制说明
+	var right_panel = Control.new()
+	right_panel.offset_left = 430
+	right_panel.offset_top = 900
+	right_panel.offset_right = 1060
+	right_panel.offset_bottom = 1060
+	canvas_layer.add_child(right_panel)
+
+	var right_bg = ColorRect.new()
+	right_bg.offset_right = 630
+	right_bg.offset_bottom = 160
+	right_bg.color = Color(0, 0, 0, 0.7)
+	right_bg.corner_radius_top_left = 8
+	right_bg.corner_radius_top_right = 8
+	right_bg.corner_radius_bottom_left = 8
+	right_bg.corner_radius_bottom_right = 8
+	right_panel.add_child(right_bg)
+
+	var controls_title = Label.new()
+	controls_title.offset_left = 12
+	controls_title.offset_top = 8
+	controls_title.theme_override_font_sizes["font_size"] = 12
+	controls_title.theme_override_colors["font_color"] = Color(0.4, 1, 0.4, 1) # 绿色
+	controls_title.text = "控制说明:"
+	right_panel.add_child(controls_title)
+
 	var help_label = Label.new()
-	help_label.text = """
-	控制说明:
-	[1] 手 (收获/查看)
-	[2] 锄头 (耕地)
-	[3] 水壶 (浇水)
-	[4] 肥料
-	[5] 番茄种子 (春/夏)
-	[6] 小麦种子 (夏/秋)
-	[7] 南瓜种子 (秋)
-	[8] 红萝卜种子 (春/秋/冬)
-	[SPACE] 下一天
-	"""
-	vbox.add_child(help_label)
+	help_label.offset_left = 12
+	help_label.offset_top = 22
+	help_label.offset_right = 618
+	help_label.offset_bottom = 150
+	help_label.theme_override_font_sizes["font_size"] = 11
+	help_label.theme_override_colors["font_color"] = Color(0.8, 0.8, 0.8, 1)
+	help_label.text = "[1]手 [2]锄头 [3]水壶 [4]肥料 [5]番茄 [6]小麦 [7]南瓜 [8]红萝卜 | [SPACE]下一天"
+	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	right_panel.add_child(help_label)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
@@ -285,21 +401,28 @@ func _update_plot_visual(plot_id: int) -> void:
 	var soil: ColorRect = node.get_node("Soil")
 	var crop_sprite: Sprite2D = node.get_node("CropSprite")
 	var wet_overlay: ColorRect = node.get_node("WetOverlay")
+	var fertilizer_overlay: ColorRect = node.get_node("FertilizerOverlay")
+	var progress_container: Control = node.get_node("ProgressContainer")
+	var progress_bar: ColorRect = progress_container.get_node("ProgressBar")
 	var debug_label: Label = node.get_node("DebugLabel")
-	
+
 	# 1. 更新土地颜色
 	if plot.is_tilled:
 		soil.color = Color(0.55, 0.47, 0.35) # 耕地颜色 (土黄)
 	else:
 		soil.color = Color(0.3, 0.5, 0.3) # 草地颜色
-		
+
 	# 2. 更新湿润状态
 	wet_overlay.visible = plot.water_level > 20.0 # 稍微有点水就显示湿润
-	
-	# 3. 更新作物 Sprite
+
+	# 3. 更新肥料状态
+	fertilizer_overlay.visible = plot.fertilizer_level > 20.0
+
+	# 4. 更新作物 Sprite 和进度条
 	if plot.has_crop():
 		crop_sprite.visible = true
-		
+		progress_bar.visible = true
+
 		# 根据生长阶段选择贴图
 		if plot.growth_stage < 30:
 			crop_sprite.texture = TEX_SHOOT_SMALL
@@ -313,34 +436,54 @@ func _update_plot_visual(plot_id: int) -> void:
 				3: crop_sprite.texture = TEX_CROP_PUMPKIN
 				4: crop_sprite.texture = TEX_CROP_CARROT
 				_: crop_sprite.texture = TEX_SHOOT_MEDIUM # Fallback
-	else:
-		crop_sprite.visible = false
-		
-	# 4. Debug 信息
-	if plot.has_crop():
+
+		# 更新进度条
+		var progress_ratio = float(plot.growth_stage) / 100.0
+		var progress_width = cell_size.x * clamp(progress_ratio, 0.0, 1.0)
+		progress_bar.size = Vector2(progress_width, 6)
+
+		# 颜色根据生长阶段变化
+		if plot.growth_stage < 50:
+			progress_bar.color = Color(0.8, 0.6, 0.2, 0.8) # 黄色
+		elif plot.growth_stage < 100:
+			progress_bar.color = Color(0.4, 0.8, 0.4, 0.8) # 绿色
+		else:
+			progress_bar.color = Color(1, 0.8, 0.2, 0.8) # 金色（成熟）
+
+		# 显示百分比
 		debug_label.text = "%d%%" % plot.growth_stage
 	else:
+		crop_sprite.visible = false
+		progress_bar.visible = false
 		debug_label.text = ""
 
 func _update_ui_labels() -> void:
 	season_label.text = "季节: %s | 第 %d 天" % [farming_manager.current_season, farming_manager.current_day]
-	
-	var tool_name = Tool.keys()[current_tool]
-	tool_label.text = "当前工具: %s" % tool_name
+
+	var tool_names = {
+		Tool.HAND: "手 (查看/收获)",
+		Tool.HOE: "锄头 (耕地)",
+		Tool.WATER_CAN: "水壶 (浇水)",
+		Tool.SEEDS_TOMATO: "番茄种子",
+		Tool.SEEDS_WHEAT: "小麦种子",
+		Tool.SEEDS_PUMPKIN: "南瓜种子",
+		Tool.SEEDS_CARROT: "红萝卜种子",
+		Tool.FERTILIZER: "肥料"
+	}
+
+	tool_label.text = tool_names[current_tool]
 
 func _update_info_label(plot: FarmPlot) -> void:
 	if not plot: return
-	
+
 	var status = "未耕种"
+	var crop_info = ""
+
 	if plot.is_tilled:
 		status = "已耕地"
 		if plot.has_crop():
 			var crop_name = farming_manager.crops_database[plot.current_crop_id]["name"]
-			status = "%s (生长: %d%%)" % [crop_name, plot.growth_stage]
-	
-	info_label.text = """
-	地块 ID: %d
-	状态: %s
-	水分: %.1f
-	肥料: %.1f
-	""" % [plot.id, status, plot.water_level, plot.fertilizer_level]
+			status = "%s" % crop_name
+			crop_info = "生长: %d%% " % plot.growth_stage
+
+	info_label.text = "%s %s\n水: %.0f  肥: %.0f" % [crop_info, status, plot.water_level, plot.fertilizer_level]
