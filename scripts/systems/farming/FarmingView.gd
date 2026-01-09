@@ -103,7 +103,6 @@ func _create_grid_visuals() -> void:
 			border.name = "Border"
 			border.size = cell_size
 			border.color = Color.TRANSPARENT
-			border.draw_behind = false
 			plot_node.add_child(border)
 
 			# 2. 作物 Sprite
