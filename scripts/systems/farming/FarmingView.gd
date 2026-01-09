@@ -182,10 +182,6 @@ func _create_ui() -> void:
 	top_bg.offset_right = 380
 	top_bg.offset_bottom = 60
 	top_bg.color = Color(0, 0, 0, 0.7)
-	top_bg.corner_radius_top_left = 8
-	top_bg.corner_radius_top_right = 8
-	top_bg.corner_radius_bottom_left = 8
-	top_bg.corner_radius_bottom_right = 8
 	top_panel.add_child(top_bg)
 
 	season_label = Label.new()
@@ -207,10 +203,6 @@ func _create_ui() -> void:
 	left_bg.offset_right = 400
 	left_bg.offset_bottom = 160
 	left_bg.color = Color(0, 0, 0, 0.7)
-	left_bg.corner_radius_top_left = 8
-	left_bg.corner_radius_top_right = 8
-	left_bg.corner_radius_bottom_left = 8
-	left_bg.corner_radius_bottom_right = 8
 	left_panel.add_child(left_bg)
 
 	# 工具标签
@@ -253,10 +245,6 @@ func _create_ui() -> void:
 	right_bg.offset_right = 630
 	right_bg.offset_bottom = 160
 	right_bg.color = Color(0, 0, 0, 0.7)
-	right_bg.corner_radius_top_left = 8
-	right_bg.corner_radius_top_right = 8
-	right_bg.corner_radius_bottom_left = 8
-	right_bg.corner_radius_bottom_right = 8
 	right_panel.add_child(right_bg)
 
 	var controls_title = Label.new()
