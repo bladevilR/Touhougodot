@@ -152,3 +152,35 @@ signal item_harvested(item_id: String, amount: int)  # 物品被采集
 # --- 羁绊系统信号 ---
 @warning_ignore("unused_signal")
 signal bond_selected(bond_id: String)  # 选择羁绊角色
+
+# --- 时间系统信号 ---
+@warning_ignore("unused_signal")
+signal time_tick(total_minutes: int)  # 每游戏分钟触发
+@warning_ignore("unused_signal")
+signal hour_changed(hour: int)  # 整点触发
+@warning_ignore("unused_signal")
+signal time_of_day_changed(period: int)  # 时段变化 (黎明/上午/中午/下午/黄昏/夜晚/深夜)
+@warning_ignore("unused_signal")
+signal day_changed(day: int)  # 日期变化（TimeManager触发）
+
+# --- 日历系统信号 ---
+@warning_ignore("unused_signal")
+signal day_started(day: int, weekday: String, season: String)  # 新的一天开始（完整信息）
+@warning_ignore("unused_signal")
+signal week_changed(week: int)  # 周变化
+@warning_ignore("unused_signal")
+signal season_changed(old_season: String, new_season: String)  # 季节变化
+@warning_ignore("unused_signal")
+signal year_changed(year: int)  # 年变化
+@warning_ignore("unused_signal")
+signal festival_started(festival_id: String)  # 节日开始
+
+# --- 任务系统扩展信号 ---
+@warning_ignore("unused_signal")
+signal daily_quests_reset()  # 每日任务重置
+
+# --- 商店系统扩展信号 ---
+@warning_ignore("unused_signal")
+signal shop_stock_refreshed(shop_id: String)  # 商店库存刷新
+@warning_ignore("unused_signal")
+signal item_sold(item_id: String, amount: int, price: int)  # 出售物品

@@ -8,6 +8,7 @@ signal quest_updated(quest_id: String, objective_index: int)
 signal quest_completed(quest_id: String)
 signal quest_failed(quest_id: String)
 signal quest_objective_completed(quest_id: String, objective_index: int)
+signal quest_progress_updated(quest_id: String, objective_index: int, current: int, required: int)
 
 # 任务状态枚举
 enum QuestStatus {
@@ -29,10 +30,12 @@ enum QuestType {
 # quest_id: {status: QuestStatus, progress: [int], started_time: float}
 var active_quests: Dictionary = {}
 var completed_quests: Array[String] = []
+var last_daily_reset_day: int = -1  # 上次每日任务重置的日期
 
 func _ready():
 	# 监听游戏事件来更新任务进度
 	_connect_game_signals()
+	print("QuestManager: 初始化完成")
 
 ## 连接游戏信号
 func _connect_game_signals() -> void:
@@ -43,7 +46,9 @@ func _connect_game_signals() -> void:
 	if has_node("/root/InventoryManager"):
 		InventoryManager.item_added.connect(_on_item_collected)
 
-	# 可以添加更多信号监听...
+	# 监听日期变化（用于每日任务重置）
+	if SignalBus.has_signal("day_started"):
+		SignalBus.day_started.connect(_on_day_started)
 
 ## 开始任务
 func start_quest(quest_id: String) -> bool:
@@ -102,6 +107,9 @@ func update_quest_progress(quest_id: String, objective_index: int, amount: int =
 	quest_state.progress[objective_index] = min(current_progress + amount, required)
 
 	quest_updated.emit(quest_id, objective_index)
+
+	# 发送详细进度信号
+	quest_progress_updated.emit(quest_id, objective_index, quest_state.progress[objective_index], required)
 
 	# 检查目标是否完成
 	if quest_state.progress[objective_index] >= required:
@@ -168,13 +176,21 @@ func _grant_quest_rewards(quest_id: String) -> void:
 
 	# 经验奖励
 	if rewards.has("exp"):
-		pass
-		# TODO: 添加经验到玩家
+		var exp_amount = rewards.exp
+		# 尝试通过 ExperienceManager 添加经验
+		var exp_manager = get_tree().get_first_node_in_group("experience_manager")
+		if exp_manager and exp_manager.has_method("gain_xp"):
+			exp_manager.gain_xp(exp_amount)
+		# 发送通知
+		if SignalBus.has_signal("show_notification"):
+			SignalBus.show_notification.emit("获得 %d 经验!" % exp_amount, Color.YELLOW)
+		print("QuestManager: 发放经验奖励 %d" % exp_amount)
 
 	# 金币奖励
 	if rewards.has("coins"):
 		GameStateManager.player_data.coins += rewards.coins
 		SignalBus.coins_changed.emit(GameStateManager.player_data.coins)
+		print("QuestManager: 发放金币奖励 %d" % rewards.coins)
 
 	# 物品奖励
 	if rewards.has("items"):
@@ -182,6 +198,7 @@ func _grant_quest_rewards(quest_id: String) -> void:
 			var amount = rewards.items[item_id]
 			if has_node("/root/InventoryManager"):
 				InventoryManager.add_item(item_id, amount)
+		print("QuestManager: 发放物品奖励")
 
 ## 事件处理
 func _on_enemy_killed(enemy: Node2D, xp_value: float, position: Vector2) -> void:
@@ -205,6 +222,35 @@ func _on_item_collected(item_id: String, amount: int) -> void:
 			var objective = objectives[i]
 			if objective.get("type") == "collect" and objective.get("item_id") == item_id:
 				update_quest_progress(quest_id, i, amount)
+
+## 每日任务重置（日期变化时触发）
+func _on_day_started(day: int, _weekday: String, _season: String) -> void:
+	if day != last_daily_reset_day:
+		_reset_daily_quests()
+		last_daily_reset_day = day
+
+## 重置每日任务
+func _reset_daily_quests() -> void:
+	print("QuestManager: 正在重置每日任务...")
+	var daily_quests_reset_count = 0
+
+	# 获取所有每日任务ID
+	var all_quests = QuestData.get_all_quests()
+	for quest_id in all_quests:
+		var quest_data = QuestData.get_quest(quest_id)
+		if quest_data.get("type") == "daily":
+			# 从已完成列表移除
+			if quest_id in completed_quests:
+				completed_quests.erase(quest_id)
+				daily_quests_reset_count += 1
+
+			# 从活动列表移除
+			if active_quests.has(quest_id):
+				active_quests.erase(quest_id)
+
+	if daily_quests_reset_count > 0:
+		print("QuestManager: 重置了 %d 个每日任务" % daily_quests_reset_count)
+		SignalBus.daily_quests_reset.emit()
 
 ## 查询方法
 func is_quest_active(quest_id: String) -> bool:
@@ -230,9 +276,11 @@ func get_completed_quests() -> Array[String]:
 func get_save_data() -> Dictionary:
 	return {
 		"active_quests": active_quests.duplicate(true),
-		"completed_quests": completed_quests.duplicate()
+		"completed_quests": completed_quests.duplicate(),
+		"last_daily_reset_day": last_daily_reset_day
 	}
 
 func load_save_data(data: Dictionary) -> void:
 	active_quests = data.get("active_quests", {})
 	completed_quests = data.get("completed_quests", [])
+	last_daily_reset_day = data.get("last_daily_reset_day", -1)
