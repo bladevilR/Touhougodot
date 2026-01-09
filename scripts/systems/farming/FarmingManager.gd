@@ -58,10 +58,10 @@ func _initialize_crops_database() -> void:
 	}
 
 func _initialize_farm_plots() -> void:
-	# 初始化农田地块（示例：3x3网格）
+	# 初始化农田地块（示例：6x5网格）
 	var plot_id = 0
-	for x in range(3):
-		for y in range(3):
+	for y in range(5):
+		for x in range(6):
 			var plot = FarmPlot.new()
 			plot.id = plot_id
 			plot.position = Vector2(x * 64, y * 64)
@@ -81,6 +81,9 @@ func plant_crop(plot_id: int, crop_id: int) -> bool:
 	# 检查季节是否合适
 	if not crop_data["seasons"].has(current_season):
 		push_error("作物 %s 在 %s 季节不能种植" % [crop_data["name"], current_season])
+		return false
+
+	if not plot.is_tilled:
 		return false
 
 	if not plot.is_empty():

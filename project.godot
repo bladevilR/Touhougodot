@@ -37,6 +37,10 @@ QuestData="*res://scripts/data/QuestData.gd"
 GlobalUIManager="*res://scripts/core/GlobalUIManager.gd"
 Logger="*res://scripts/core/autoloads/Logger.gd"
 
+[audio]
+
+driver/output_latency=50
+
 [display]
 
 window/size/viewport_width=1920
