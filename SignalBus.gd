@@ -184,3 +184,61 @@ signal daily_quests_reset()  # 每日任务重置
 signal shop_stock_refreshed(shop_id: String)  # 商店库存刷新
 @warning_ignore("unused_signal")
 signal item_sold(item_id: String, amount: int, price: int)  # 出售物品
+
+# --- 人性系统信号 ---
+@warning_ignore("unused_signal")
+signal humanity_changed(old_value: float, new_value: float)  # 人性值变化
+@warning_ignore("unused_signal")
+signal humanity_threshold_crossed(threshold_name: String, is_rising: bool)  # 跨越阈值
+@warning_ignore("unused_signal")
+signal humanity_warning(warning_type: String)  # 人性警告
+
+# --- 疲劳系统信号 ---
+@warning_ignore("unused_signal")
+signal fatigue_changed(old_value: float, new_value: float)  # 疲劳值变化
+@warning_ignore("unused_signal")
+signal fatigue_warning(level: String)  # 疲劳警告 ("tired", "exhausted", "collapse")
+@warning_ignore("unused_signal")
+signal player_collapsed()  # 玩家因疲劳昏倒
+
+# --- NPC日程系统信号 ---
+@warning_ignore("unused_signal")
+signal npc_schedule_changed(npc_id: String, schedule_entry: Dictionary)  # NPC日程变化
+@warning_ignore("unused_signal")
+signal npc_arrived_at_location(npc_id: String, location: String)  # NPC到达位置
+
+# --- 羁绊系统信号（扩展）---
+@warning_ignore("unused_signal")
+signal bond_level_changed(npc_id: String, old_level: int, new_level: int)  # 羁绊等级变化
+@warning_ignore("unused_signal")
+signal bond_points_changed(npc_id: String, points: int)  # 羁绊点数变化
+@warning_ignore("unused_signal")
+signal companion_unlocked(npc_id: String)  # 解锁同伴
+@warning_ignore("unused_signal")
+signal bond_event_triggered(npc_id: String, event_id: String)  # 羁绊事件触发
+
+# --- 同伴系统信号 ---
+@warning_ignore("unused_signal")
+signal companion_recruited(npc_id: String)  # 招募同伴
+@warning_ignore("unused_signal")
+signal companion_joined_party(npc_id: String)  # 同伴加入队伍
+@warning_ignore("unused_signal")
+signal companion_left_party(npc_id: String)  # 同伴离开队伍
+@warning_ignore("unused_signal")
+signal companion_hp_changed(npc_id: String, current_hp: float, max_hp: float)  # 同伴血量变化
+
+# --- 小屋交互信号 ---
+@warning_ignore("unused_signal")
+signal sleep_started()  # 开始睡觉
+@warning_ignore("unused_signal")
+signal sleep_completed()  # 睡觉完成
+@warning_ignore("unused_signal")
+signal home_storage_opened()  # 打开存储箱
+@warning_ignore("unused_signal")
+signal home_storage_closed()  # 关闭存储箱
+@warning_ignore("unused_signal")
+signal tea_interaction_completed()  # 喝茶完成
+@warning_ignore("unused_signal")
+signal meal_interaction_completed()  # 吃饭完成
+@warning_ignore("unused_signal")
+signal read_book_completed()  # 读书完成

@@ -6,10 +6,12 @@ extends Node
 # 游戏模式枚举
 enum GameMode {
 	MENU,           # 主菜单
+	HOME,           # 在家（竹林小屋）
 	OVERWORLD,      # 主世界（RPG模式：城镇、农场等）
 	COMBAT,         # 战斗模式（Roguelike地下城）
 	DIALOGUE,       # 对话中
-	CUTSCENE        # 过场动画
+	CUTSCENE,       # 过场动画
+	SLEEPING        # 睡眠中
 }
 
 # 当前游戏模式
@@ -103,13 +105,13 @@ func end_dialogue() -> void:
 	dialogue_ended.emit()
 	change_mode(GameMode.OVERWORLD)
 
-## 检查是否可以移动（非对话、非菜单、非过场）
+## 检查是否可以移动（非对话、非菜单、非过场、非睡眠）
 func can_player_move() -> bool:
-	return current_mode in [GameMode.OVERWORLD, GameMode.COMBAT]
+	return current_mode in [GameMode.HOME, GameMode.OVERWORLD, GameMode.COMBAT]
 
 ## 检查是否可以打开菜单
 func can_open_menu() -> bool:
-	return current_mode in [GameMode.OVERWORLD, GameMode.COMBAT]
+	return current_mode in [GameMode.HOME, GameMode.OVERWORLD, GameMode.COMBAT]
 
 ## 私有方法
 func _on_combat_start() -> void:
@@ -121,8 +123,10 @@ func _on_return_to_overworld() -> void:
 func _mode_to_string(mode: GameMode) -> String:
 	match mode:
 		GameMode.MENU: return "菜单"
+		GameMode.HOME: return "在家"
 		GameMode.OVERWORLD: return "主世界"
 		GameMode.COMBAT: return "战斗"
 		GameMode.DIALOGUE: return "对话"
 		GameMode.CUTSCENE: return "过场"
+		GameMode.SLEEPING: return "睡眠中"
 		_: return "未知"

@@ -156,7 +156,7 @@ func _collect_save_data() -> Dictionary:
 	var player = _get_player_node()
 
 	var save_data = {
-		"version": "1.0.0",
+		"version": "2.0.0",  # 版本升级
 		"timestamp": Time.get_datetime_string_from_system(),
 
 		# 玩家基础数据
@@ -173,11 +173,18 @@ func _collect_save_data() -> Dictionary:
 			"y": GameStateManager.player_data.position.y
 		},
 
-		# 背包数据
+		# 现有系统
 		"inventory": InventoryManager.get_save_data() if has_node("/root/InventoryManager") else {},
-
-		# 任务数据
 		"quests": QuestManager.get_save_data() if has_node("/root/QuestManager") else {},
+		"time": TimeManager.get_save_data() if has_node("/root/TimeManager") else {},
+		"calendar": CalendarManager.get_save_data() if has_node("/root/CalendarManager") else {},
+
+		# 新增系统
+		"humanity": HumanitySystem.get_save_data() if has_node("/root/HumanitySystem") else {},
+		"fatigue": FatigueSystem.get_save_data() if has_node("/root/FatigueSystem") else {},
+		"npc_schedules": NPCScheduleManager.get_save_data() if has_node("/root/NPCScheduleManager") else {},
+		"companions": CompanionSystem.get_save_data() if has_node("/root/CompanionSystem") else {},
+		"home": HomeInteractionSystem.get_save_data() if has_node("/root/HomeInteractionSystem") else {},
 
 		# 游戏统计
 		"play_time": _get_play_time(),
@@ -203,13 +210,27 @@ func _apply_save_data(save_data: Dictionary) -> void:
 	var scene_name = save_data.get("current_scene", "town")
 	GameStateManager.player_data.current_scene = scene_name
 
-	# 恢复背包
+	# 恢复现有系统
 	if has_node("/root/InventoryManager"):
 		InventoryManager.load_save_data(save_data.get("inventory", {}))
-
-	# 恢复任务
 	if has_node("/root/QuestManager"):
 		QuestManager.load_save_data(save_data.get("quests", {}))
+	if has_node("/root/TimeManager"):
+		TimeManager.load_save_data(save_data.get("time", {}))
+	if has_node("/root/CalendarManager"):
+		CalendarManager.load_save_data(save_data.get("calendar", {}))
+
+	# 恢复新系统
+	if has_node("/root/HumanitySystem"):
+		HumanitySystem.load_save_data(save_data.get("humanity", {}))
+	if has_node("/root/FatigueSystem"):
+		FatigueSystem.load_save_data(save_data.get("fatigue", {}))
+	if has_node("/root/NPCScheduleManager"):
+		NPCScheduleManager.load_save_data(save_data.get("npc_schedules", {}))
+	if has_node("/root/CompanionSystem"):
+		CompanionSystem.load_save_data(save_data.get("companions", {}))
+	if has_node("/root/HomeInteractionSystem"):
+		HomeInteractionSystem.load_save_data(save_data.get("home", {}))
 
 	# 加载场景
 	SceneManager.change_scene(scene_name)
